@@ -1,0 +1,7 @@
+domain: microsoft.com
+layout:
+- go.kubebuilder.io/v3
+- declarative.go.kubebuilder.io/v1
+projectName: kube-egress-gateway
+repo: github.com/Azure/kube-egress-gateway
+version: "3"
