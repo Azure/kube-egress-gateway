@@ -138,3 +138,7 @@ cobra-cli: ## Download cobra cli locally if necessary.
 .PHONY: kubebuilder
 kubebuilder: ## Download kubebuilder locally if necessary.
 	test -s $(LOCALBIN)/kubebuilder || curl -L -o $(LOCALBIN)/kubebuilder https://go.kubebuilder.io/dl/latest/$(go env GOOS)/$(go env GOARCH) && chmod a+x $(LOCALBIN)/kubebuilder
+
+.PHONY: golangci-lint 
+golangci-lint: ## Download golangci-lint locally if necessary.
+	test -s $(LOCALBIN)/golangci-lint ||GOBIN=$(LOCALBIN) curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(LOCALBIN) latest
