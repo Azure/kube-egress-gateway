@@ -62,11 +62,11 @@ test: manifests generate fmt vet envtest ## Run tests.
 
 .PHONY: build
 build: generate fmt vet ## Build manager binary.
-	go build -o bin/manager main.go
+	go build -o bin/manager ./cmd/kube-egress-gateway-controller/main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./main.go
+	go run ./cmd/kube-egress-gateway-controller/main.go
 
 .PHONY: docker-build
 docker-build: test ## Build docker image with the manager.
@@ -130,3 +130,11 @@ $(CONTROLLER_GEN): $(LOCALBIN)
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
 $(ENVTEST): $(LOCALBIN)
 	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+
+.PHONY: cobra-cli
+cobra-cli: ## Download cobra cli locally if necessary.
+	test -s $(LOCALBIN)/cobra-cli || GOBIN=$(LOCALBIN) go install github.com/spf13/cobra-cli@latest
+
+.PHONY: kubebuilder
+kubebuilder: ## Download kubebuilder locally if necessary.
+	test -s $(LOCALBIN)/kubebuilder || curl -L -o $(LOCALBIN)/kubebuilder https://go.kubebuilder.io/dl/latest/$(go env GOOS)/$(go env GOARCH) && chmod a+x $(LOCALBIN)/kubebuilder
