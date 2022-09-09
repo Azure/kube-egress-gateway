@@ -41,6 +41,9 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	"github.com/Azure/kube-egress-gateway/controllers"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -105,6 +108,7 @@ func init() {
 	zapOpts.BindFlags(goflag.CommandLine)
 	rootCmd.Flags().AddGoFlagSet(goflag.CommandLine)
 
+	utilruntime.Must(kubeegressgatewayv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -160,6 +164,14 @@ func startController(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	if err = (&controllers.StaticGatewayConfigurationReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("StaticGatewayConfiguration"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "StaticGatewayConfiguration")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
