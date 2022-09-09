@@ -2,7 +2,7 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.24.2
+ENVTEST_K8S_VERSION = 1.25.0
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -51,8 +51,8 @@ fmt: ## Run go fmt against code.
 	go fmt ./...
 
 .PHONY: vet
-vet: ## Run go vet against code.
-	go vet ./...
+vet: golangci-lint ## Run go vet against code.
+	$(LOCALBIN)/golangci-lint run --timeout 10m ./...
 
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
@@ -112,7 +112,7 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 
 ## Tool Versions
-KUSTOMIZE_VERSION ?= v3.8.7
+KUSTOMIZE_VERSION ?= v4.5.7
 CONTROLLER_TOOLS_VERSION ?= v0.9.2
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
@@ -131,14 +131,14 @@ envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
 $(ENVTEST): $(LOCALBIN)
 	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
 
-.PHONY: cobra-cli
-cobra-cli: ## Download cobra cli locally if necessary.
+.PHONY: cobra-cli ## Download cobra cli locally if necessary.
+cobra-cli: $(LOCALBIN)
 	test -s $(LOCALBIN)/cobra-cli || GOBIN=$(LOCALBIN) go install github.com/spf13/cobra-cli@latest
 
-.PHONY: kubebuilder
-kubebuilder: ## Download kubebuilder locally if necessary.
-	test -s $(LOCALBIN)/kubebuilder || curl -L -o $(LOCALBIN)/kubebuilder https://go.kubebuilder.io/dl/latest/$(go env GOOS)/$(go env GOARCH) && chmod a+x $(LOCALBIN)/kubebuilder
+.PHONY: kubebuilder ## Download kubebuilder locally if necessary.
+kubebuilder: $(LOCALBIN)
+	test -s $(LOCALBIN)/kubebuilder || curl -L -o $(LOCALBIN)/kubebuilder https://go.kubebuilder.io/dl/latest/`go env GOOS`/`go env GOARCH` && chmod a+x $(LOCALBIN)/kubebuilder
 
-.PHONY: golangci-lint 
-golangci-lint: ## Download golangci-lint locally if necessary.
-	test -s $(LOCALBIN)/golangci-lint ||GOBIN=$(LOCALBIN) curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(LOCALBIN) latest
+.PHONY: golangci-lint ## Download golangci-lint locally if necessary.
+golangci-lint: $(LOCALBIN)
+	test -s $(LOCALBIN)/golangci-lint || curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(LOCALBIN) latest
