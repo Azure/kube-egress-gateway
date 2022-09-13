@@ -1,6 +1,5 @@
 # Build the manager binary
-FROM golang:1.19 as builder
-
+FROM --platform=$BUILDPLATFORM golang:1.19 as builder 
 WORKDIR /workspace
 # Copy the Go Modules manifests
 COPY go.mod go.mod
@@ -9,6 +8,10 @@ COPY go.sum go.sum
 # and so that source changes don't invalidate our downloaded layer
 RUN go mod download
 
+ARG MAIN_ENTRY=kube-egress-gateway-controller
+ARG TARGETARCH
+FROM builder as base
+WORKDIR /workspace
 # Copy the go source
 COPY cmd/ cmd/
 COPY api/ api/
@@ -19,16 +22,18 @@ COPY channels/ /channels/
 RUN chmod -R a+rx /channels/
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -a -o ${MAIN_ENTRY}  ./cmd/${MAIN_ENTRY}/main.go
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/static:nonroot
+FROM gcr.io/distroless/static-debian11:nonroot
 WORKDIR /
-COPY --from=builder /workspace/manager .
+COPY --from=base /workspace/${MAIN_ENTRY} .
 # copy channels
-COPY --from=builder /channels /channels
+COPY --from=base /channels /channels
 
 USER 65532:65532
 
-ENTRYPOINT ["/manager"]
+ENTRYPOINT [${MAIN_ENTRY}]
+
+
