@@ -63,18 +63,19 @@ test: manifests generate fmt vet envtest ## Run tests.
 .PHONY: build
 build: generate fmt vet ## Build manager binary.
 	go build -o bin/manager ./cmd/kube-egress-gateway-controller/main.go
+	go build -o bin/daemon ./cmd/kube-egress-gateway-daemon/main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/kube-egress-gateway-controller/main.go
 
 .PHONY: docker-build
-docker-build: test ## Build docker image with the manager.
-	docker build -t ${IMG} .
+docker-build: test docker-builder-setup ## Build docker image with the manager.
+	docker buildx bake -f docker-bake.hcl --progress auto  . --push
 
-.PHONY: docker-push
-docker-push: ## Push docker image with the manager.
-	docker push ${IMG}
+.PHONY: 
+docker-builder-setup:
+    docker run --privileged --rm tonistiigi/binfmt --install all
 
 ##@ Deployment
 
