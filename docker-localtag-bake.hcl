@@ -13,3 +13,7 @@ target "daemon-tags" {
 target "controller-tags" {
     tags = ["${IMAGE_REGISTRY}/kube-egress-gateway-controller:${TAG}"]
 }
+
+target "cnimanager-tags" {
+    tags = ["${IMAGE_REGISTRY}/kube-egress-gateway-cnimanager:${TAG}"]
+}

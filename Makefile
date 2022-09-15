@@ -68,6 +68,7 @@ build: generate fmt vet ## Build manager binary.
 	go build -o bin/manager ./cmd/kube-egress-gateway-controller/main.go
 	go build -o bin/daemon ./cmd/kube-egress-gateway-daemon/main.go
 	go build -o bin/cni ./cmd/cni/kube-egress-cni/main.go
+	go build -o bin/cnimanager ./cmd/kube-egress-gateway-cnimanager/main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
