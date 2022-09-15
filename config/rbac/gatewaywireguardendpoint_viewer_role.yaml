@@ -1,0 +1,20 @@
+# permissions for end users to view gatewaywireguardendpoints.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: gatewaywireguardendpoint-viewer-role
+rules:
+- apiGroups:
+  - kube-egress-gateway.microsoft.com
+  resources:
+  - gatewaywireguardendpoints
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - kube-egress-gateway.microsoft.com
+  resources:
+  - gatewaywireguardendpoints/status
+  verbs:
+  - get

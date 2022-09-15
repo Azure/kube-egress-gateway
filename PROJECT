@@ -25,4 +25,20 @@ resources:
     defaulting: true
     validation: true
     webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  domain: microsoft.com
+  group: kube-egress-gateway
+  kind: GatewayWireguardEndpoint
+  path: github.com/Azure/kube-egress-gateway/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  domain: microsoft.com
+  group: kube-egress-gateway
+  kind: PodWireguardEndpoint
+  path: github.com/Azure/kube-egress-gateway/api/v1alpha1
+  version: v1alpha1
 version: "3"

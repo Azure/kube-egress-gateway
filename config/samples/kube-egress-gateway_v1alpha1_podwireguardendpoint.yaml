@@ -1,0 +1,8 @@
+apiVersion: kube-egress-gateway.microsoft.com/v1alpha1
+kind: PodWireguardEndpoint
+metadata:
+  name: podwireguardendpoint-sample
+spec:
+  staticGatewayConfiguration: staticgatewayconfiguration-sample
+  podIPv4Address: 10.243.0.25
+  podWireguardKeySecret: mypod-secret
