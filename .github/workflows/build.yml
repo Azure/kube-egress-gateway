@@ -52,7 +52,6 @@ jobs:
             type=semver,pattern={{major}}
             type=sha,enable=true,priority=100,prefix=sha-,suffix=,format=short
           bake-target: daemon-tags
-
       - name: Docker meta
         id: controller # you'll use this in the next step
         uses: docker/metadata-action@v4
@@ -69,6 +68,22 @@ jobs:
             type=semver,pattern={{major}}
             type=sha,enable=true,priority=100,prefix=sha-,suffix=,format=short
           bake-target: controller-tags
+      - name: Docker meta
+        id: cnimanager # you'll use this in the next step
+        uses: docker/metadata-action@v4
+        with:
+          # list of Docker images to use as base name for tags
+          images: |
+            ghcr.io/azure/kube-egress-gateway-cnimanager
+          tags: |
+            type=schedule
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,enable=true,priority=100,prefix=sha-,suffix=,format=short
+          bake-target: cnimanager-tags
       - name: Build and push
         uses: docker/bake-action@v2
         with:
@@ -77,4 +92,5 @@ jobs:
             docker-bake.hcl
             ${{ steps.daemon.outputs.bake-file }}
             ${{ steps.controller.outputs.bake-file }}
+            ${{ steps.cnimanager.outputs.bake-file }}
 

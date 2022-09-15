@@ -23,7 +23,7 @@ SOFTWARE
 */
 package main
 
-import "github.com/Azure/kube-egress-gateway/cmd/kube-egress-gateway-daemon/cmd"
+import "github.com/Azure/kube-egress-gateway/cmd/kube-egress-gateway-cnimanager/cmd"
 
 func main() {
 	cmd.Execute()

@@ -1,6 +1,6 @@
 
 group "default" {
-  targets = ["daemon", "controller"]
+  targets = ["daemon", "controller", "cnimanager"]
 }
 
 target "base" {
@@ -21,3 +21,9 @@ target "controller" {
   }
 }
 
+target "cnimanager" {
+  inherits = ["base","cnimanager-tags"]
+  args = {
+    MAIN_ENTRY = "kube-egress-gateway-cnimanager",
+  }
+}
