@@ -60,6 +60,9 @@ test: manifests generate fmt vet envtest ## Run tests.
 
 ##@ Build
 
+IMAGE_REGISTRY ?= local
+IMAGE_TAG ?= $(shell git rev-parse --short=7 HEAD)
+
 .PHONY: build
 build: generate fmt vet ## Build manager binary.
 	go build -o bin/manager ./cmd/kube-egress-gateway-controller/main.go
@@ -71,11 +74,11 @@ run: manifests generate fmt vet ## Run a controller from your host.
 
 .PHONY: docker-build
 docker-build: test docker-builder-setup ## Build docker image with the manager.
-	docker buildx bake -f docker-bake.hcl --progress auto  . --push
+	TAG=$(IMAGE_TAG) IMAGE_REGISTRY=$(IMAGE_REGISTRY) docker buildx bake -f docker-bake.hcl -f docker-localtag-bake.hcl --progress auto --push
 
-.PHONY: 
+.PHONY: docker-builder-setup
 docker-builder-setup:
-    docker run --privileged --rm tonistiigi/binfmt --install all
+	docker run --privileged --rm tonistiigi/binfmt --install all
 
 ##@ Deployment
 

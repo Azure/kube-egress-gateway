@@ -6,6 +6,7 @@ group "default" {
 target "base" {
   dockerfile = "base.Dockerfile"
 }
+
 target "daemon" {
   inherits = ["base","daemon-tags"]
   args = {
