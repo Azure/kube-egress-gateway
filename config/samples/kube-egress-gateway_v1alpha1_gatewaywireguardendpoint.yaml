@@ -1,0 +1,9 @@
+apiVersion: kube-egress-gateway.microsoft.com/v1alpha1
+kind: GatewayWireguardEndpoint
+metadata:
+  name: gatewaywireguardendpoint-sample
+spec:
+  nodeName: gatewaypool1-12345678-vmss000001
+  staticGatewayConfiguration: staticgatewayconfiguration-sample
+  gwPrivateIpAddress: 10.0.0.10
+  wireguardKeySecret: staticgatewayconfiguration-sample-secret
