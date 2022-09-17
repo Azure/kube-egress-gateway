@@ -43,8 +43,14 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 .PHONY: generate
-generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+generate: generate-apiutils generate-protogo
+
+generate-apiutils: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+
+generate-protogo: protoc protoc-gen-go-grpc protoc-gen-go ## Generate code containing golang protobuf implementation.
+	PATH=$(PATH):$(LOCALBIN) $(LOCALBIN)/protoc --go_out=. --go_opt=paths=source_relative \
+    --go-grpc_out=. --go-grpc_opt=paths=source_relative pkg/cniprotocol/*.proto
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
@@ -107,44 +113,68 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 
 ##@ Build Dependencies
 
+.PHONY: install-dependencies
+install-dependencies: kustomize controller-gen envtest cobra-cli kubebuilder golangci-lint protoc-gen-go protoc-gen-go-grpc protoc ## Install all build dependencies.
+
 ## Location to install dependencies to
 LOCALBIN ?= $(shell pwd)/bin
 $(LOCALBIN):
 	mkdir -p $(LOCALBIN)
 
-## Tool Binaries
-KUSTOMIZE ?= $(LOCALBIN)/kustomize
-CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
-ENVTEST ?= $(LOCALBIN)/setup-envtest
-
-## Tool Versions
-KUSTOMIZE_VERSION ?= v4.5.7
 CONTROLLER_TOOLS_VERSION ?= v0.9.2
 
+KUSTOMIZE ?= $(LOCALBIN)/kustomize
+KUSTOMIZE_VERSION ?= v4.5.7
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
 $(KUSTOMIZE): $(LOCALBIN)
 	test -s $(LOCALBIN)/kustomize || { curl -s $(KUSTOMIZE_INSTALL_SCRIPT) | bash -s -- $(subst v,,$(KUSTOMIZE_VERSION)) $(LOCALBIN); }
 
+CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 .PHONY: controller-gen
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
 $(CONTROLLER_GEN): $(LOCALBIN)
 	test -s $(LOCALBIN)/controller-gen || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
 
+ENVTEST ?= $(LOCALBIN)/setup-envtest
 .PHONY: envtest
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
 $(ENVTEST): $(LOCALBIN)
 	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
 
-.PHONY: cobra-cli ## Download cobra cli locally if necessary.
-cobra-cli: $(LOCALBIN)
+COBRA_CLI ?=$(LOCALBIN)/cobra-CLI
+.PHONY: cobra-cli 
+cobra-cli: $(COBRA_CLI) ## Download cobra cli locally if necessary.
+${COBRA_CLI}: $(LOCALBIN)
 	test -s $(LOCALBIN)/cobra-cli || GOBIN=$(LOCALBIN) go install github.com/spf13/cobra-cli@latest
 
-.PHONY: kubebuilder ## Download kubebuilder locally if necessary.
-kubebuilder: $(LOCALBIN)
-	test -s $(LOCALBIN)/kubebuilder || curl -L -o $(LOCALBIN)/kubebuilder https://go.kubebuilder.io/dl/latest/`go env GOOS`/`go env GOARCH` && chmod a+x $(LOCALBIN)/kubebuilder
+KUBEBUILDER ?= $(LOCALBIN)/kubebuilder
+.PHONY: kubebuilder 
+kubebuilder: $(KUBEBUILDER) ## Download kubebuilder locally if necessary.
+$(KUBEBUILDER): $(LOCALBIN) 
+	test -s $(LOCALBIN)/kubebuilder || { curl -L -o $(LOCALBIN)/kubebuilder https://go.kubebuilder.io/dl/latest/`go env GOOS`/`go env GOARCH` && chmod a+x $(LOCALBIN)/kubebuilder ;}
 
-.PHONY: golangci-lint ## Download golangci-lint locally if necessary.
-golangci-lint: $(LOCALBIN)
+GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
+.PHONY: golangci-lint 
+golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
+$(GOLANGCI_LINT): $(LOCALBIN)
 	test -s $(LOCALBIN)/golangci-lint || curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(LOCALBIN) latest
+
+PROTOC_GEN_GO ?= $(LOCALBIN)/protoc-gen-go
+.PHONY: protoc-gen-go
+protoc-gen-go: $(PROTOC_GEN_GO) ## Download protoc-gen-go locally if necessary.
+$(PROTOC_GEN_GO): $(LOCALBIN)
+	test -s $(LOCALBIN)/protoc-gen-go || GOBIN=$(LOCALBIN) go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+
+PROTOC_GEN_GO_GRPC ?= $(LOCALBIN)/protoc-gen-go-grpc
+.PHONY: protoc-gen-go-grpc
+protoc-gen-go-grpc: $(PROTOC_GEN_GO_GRPC)  ## Download protoc-gen-go-grpc locally if necessary.
+$(PROTOC_GEN_GO_GRPC): $(LOCALBIN)
+	test -s $(LOCALBIN)/protoc-gen-go-grpc || GOBIN=$(LOCALBIN) go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+PROTOC ?= $(LOCALBIN)/protoc
+.PHONY: protoc
+protoc: $(PROTOC)  ## Download protoc locally if necessary.
+$(PROTOC): $(LOCALBIN) 
+	test -s $(LOCALBIN)/protoc || { curl -L -o $(LOCALBIN)/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v3.20.2/protoc-3.20.2-linux-x86_64.zip && unzip $(LOCALBIN)/protoc.zip -d $(LOCALBIN) && mv $(LOCALBIN)/bin/protoc $(LOCALBIN) && rm -rf $(LOCALBIN)/protoc.zip $(LOCALBIN)/readme.txt $(LOCALBIN)/bin; }
