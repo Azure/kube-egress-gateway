@@ -34,9 +34,6 @@ var rootCmd = &cobra.Command{
 	Use:   "kube-egress-gateway-cnimanager",
 	Short: "cniManager installs kube-egress cni, monitors pod creation and runs as proxy between cni and apiServer",
 	Long:  `cniManager installs kube-egress cni, monitors pod creation and runs as proxy between cni and apiServer`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

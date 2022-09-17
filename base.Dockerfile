@@ -16,6 +16,7 @@ WORKDIR /workspace
 COPY cmd/ cmd/
 COPY api/ api/
 COPY controllers/ controllers/
+COPY pkg/ pkg/
 # https://github.com/kubernetes-sigs/kubebuilder-declarative-pattern/blob/master/docs/addon/walkthrough/README.md#adding-a-manifest
 # Stage channels and make readable
 COPY channels/ /channels/
