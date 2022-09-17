@@ -25,12 +25,19 @@
 package main
 
 import (
+	"context"
+	"net"
+
 	"github.com/containernetworking/cni/libcni"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	type100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/Azure/kube-egress-gateway/pkg/cniprotocol"
+	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 )
 
@@ -39,6 +46,22 @@ func main() {
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
+	conn, err := grpc.Dial(
+		"unix://"+consts.CNI_SOCKET_PATH,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
+			d := net.Dialer{}
+			return d.DialContext(ctx, "unix", addr)
+		}))
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	client := cniprotocol.NewNicServiceClient(conn)
+	_, err = client.NicAdd(context.Background(), &cniprotocol.CNIAddRequest{})
+	if err != nil {
+		return err
+	}
 	// outputCmdArgs(args)
 	netConf, _ := libcni.ConfFromBytes(args.StdinData)
 
@@ -46,6 +69,23 @@ func cmdAdd(args *skel.CmdArgs) error {
 }
 
 func cmdDel(args *skel.CmdArgs) error {
+	conn, err := grpc.Dial(
+		"unix://"+consts.CNI_SOCKET_PATH,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
+			d := net.Dialer{}
+			return d.DialContext(ctx, "unix", addr)
+		}))
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	client := cniprotocol.NewNicServiceClient(conn)
+	_, err = client.NicDel(context.Background(), &cniprotocol.CNIDeleteRequest{})
+	if err != nil {
+		return err
+	}
+
 	// outputCmdArgs(args)
 	netConf, _ := libcni.ConfFromBytes(args.StdinData)
 
