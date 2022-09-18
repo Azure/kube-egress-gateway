@@ -10,9 +10,9 @@ require (
 	github.com/onsi/gomega v1.20.2
 	github.com/spf13/cobra v1.5.0
 	github.com/spf13/viper v1.13.0
-	k8s.io/api v0.25.0
-	k8s.io/apimachinery v0.25.0
-	k8s.io/client-go v0.25.0
+	k8s.io/api v0.25.1
+	k8s.io/apimachinery v0.25.1
+	k8s.io/client-go v0.25.1
 	sigs.k8s.io/controller-runtime v0.13.0
 	sigs.k8s.io/kubebuilder-declarative-pattern v0.11.20220513-0.20220602225619-fe5be9431eae
 )
