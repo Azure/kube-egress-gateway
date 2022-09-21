@@ -26,7 +26,6 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	addonv1alpha1 "sigs.k8s.io/kubebuilder-declarative-pattern/pkg/patterns/addon/pkg/apis/v1alpha1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -43,9 +42,6 @@ type GatewayVMSSProfile struct {
 
 // StaticGatewayConfigurationSpec defines the desired state of StaticGatewayConfiguration
 type StaticGatewayConfigurationSpec struct {
-	addonv1alpha1.CommonSpec `json:",inline"`
-	addonv1alpha1.PatchSpec  `json:",inline"`
-
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
@@ -76,8 +72,6 @@ type GatewayWireguardProfile struct {
 
 // StaticGatewayConfigurationStatus defines the observed state of StaticGatewayConfiguration
 type StaticGatewayConfigurationStatus struct {
-	addonv1alpha1.CommonStatus `json:",inline"`
-
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
@@ -107,28 +101,6 @@ type StaticGatewayConfiguration struct {
 
 	Spec   StaticGatewayConfigurationSpec   `json:"spec,omitempty"`
 	Status StaticGatewayConfigurationStatus `json:"status,omitempty"`
-}
-
-var _ addonv1alpha1.CommonObject = &StaticGatewayConfiguration{}
-
-func (o *StaticGatewayConfiguration) ComponentName() string {
-	return "staticgatewayconfiguration"
-}
-
-func (o *StaticGatewayConfiguration) CommonSpec() addonv1alpha1.CommonSpec {
-	return o.Spec.CommonSpec
-}
-
-func (o *StaticGatewayConfiguration) PatchSpec() addonv1alpha1.PatchSpec {
-	return o.Spec.PatchSpec
-}
-
-func (o *StaticGatewayConfiguration) GetCommonStatus() addonv1alpha1.CommonStatus {
-	return o.Status.CommonStatus
-}
-
-func (o *StaticGatewayConfiguration) SetCommonStatus(s addonv1alpha1.CommonStatus) {
-	o.Status.CommonStatus = s
 }
 
 //+kubebuilder:object:root=true

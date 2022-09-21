@@ -1,0 +1,31 @@
+# permissions for end users to edit gatewaylbconfigurations.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: gatewaylbconfiguration-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: kube-egress-gateway
+    app.kubernetes.io/part-of: kube-egress-gateway
+    app.kubernetes.io/managed-by: kustomize
+  name: gatewaylbconfiguration-editor-role
+rules:
+- apiGroups:
+  - kube-egress-gateway.microsoft.com
+  resources:
+  - gatewaylbconfigurations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kube-egress-gateway.microsoft.com
+  resources:
+  - gatewaylbconfigurations/status
+  verbs:
+  - get

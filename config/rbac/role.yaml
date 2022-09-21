@@ -8,6 +8,58 @@ rules:
 - apiGroups:
   - kube-egress-gateway.microsoft.com
   resources:
+  - gatewaylbconfigurations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kube-egress-gateway.microsoft.com
+  resources:
+  - gatewaylbconfigurations/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - kube-egress-gateway.microsoft.com
+  resources:
+  - gatewaylbconfigurations/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - kube-egress-gateway.microsoft.com
+  resources:
+  - gatewayvmconfigurations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kube-egress-gateway.microsoft.com
+  resources:
+  - gatewayvmconfigurations/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - kube-egress-gateway.microsoft.com
+  resources:
+  - gatewayvmconfigurations/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - kube-egress-gateway.microsoft.com
+  resources:
   - staticgatewayconfigurations
   verbs:
   - create
@@ -17,6 +69,12 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - kube-egress-gateway.microsoft.com
+  resources:
+  - staticgatewayconfigurations/finalizers
+  verbs:
+  - update
 - apiGroups:
   - kube-egress-gateway.microsoft.com
   resources:

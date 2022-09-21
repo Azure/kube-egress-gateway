@@ -1,0 +1,12 @@
+apiVersion: kube-egress-gateway.microsoft.com/v1alpha1
+kind: GatewayVMConfiguration
+metadata:
+  labels:
+    app.kubernetes.io/name: gatewayvmconfiguration
+    app.kubernetes.io/instance: gatewayvmconfiguration-sample
+    app.kubernetes.io/part-of: kube-egress-gateway
+    app.kuberentes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: kube-egress-gateway
+  name: gatewayvmconfiguration-sample
+spec:
+  # TODO(user): Add fields here
