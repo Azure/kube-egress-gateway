@@ -56,7 +56,7 @@ var rootCmd = &cobra.Command{
 	Long:  `Monitor StaticGatewayConfiguration CR events and node events, configures VMSS, and manages GatewayWireguardEndpoint CR`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
-	Run: startController,
+	Run: startControllers,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -131,7 +131,7 @@ func initConfig() {
 	}
 }
 
-func startController(cmd *cobra.Command, args []string) {
+func startControllers(cmd *cobra.Command, args []string) {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
 
@@ -161,7 +161,6 @@ func startController(cmd *cobra.Command, args []string) {
 
 	if err = (&controllers.StaticGatewayConfigurationReconciler{
 		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("StaticGatewayConfiguration"),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "StaticGatewayConfiguration")
@@ -169,6 +168,20 @@ func startController(cmd *cobra.Command, args []string) {
 	}
 	if err = (&kubeegressgatewayv1alpha1.StaticGatewayConfiguration{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "StaticGatewayConfiguration")
+		os.Exit(1)
+	}
+	if err = (&controllers.GatewayLBConfigurationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "GatewayLBConfiguration")
+		os.Exit(1)
+	}
+	if err = (&controllers.GatewayVMConfigurationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "GatewayVMConfiguration")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

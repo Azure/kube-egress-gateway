@@ -36,9 +36,9 @@ This approach utilizes a dedicated AKS nodepool or Azure virtual machine scale s
 When the gateway nodepool is created, there are no gateway IPConfigurations. A user should create a namespaced `StaticGatewayConfiguration` CRD object to create an egress gateway configuration, specifying the target gateway nodepool, and optional BYO public IP prefix. Users can then annotate the pod (`kubernetes.azure.com/static-gateway-configuration: <gateway config name, e.g. aks-static-gw-001>`) to claim a static gateway configuration as egress.
 
 ### Components
-* **Gateway manager controller**: Monitor StaticGatewayConfiguration CR events and node events, configures VMSS, and manages GatewayWireguardEndpoint CR.
-* **Gateway daemonSet on gateway nodes**: Monitor GatewayWireguardEndpoint CR and PodWireguardEndpoint CR, configures the network namespaces, interfaces, and routes on gateway nodes.
-* **Chained CNI and pod egress controller daemonSet on regular cluster nodes**: Setup wireguard interfaces and routes in pods' network namespace.
+* **Gateway manager**: Contains three controllers, one monitors `StaticGatewayConfiguration` CR and generates corresponding `GatewayLBConfiguration` and `GatewayVMConfiguration` CRs. Two other controllers monitor these two CRs and configure Azure LB and Azure VMSS respectively.
+* **Gateway daemonSet on gateway nodes**: Monitors `StaticGatewayConfiguration` CR and `PodWireguardEndpoint` CR, configures the network namespaces, interfaces, and routes on gateway nodes.
+* **Chained CNI and pod egress controller daemonSet on regular cluster nodes**: Setups wireguard interfaces and routes in pods' network namespace.
 
 ### Test Plan
 

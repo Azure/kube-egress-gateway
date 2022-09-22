@@ -31,33 +31,30 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 )
 
-var _ reconcile.Reconciler = &StaticGatewayConfigurationReconciler{}
-
-// StaticGatewayConfigurationReconciler reconciles gateway loadBalancer according to a StaticGatewayConfiguration object
-type StaticGatewayConfigurationReconciler struct {
+// GatewayLBConfigurationReconciler reconciles a GatewayLBConfiguration object
+type GatewayLBConfigurationReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=staticgatewayconfigurations,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=staticgatewayconfigurations/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=staticgatewayconfigurations/finalizers,verbs=update
+//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=gatewaylbconfigurations,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=gatewaylbconfigurations/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=gatewaylbconfigurations/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // TODO(user): Modify the Reconcile function to compare the state specified by
-// the StaticGatewayConfiguration object against the actual cluster state, and then
+// the GatewayLBConfiguration object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
 // the user.
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.0/pkg/reconcile
-func (r *StaticGatewayConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *GatewayLBConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
 	// TODO(user): your logic here
@@ -66,8 +63,8 @@ func (r *StaticGatewayConfigurationReconciler) Reconcile(ctx context.Context, re
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *StaticGatewayConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *GatewayLBConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&kubeegressgatewayv1alpha1.StaticGatewayConfiguration{}).
+		For(&kubeegressgatewayv1alpha1.GatewayLBConfiguration{}).
 		Complete(r)
 }
