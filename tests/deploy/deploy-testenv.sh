@@ -28,6 +28,7 @@ SUBNET_GATEWAY=$(az network vnet subnet create -g ${RESOURCE_GROUP} --vnet-name 
 SUBNET_AKS=$(az network vnet subnet create -g ${RESOURCE_GROUP} --vnet-name ${VNET_NAME} -n "aks" --address-prefixes "10.243.4.0/22")
 SUBNET_POD=$(az network vnet subnet create -g ${RESOURCE_GROUP} --vnet-name ${VNET_NAME} -n "pod" --address-prefixes "10.243.8.0/22")
 
+SUBNET_AKS_ID=$(echo ${SUBNET_AKS} | jq -r '. | .id')
 SUBNET_POD_ID=$(echo ${SUBNET_POD} | jq -r '. | .id')
 SUBNET_GATEWAY_ID=$(echo ${SUBNET_GATEWAY} | jq -r '. | .id')
 
@@ -45,9 +46,9 @@ Role=$(az role assignment create --role "Network Contributor" --assignee-princip
 if [ "$NETWORK_PLUGIN" == "kubenet" ]; then
     NETWORK_PROFILE="--network-plugin kubenet --pod-cidr ${KUBENET_POD_CIDR}"
     NODEPOOL_PROFILE="--max-pods 250"
-elif [ "$NETWORK_PLUGIN" == "azure"]; then
+elif [ "$NETWORK_PLUGIN" == "azure" ]; then
     NETWORK_PROFILE="--network-plugin azure"
-    NODEPOOL_PROFILE="--pod-subnet-id  ${SUBNET_POD_ID}"
+    NODEPOOL_PROFILE="--pod-subnet-id ${SUBNET_POD_ID}"
 else
     echo "Network plugin ${NETWORK_PLUGIN} is not supported, should be kubenet or azure"
 fi
@@ -57,7 +58,7 @@ AKS=$(az aks create -n ${AKS_CLUSTER_NAME} -g ${RESOURCE_GROUP} -l ${LOCATION} \
     --enable-managed-identity --assign-identity ${UMI_RESOURCE_ID} \
     --dns-name-prefix ${AKS_CLUSTER_NAME} --admin-username "azureuser" --generate-ssh-keys \
     --dns-service-ip ${DNS_SERVER_IP} --service-cidr ${SERVICE_CIDR} ${NETWORK_PROFILE} \
-    --node-count 1 --vnet-subnet-id ${SUBNET_POD_ID} ${SYSTEMPOOL_PROFILE})
+    --node-count 1 --vnet-subnet-id ${SUBNET_AKS_ID} ${NODEPOOL_PROFILE})
 
 AKS_NODE_RESOURCE_GROUP=$(echo ${AKS} | jq -r '. | .nodeResourceGroup')
 
