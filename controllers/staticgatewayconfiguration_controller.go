@@ -26,10 +26,18 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -44,6 +52,7 @@ type StaticGatewayConfigurationReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+//+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=staticgatewayconfigurations,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=staticgatewayconfigurations/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=staticgatewayconfigurations/finalizers,verbs=update
@@ -58,16 +67,184 @@ type StaticGatewayConfigurationReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.0/pkg/reconcile
 func (r *StaticGatewayConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	log := log.FromContext(ctx)
 
-	// TODO(user): your logic here
+	// Fetch the StaticGatewayConfiguration instance.
+	gwConfig := &kubeegressgatewayv1alpha1.StaticGatewayConfiguration{}
+	if err := r.Get(ctx, req.NamespacedName, gwConfig); err != nil {
+		if apierrors.IsNotFound(err) {
+			// Object not found, return.
+			return ctrl.Result{}, nil
+		}
+		log.Error(err, "unable to fetch StaticGatewayConfiguration instance")
+		return ctrl.Result{}, err
+	}
 
-	return ctrl.Result{}, nil
+	if !gwConfig.ObjectMeta.DeletionTimestamp.IsZero() {
+		// Clean up staticGatewayConfiguration
+		return r.ensureDeleted(ctx, gwConfig)
+	}
+
+	return r.reconcile(ctx, gwConfig)
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *StaticGatewayConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&kubeegressgatewayv1alpha1.StaticGatewayConfiguration{}).
+		Owns(&corev1.Secret{}).
 		Complete(r)
+}
+
+func (r *StaticGatewayConfigurationReconciler) reconcile(
+	ctx context.Context,
+	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+	log.Info(fmt.Sprintf("Reconciling staticGatewayConfiguration %s/%s", gwConfig.Namespace, gwConfig.Name))
+
+	if !controllerutil.ContainsFinalizer(gwConfig, SGCFinalizerName) {
+		log.Info("Adding finalizer")
+		controllerutil.AddFinalizer(gwConfig, SGCFinalizerName)
+		err := r.Update(ctx, gwConfig)
+		if err != nil {
+			log.Error(err, "failed to add finalizer")
+		}
+		return ctrl.Result{}, err
+	}
+
+	// Make a copy of the original gwConfig to check update
+	existing := &kubeegressgatewayv1alpha1.StaticGatewayConfiguration{}
+	gwConfig.DeepCopyInto(existing)
+
+	// reconcile wireguard keypair
+	if err := r.reconcileWireguardKey(ctx, gwConfig); err != nil {
+		log.Error(err, "failed to reconcile wireguard key")
+		return ctrl.Result{}, err
+	}
+
+	if !equality.Semantic.DeepEqual(existing, gwConfig) {
+		log.Info(fmt.Sprintf("Updating staticGatewayConfiguration %s/%s", gwConfig.Namespace, gwConfig.Name))
+		if err := r.Status().Update(ctx, gwConfig); err != nil {
+			log.Error(err, "failed to update static gateway configuration")
+		}
+	}
+
+	log.Info("staticGatewayConfiguration reconciled")
+	return ctrl.Result{}, nil
+}
+
+func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
+	ctx context.Context,
+	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+	log.Info(fmt.Sprintf("Reconciling staticGatewayConfiguration deletion %s/%s", gwConfig.Namespace, gwConfig.Name))
+
+	if controllerutil.ContainsFinalizer(gwConfig, SGCFinalizerName) {
+		log.Info("Removing finalizer")
+		controllerutil.RemoveFinalizer(gwConfig, SGCFinalizerName)
+		if err := r.Update(ctx, gwConfig); err != nil {
+			log.Error(err, "failed to remove finalizer")
+			return ctrl.Result{}, err
+		}
+	}
+
+	log.Info("staticGatewayConfiguration deletion reconciled")
+	return ctrl.Result{}, nil
+}
+
+func (r *StaticGatewayConfigurationReconciler) reconcileWireguardKey(
+	ctx context.Context,
+	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+) error {
+	log := log.FromContext(ctx)
+
+	// check existence of the wireguard secret key
+	secretKey := getSubresourceKey(gwConfig)
+	secret := &corev1.Secret{}
+	if err := r.Get(ctx, *secretKey, secret); err != nil {
+		if !apierrors.IsNotFound(err) {
+			log.Error(err, "failed to get existing secret %s/%s", secretKey.Namespace, secretKey.Name)
+			return err
+		} else {
+			// secret does not exist, create a new one
+			log.Info(fmt.Sprintf("Creating new wireguard key pair for %s/%s", gwConfig.Namespace, gwConfig.Name))
+			// create new private key
+			wgPrivateKey, err := wgtypes.GeneratePrivateKey()
+			if err != nil {
+				log.Error(err, "failed to generate wireguard private key")
+				return err
+			}
+
+			// create secret
+			secret, err = r.createWireguardSecret(ctx, wgPrivateKey.String(), gwConfig)
+			if err != nil {
+				log.Error(err, "failed to create wireguard secret")
+				return err
+			}
+		}
+	}
+
+	// Update secret reference
+	gwConfig.Status.WireguardPrivateKeySecretRef = &corev1.ObjectReference{
+		APIVersion: "v1",
+		Kind:       "Secret",
+		Name:       secret.Name,
+	}
+
+	// Update public key
+	wgPrivateKeyByte, ok := secret.Data[WireguardSecretKeyName]
+	if !ok {
+		return fmt.Errorf("failed to retrieve private key from secret %s/%s", secretKey.Namespace, secretKey.Name)
+	}
+	wgPrivateKey, err := wgtypes.ParseKey(string(wgPrivateKeyByte))
+	if err != nil {
+		log.Error(err, "failed to parse private key")
+		return err
+	}
+	wgPublicKey := wgPrivateKey.PublicKey().String()
+	gwConfig.Status.WireguardPublicKey = wgPublicKey
+
+	return nil
+}
+
+func getSubresourceKey(
+	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+) *types.NamespacedName {
+	return &types.NamespacedName{
+		Namespace: gwConfig.Namespace,
+		Name:      gwConfig.Name,
+	}
+}
+
+func (r *StaticGatewayConfigurationReconciler) createWireguardSecret(
+	ctx context.Context,
+	privateKey string,
+	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+) (*corev1.Secret, error) {
+	data := map[string][]byte{
+		WireguardSecretKeyName: []byte(privateKey),
+	}
+	secretKey := getSubresourceKey(gwConfig)
+	secret := &corev1.Secret{
+		Data: data,
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretKey.Name,
+			Namespace: secretKey.Namespace,
+		},
+	}
+	if err := controllerutil.SetControllerReference(gwConfig, secret, r.Client.Scheme()); err != nil {
+		return nil, err
+	}
+
+	if err := r.Create(ctx, secret); err != nil {
+		return nil, err
+	}
+
+	retSecret := &corev1.Secret{}
+	if err := r.Get(ctx, *secretKey, retSecret); err != nil {
+		return nil, err
+	}
+	return retSecret, nil
 }

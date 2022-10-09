@@ -25,6 +25,7 @@
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -46,15 +47,19 @@ type StaticGatewayConfigurationSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Name of the gateway nodepool to apply the gateway configuration.
+	// +optional
 	GatewayNodepoolName string `json:"gatewayNodepoolName,omitempty"`
 
 	// Profile of the gateway VMSS to apply the gateway configuration.
+	// +optional
 	GatewayVMSSProfile `json:"gatewayVmssProfile,omitempty"`
 
 	// List of destination cidrs not to be routed via gateway.
+	// +optional
 	ExceptionCIDRs []string `json:"exceptionCIDRs,omitempty"`
 
 	// BYO Resource ID of public IP prefix to be used as outbound.
+	// +optional
 	PublicIpPrefixId string `json:"publicIpPrefixId,omitempty"`
 }
 
@@ -66,8 +71,11 @@ type GatewayWireguardProfile struct {
 	// Listening port of the gateway side wireguard daemon.
 	WireguardServerPort int `json:"wireguardServerPort,omitempty"`
 
-	// Name of the secret that holds gateway side wireguard public key.
-	WireguardKeySecret string `json:"wireguardKeySecret,omitempty"`
+	// Gateway side wireguard public key.
+	WireguardPublicKey string `json:"wireguardPublicKey,omitempty"`
+
+	// Reference of the secret that holds gateway side wireguard private key.
+	WireguardPrivateKeySecretRef *corev1.ObjectReference `json:"wireguardPrivateKeySecretRef,omitempty"`
 }
 
 // StaticGatewayConfigurationStatus defines the observed state of StaticGatewayConfiguration

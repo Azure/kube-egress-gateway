@@ -78,7 +78,7 @@ build: generate fmt vet ## Build manager binary.
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./cmd/kube-egress-gateway-controller/main.go
+	go run ./cmd/kube-egress-gateway-controller/main.go --zap-log-level 5
 
 .PHONY: docker-build
 docker-build: test docker-builder-setup ## Build docker image with the manager.
