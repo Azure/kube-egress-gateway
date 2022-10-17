@@ -15,7 +15,7 @@ require (
 	github.com/spf13/viper v1.13.0
 	go.uber.org/zap v1.23.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20220916014741-473347a5e6e3
-	google.golang.org/grpc v1.50.0
+	google.golang.org/grpc v1.50.1
 	google.golang.org/protobuf v1.28.1
 	k8s.io/api v0.25.3
 	k8s.io/apimachinery v0.25.3
