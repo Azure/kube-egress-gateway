@@ -33,12 +33,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 )
 
 // GatewayVMConfigurationReconciler reconciles a GatewayVMConfiguration object
 type GatewayVMConfigurationReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+
+	azmanager.AzureManager
 }
 
 //+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=gatewayvmconfigurations,verbs=get;list;watch;create;update;patch;delete

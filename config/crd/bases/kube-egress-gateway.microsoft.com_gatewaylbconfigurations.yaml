@@ -36,14 +36,30 @@ spec:
           spec:
             description: GatewayLBConfigurationSpec defines the desired state of GatewayLBConfiguration
             properties:
-              foo:
-                description: Foo is an example field of GatewayLBConfiguration. Edit
-                  gatewaylbconfiguration_types.go to remove/update
+              gatewayNodepoolName:
+                description: Name of the gateway nodepool to apply the gateway configuration.
                 type: string
+              gatewayVmssProfile:
+                description: Profile of the gateway VMSS to apply the gateway configuration.
+                properties:
+                  vmssName:
+                    description: Name of the VMSS
+                    type: string
+                  vmssResourceGroup:
+                    description: Resource group of the VMSS. Must be in the same subscription.
+                    type: string
+                type: object
             type: object
           status:
             description: GatewayLBConfigurationStatus defines the observed state of
               GatewayLBConfiguration
+            properties:
+              frontendIP:
+                description: Gateway IP for wireguard connection.
+                type: string
+              serverPort:
+                description: Listening port of the gateway side wireguard daemon.
+                type: integer
             type: object
         type: object
     served: true

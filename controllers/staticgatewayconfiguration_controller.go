@@ -56,6 +56,8 @@ type StaticGatewayConfigurationReconciler struct {
 //+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=staticgatewayconfigurations,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=staticgatewayconfigurations/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=staticgatewayconfigurations/finalizers,verbs=update
+//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=gatewaylbconfigurations,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=gatewaylbconfigurations/status,verbs=get;update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -93,6 +95,7 @@ func (r *StaticGatewayConfigurationReconciler) SetupWithManager(mgr ctrl.Manager
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&kubeegressgatewayv1alpha1.StaticGatewayConfiguration{}).
 		Owns(&corev1.Secret{}).
+		Owns(&kubeegressgatewayv1alpha1.GatewayLBConfiguration{}).
 		Complete(r)
 }
 
@@ -120,6 +123,12 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 	// reconcile wireguard keypair
 	if err := r.reconcileWireguardKey(ctx, gwConfig); err != nil {
 		log.Error(err, "failed to reconcile wireguard key")
+		return ctrl.Result{}, err
+	}
+
+	// reconcile lbconfig
+	if err := r.reconcileGatewayLBConfig(ctx, gwConfig); err != nil {
+		log.Error(err, "failed to reconcile gateway LB configuration")
 		return ctrl.Result{}, err
 	}
 
@@ -170,15 +179,9 @@ func (r *StaticGatewayConfigurationReconciler) reconcileWireguardKey(
 		} else {
 			// secret does not exist, create a new one
 			log.Info(fmt.Sprintf("Creating new wireguard key pair for %s/%s", gwConfig.Namespace, gwConfig.Name))
-			// create new private key
-			wgPrivateKey, err := wgtypes.GeneratePrivateKey()
-			if err != nil {
-				log.Error(err, "failed to generate wireguard private key")
-				return err
-			}
 
 			// create secret
-			secret, err = r.createWireguardSecret(ctx, wgPrivateKey.String(), gwConfig)
+			secret, err = r.createWireguardSecret(ctx, secretKey, gwConfig)
 			if err != nil {
 				log.Error(err, "failed to create wireguard secret")
 				return err
@@ -220,13 +223,18 @@ func getSubresourceKey(
 
 func (r *StaticGatewayConfigurationReconciler) createWireguardSecret(
 	ctx context.Context,
-	privateKey string,
+	secretKey *types.NamespacedName,
 	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
 ) (*corev1.Secret, error) {
-	data := map[string][]byte{
-		WireguardSecretKeyName: []byte(privateKey),
+	// create new private key
+	wgPrivateKey, err := wgtypes.GeneratePrivateKey()
+	if err != nil {
+		return nil, err
 	}
-	secretKey := getSubresourceKey(gwConfig)
+
+	data := map[string][]byte{
+		WireguardSecretKeyName: []byte(wgPrivateKey.String()),
+	}
 	secret := &corev1.Secret{
 		Data: data,
 		ObjectMeta: metav1.ObjectMeta{
@@ -247,4 +255,83 @@ func (r *StaticGatewayConfigurationReconciler) createWireguardSecret(
 		return nil, err
 	}
 	return retSecret, nil
+}
+
+func (r *StaticGatewayConfigurationReconciler) reconcileGatewayLBConfig(
+	ctx context.Context,
+	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+) error {
+	log := log.FromContext(ctx)
+
+	// check existence of the gatewayLBConfig
+	lbConfigKey := getSubresourceKey(gwConfig)
+	lbConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{}
+	if err := r.Get(ctx, *lbConfigKey, lbConfig); err != nil {
+		if !apierrors.IsNotFound(err) {
+			log.Error(err, "failed to get existing secret %s/%s", lbConfigKey.Namespace, lbConfigKey.Name)
+			return err
+		} else {
+			// secret does not exist, create a new one
+			log.Info(fmt.Sprintf("Creating new gateway LB configuration for %s/%s", gwConfig.Namespace, gwConfig.Name))
+
+			// create secret
+			lbConfig, err = r.createGatewayLBConfig(ctx, lbConfigKey, gwConfig)
+			if err != nil {
+				log.Error(err, "failed to create wireguard secret")
+				return err
+			}
+		}
+	}
+
+	// Collect status from lbConfig to staticGatewayConfiguration
+	if lbConfig.Status.FrontendIP != "" {
+		gwConfig.Status.WireguardServerIP = lbConfig.Status.FrontendIP
+	}
+	if lbConfig.Status.ServerPort >= WireguardPortStart && lbConfig.Status.ServerPort < WireguardPortEnd {
+		gwConfig.Status.WireguardServerPort = lbConfig.Status.ServerPort
+	}
+
+	// Update lbConfig if needed
+	if gwConfig.Spec.GatewayNodepoolName != lbConfig.Spec.GatewayNodepoolName ||
+		gwConfig.Spec.GatewayVMSSProfile != lbConfig.Spec.GatewayVMSSProfile {
+		lbConfig.Spec.GatewayNodepoolName = gwConfig.Spec.GatewayNodepoolName
+		lbConfig.Spec.GatewayVMSSProfile = gwConfig.Spec.GatewayVMSSProfile
+		if err := r.Update(ctx, lbConfig); err != nil {
+			log.Error(err, "failed to update gateway lb configuration")
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *StaticGatewayConfigurationReconciler) createGatewayLBConfig(
+	ctx context.Context,
+	lbConfigKey *types.NamespacedName,
+	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+) (*kubeegressgatewayv1alpha1.GatewayLBConfiguration, error) {
+	lbConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      lbConfigKey.Name,
+			Namespace: lbConfigKey.Namespace,
+		},
+		Spec: kubeegressgatewayv1alpha1.GatewayLBConfigurationSpec{
+			GatewayNodepoolName: gwConfig.Spec.GatewayNodepoolName,
+			GatewayVMSSProfile:  gwConfig.Spec.GatewayVMSSProfile,
+		},
+	}
+
+	if err := controllerutil.SetControllerReference(gwConfig, lbConfig, r.Client.Scheme()); err != nil {
+		return nil, err
+	}
+
+	if err := r.Create(ctx, lbConfig); err != nil {
+		return nil, err
+	}
+
+	retLBConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{}
+	if err := r.Get(ctx, *lbConfigKey, retLBConfig); err != nil {
+		return nil, err
+	}
+	return retLBConfig, nil
 }

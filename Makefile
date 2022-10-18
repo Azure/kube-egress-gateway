@@ -58,7 +58,7 @@ fmt: ## Run go fmt against code.
 
 .PHONY: vet
 vet: golangci-lint ## Run go vet against code.
-	$(LOCALBIN)/golangci-lint run --timeout 10m ./...
+	$(LOCALBIN)/golangci-lint run --timeout 10m --config ./.golangci.yml ./...
 
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
@@ -76,9 +76,10 @@ build: generate fmt vet ## Build manager binary.
 	go build -o bin/cni ./cmd/cni/kube-egress-cni/main.go
 	go build -o bin/cnimanager ./cmd/kube-egress-gateway-cnimanager/main.go
 
+AZURE_CONFIG_FILE ?= ./tests/deploy/azure.json
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./cmd/kube-egress-gateway-controller/main.go --zap-log-level 5
+	go run ./cmd/kube-egress-gateway-controller/main.go --zap-log-level 5 --cloud-config $(AZURE_CONFIG_FILE)
 
 .PHONY: docker-build
 docker-build: test docker-builder-setup ## Build docker image with the manager.
