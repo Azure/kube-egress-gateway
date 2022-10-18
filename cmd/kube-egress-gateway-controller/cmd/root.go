@@ -44,10 +44,9 @@ import (
 
 	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/controllers"
+	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	//+kubebuilder:scaffold:imports
 )
-
-var cfgFile string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -69,6 +68,7 @@ func Execute() {
 }
 
 var (
+	cloudConfigFile      string
 	scheme               = runtime.NewScheme()
 	setupLog             = ctrl.Log.WithName("setup")
 	metricsAddr          string
@@ -80,13 +80,13 @@ var (
 )
 
 func init() {
-	cobra.OnInitialize(initConfig)
+	cobra.OnInitialize(initCloudConfig)
 
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.kube-egress-gateway-controller.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cloudConfigFile, "cloud-config", "/etc/kubernetes/kube-egress-gateway/azure.json", "cloud config file")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
@@ -107,27 +107,22 @@ func init() {
 	//+kubebuilder:scaffold:scheme
 }
 
-// initConfig reads in config file and ENV variables if set.
-func initConfig() {
-	if cfgFile != "" {
-		// Use config file from the flag.
-		viper.SetConfigFile(cfgFile)
-	} else {
-		// Find home directory.
-		home, err := os.UserHomeDir()
-		cobra.CheckErr(err)
-
-		// Search config in home directory with name ".kube-egress-gateway-controller" (without extension).
-		viper.AddConfigPath(home)
-		viper.SetConfigType("yaml")
-		viper.SetConfigName(".kube-egress-gateway-controller")
+// initCloudConfig reads in cloud config file and ENV variables if set.
+func initCloudConfig() {
+	if cloudConfigFile == "" {
+		fmt.Fprintln(os.Stderr, "Error: cloud config file is not provided")
+		os.Exit(1)
 	}
+	viper.SetConfigFile(cloudConfigFile)
 
 	viper.AutomaticEnv() // read in environment variables that match
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
+	} else {
+		fmt.Fprintln(os.Stderr, "Error: failed to find cloud config file:", cloudConfigFile)
+		os.Exit(1)
 	}
 }
 
@@ -159,6 +154,12 @@ func startControllers(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	az, err := azmanager.CreateAzureManager()
+	if err != nil {
+		setupLog.Error(err, "unable to create azure manager")
+		os.Exit(1)
+	}
+
 	if err = (&controllers.StaticGatewayConfigurationReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
@@ -171,15 +172,17 @@ func startControllers(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 	if err = (&controllers.GatewayLBConfigurationReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:       mgr.GetClient(),
+		Scheme:       mgr.GetScheme(),
+		AzureManager: az,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GatewayLBConfiguration")
 		os.Exit(1)
 	}
 	if err = (&controllers.GatewayVMConfigurationReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:       mgr.GetClient(),
+		Scheme:       mgr.GetScheme(),
+		AzureManager: az,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GatewayVMConfiguration")
 		os.Exit(1)

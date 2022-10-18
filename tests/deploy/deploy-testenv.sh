@@ -11,6 +11,11 @@ KUBENET_POD_CIDR=${KUBENET_POD_CIRD:-"10.244.0.0/16"}
 SERVICE_CIDR=${SERVICE_CIDR:-"10.245.0.0/16"}
 LB_NAME=${LB_NAME:-"gateway-ilb"}
 
+: "${AZURE_SUBSCRIPTION_ID:?Environment variable empty or not defined.}"
+: "${AZURE_TENANT_ID:?Environment variable empty or not defined.}"
+: "${AZURE_CLIENT_ID:?Environment variable empty or not defined.}"
+: "${AZURE_CLIENT_SECRET:?Environment variable empty or not defined.}"
+
 # Create resource group
 RG_EXISTS=$(az group exists -n ${RESOURCE_GROUP})
 if [ "$RG_EXISTS" != "true" ]; then
@@ -85,5 +90,24 @@ echo "Updating Gateway VMSS to bind to LB backend"
 VMSS_UPDATE=$(az vmss update -g ${AKS_NODE_RESOURCE_GROUP} -n ${GW_VMSS_NAME} --add virtualMachineProfile.networkProfile.networkInterfaceConfigurations[0].ipConfigurations[0].loadBalancerBackendAddressPools \
     "{\"id\": \"${LB_BACKEND_ID}\"}")
 VMSS_INSTANCE_UPDATE=$(az vmss update-instances -g ${AKS_NODE_RESOURCE_GROUP} -n ${GW_VMSS_NAME} --instance-ids '*')
+
+# Creating azure configuration file for the controllers
+echo "Generating azure configuration file"
+cat << EOF > ./azure.json
+{
+    "cloud": "AzurePublicCloud",
+    "tenantId": "${AZURE_TENANT_ID}",
+    "subscriptionId": "${AZURE_SUBSCRIPTION_ID}",
+    "aadClientId": "${AZURE_CLIENT_ID}",
+    "aadClientSecret": "${AZURE_CLIENT_SECRET}",
+    "resourceGroup": "${AKS_NODE_RESOURCE_GROUP}",
+    "location": "${LOCATION}",
+    "vnetName": "${VNET_NAME}",
+    "vnetResourceGroup": "${RESOURCE_GROUP}",
+    "subnetName": "gateway",
+    "loadBalancerName": "${LB_NAME}",
+    "loadBalancerResourceGroup": "${RESOURCE_GROUP}"
+}
+EOF
 
 echo "Test environment setup completed."

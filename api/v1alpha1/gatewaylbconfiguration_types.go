@@ -36,14 +36,25 @@ type GatewayLBConfigurationSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of GatewayLBConfiguration. Edit gatewaylbconfiguration_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// Name of the gateway nodepool to apply the gateway configuration.
+	// +optional
+	GatewayNodepoolName string `json:"gatewayNodepoolName,omitempty"`
+
+	// Profile of the gateway VMSS to apply the gateway configuration.
+	// +optional
+	GatewayVMSSProfile `json:"gatewayVmssProfile,omitempty"`
 }
 
 // GatewayLBConfigurationStatus defines the observed state of GatewayLBConfiguration
 type GatewayLBConfigurationStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// Gateway IP for wireguard connection.
+	FrontendIP string `json:"frontendIP,omitempty"`
+
+	// Listening port of the gateway side wireguard daemon.
+	ServerPort int `json:"serverPort,omitempty"`
 }
 
 //+kubebuilder:object:root=true
