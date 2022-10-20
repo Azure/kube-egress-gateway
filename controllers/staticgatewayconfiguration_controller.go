@@ -268,16 +268,16 @@ func (r *StaticGatewayConfigurationReconciler) reconcileGatewayLBConfig(
 	lbConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{}
 	if err := r.Get(ctx, *lbConfigKey, lbConfig); err != nil {
 		if !apierrors.IsNotFound(err) {
-			log.Error(err, "failed to get existing secret %s/%s", lbConfigKey.Namespace, lbConfigKey.Name)
+			log.Error(err, "failed to get existing gateway LB configuration %s/%s", lbConfigKey.Namespace, lbConfigKey.Name)
 			return err
 		} else {
-			// secret does not exist, create a new one
+			// lbConfig does not exist, create a new one
 			log.Info(fmt.Sprintf("Creating new gateway LB configuration for %s/%s", gwConfig.Namespace, gwConfig.Name))
 
-			// create secret
+			// create lbConfig
 			lbConfig, err = r.createGatewayLBConfig(ctx, lbConfigKey, gwConfig)
 			if err != nil {
-				log.Error(err, "failed to create wireguard secret")
+				log.Error(err, "failed to create gateway LB configuration")
 				return err
 			}
 		}

@@ -58,7 +58,7 @@ fmt: ## Run go fmt against code.
 
 .PHONY: vet
 vet: golangci-lint ## Run go vet against code.
-	$(LOCALBIN)/golangci-lint run --timeout 10m --config ./.golangci.yml ./...
+	$(LOCALBIN)/golangci-lint run --timeout 10m ./...
 
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.

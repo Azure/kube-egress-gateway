@@ -28,6 +28,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -45,6 +47,7 @@ import (
 	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/controllers"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
+	"github.com/Azure/kube-egress-gateway/pkg/config"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -69,6 +72,7 @@ func Execute() {
 
 var (
 	cloudConfigFile      string
+	cloudConfig          config.CloudConfig
 	scheme               = runtime.NewScheme()
 	setupLog             = ctrl.Log.WithName("setup")
 	metricsAddr          string
@@ -154,7 +158,32 @@ func startControllers(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	az, err := azmanager.CreateAzureManager()
+	if err := viper.Unmarshal(&cloudConfig); err != nil {
+		setupLog.Error(err, "unable to unmarshal cloud configuration file")
+		os.Exit(1)
+	}
+
+	if err := cloudConfig.Validate(); err != nil {
+		setupLog.Error(err, "cloud configuration is invalid")
+		os.Exit(1)
+	}
+
+	var factory azureclients.AzureClientsFactory
+	if cloudConfig.UseUserAssignedIdentity {
+		factory, err = azureclients.NewAzureClientsFactoryWithManagedIdentity(cloudConfig.SubscriptionID, cloudConfig.UserAssignedIdentityID)
+		if err != nil {
+			setupLog.Error(err, "unable to create azure clients")
+			os.Exit(1)
+		}
+	} else {
+		factory, err = azureclients.NewAzureClientsFactoryWithClientSecret(cloudConfig.SubscriptionID, cloudConfig.TenantID,
+			cloudConfig.AADClientID, cloudConfig.AADClientSecret)
+		if err != nil {
+			setupLog.Error(err, "unable to create azure clients")
+			os.Exit(1)
+		}
+	}
+	az, err := azmanager.CreateAzureManager(&cloudConfig, factory)
 	if err != nil {
 		setupLog.Error(err, "unable to create azure manager")
 		os.Exit(1)
