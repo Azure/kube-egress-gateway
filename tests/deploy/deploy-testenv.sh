@@ -77,6 +77,9 @@ readarray -t VMSS_INFO < <(az vmss list -g ${AKS_NODE_RESOURCE_GROUP} | jq -r '.
 GW_VMSS_ID=${VMSS_INFO[0]}
 GW_VMSS_NAME=${VMSS_INFO[1]}
 
+# hack: add additional tag to GW VMSS
+GW_VMSS=$(az vmss update --name ${GW_VMSS_NAME} -g ${AKS_NODE_RESOURCE_GROUP} --set tags.aks-managed-gatewayIPPrefixSize=31)
+
 
 # Creating ILB
 echo "Creating ILB: ${LB_NAME}"

@@ -17,10 +17,6 @@ COPY cmd/ cmd/
 COPY api/ api/
 COPY controllers/ controllers/
 COPY pkg/ pkg/
-# https://github.com/kubernetes-sigs/kubebuilder-declarative-pattern/blob/master/docs/addon/walkthrough/README.md#adding-a-manifest
-# Stage channels and make readable
-COPY channels/ /channels/
-RUN chmod -R a+rx /channels/
 
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -a -o ${MAIN_ENTRY}  ./cmd/${MAIN_ENTRY}/main.go
@@ -30,8 +26,6 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -a -o ${MAIN_ENTRY}  ./
 FROM gcr.io/distroless/static-debian11:nonroot
 WORKDIR /
 COPY --from=base /workspace/${MAIN_ENTRY} .
-# copy channels
-COPY --from=base /channels /channels
 
 USER 65532:65532
 

@@ -49,7 +49,7 @@ type GatewayLBConfigurationReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 
-	azmanager.AzureManager
+	*azmanager.AzureManager
 }
 
 type lbPropertyNames struct {
@@ -167,7 +167,7 @@ func (r *GatewayLBConfigurationReconciler) ensureDeleted(
 		return ctrl.Result{}, err
 	}
 
-	log.Info("gatewayLBConfiguration deletion reconciled")
+	log.Info("GatewayLBConfiguration deletion reconciled")
 	return ctrl.Result{}, nil
 }
 
@@ -188,7 +188,6 @@ func getLBPropertyName(
 }
 
 func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
-	ctx context.Context,
 	lbConfig *kubeegressgatewayv1alpha1.GatewayLBConfiguration,
 ) (*compute.VirtualMachineScaleSet, error) {
 	if lbConfig.Spec.GatewayNodepoolName != "" {
@@ -234,9 +233,9 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 	}
 
 	// get gateway VMSS
-	vmss, err := r.getGatewayVMSS(ctx, lbConfig)
+	vmss, err := r.getGatewayVMSS(lbConfig)
 	if err != nil {
-		log.Error(err, "failed to get vmssID")
+		log.Error(err, "failed to get vmss")
 		return "", 0, err
 	}
 

@@ -11,4 +11,4 @@ spec:
   - 10.0.0.0/8
   - 172.16.0.0/12
   - 120.123.0.0/16
-  publicIpPrefixId: /subscriptions/<subscription_id>/resourceGroups/<rg_name>/providers/Microsoft.Network/publicIPPrefixes/<prefix_name>
+  # publicIpPrefixId: /subscriptions/<subscription_id>/resourceGroups/<rg_name>/providers/Microsoft.Network/publicIPPrefixes/<prefix_name>

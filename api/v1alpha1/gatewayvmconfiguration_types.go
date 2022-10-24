@@ -36,14 +36,26 @@ type GatewayVMConfigurationSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of GatewayVMConfiguration. Edit gatewayvmconfiguration_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// Name of the gateway nodepool to apply the gateway configuration.
+	// +optional
+	GatewayNodepoolName string `json:"gatewayNodepoolName,omitempty"`
+
+	// Profile of the gateway VMSS to apply the gateway configuration.
+	// +optional
+	GatewayVMSSProfile `json:"gatewayVmssProfile,omitempty"`
+
+	// BYO Resource ID of public IP prefix to be used as outbound.
+	// +optional
+	PublicIpPrefixId string `json:"publicIpPrefixId,omitempty"`
 }
 
 // GatewayVMConfigurationStatus defines the observed state of GatewayVMConfiguration
 type GatewayVMConfigurationStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// The egress source IP for traffic using this configuration.
+	EgressIpPrefix string `json:"egressIpPrefix,omitempty"`
 }
 
 //+kubebuilder:object:root=true

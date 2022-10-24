@@ -7,6 +7,9 @@ const (
 	// GatewayLBConfiguration finalizer name
 	LBConfigFinalizerName = "gateway-lb-configuration-controller.microsoft.com"
 
+	// GatewayVMConfiguration finalizer name
+	VMConfigFinalizerName = "gateway-vm-configuration-controller.microsoft.com"
+
 	// Key name in the wireugard private key secret
 	WireguardSecretKeyName = "WireguardPrivateKey"
 
@@ -21,4 +24,7 @@ const (
 
 	// nodepool name tag key in aks clusters
 	AKSNodepoolTagKey = "aks-managed-poolName"
+
+	// gateway nodepool ip prefix size tag key in aks clusters
+	AKSNodepoolIPPrefixSizeTagKey = "aks-managed-gatewayIPPrefixSize"
 )

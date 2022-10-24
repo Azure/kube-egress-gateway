@@ -39,6 +39,9 @@ type GatewayVMSSProfile struct {
 
 	// Name of the VMSS
 	VMSSName string `json:"vmssName,omitempty"`
+
+	// Public IP prefix size to be applied to this VMSS.
+	PublicIPPrefixSize int32 `json:"publicIPPrefixSize,omitempty"`
 }
 
 // StaticGatewayConfigurationSpec defines the desired state of StaticGatewayConfiguration

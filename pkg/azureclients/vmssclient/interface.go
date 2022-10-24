@@ -15,4 +15,7 @@ type Interface interface {
 
 	// CreateOrUpdate() creates or updates a virtual machine scale set (vmss) object
 	CreateOrUpdate(ctx context.Context, resourceGroupName string, vmScaleSetName string, vmScaleSet compute.VirtualMachineScaleSet) (*compute.VirtualMachineScaleSet, error)
+
+	// UpdateInstances() updates one or more VM instances in a vmss object
+	UpdateInstances(ctx context.Context, resourceGroupName string, vmScaleSetName string, vmInstanceIDs []*string) error
 }

@@ -42,6 +42,10 @@ spec:
               gatewayVmssProfile:
                 description: Profile of the gateway VMSS to apply the gateway configuration.
                 properties:
+                  publicIPPrefixSize:
+                    description: Public IP prefix size to be applied to this VMSS.
+                    format: int32
+                    type: integer
                   vmssName:
                     description: Name of the VMSS
                     type: string
