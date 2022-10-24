@@ -8,7 +8,9 @@ import (
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/loadbalancerclient"
+	"github.com/Azure/kube-egress-gateway/pkg/azureclients/publicipprefixclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssclient"
+	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssvmclient"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 )
@@ -27,11 +29,13 @@ const (
 type AzureManager struct {
 	*config.CloudConfig
 
-	LoadBalancerClient loadbalancerclient.Interface
-	VmssClient         vmssclient.Interface
+	LoadBalancerClient   loadbalancerclient.Interface
+	VmssClient           vmssclient.Interface
+	VmssVMClient         vmssvmclient.Interface
+	PublicIPPrefixClient publicipprefixclient.Interface
 }
 
-func CreateAzureManager(cloud *config.CloudConfig, factory azureclients.AzureClientsFactory) (AzureManager, error) {
+func CreateAzureManager(cloud *config.CloudConfig, factory azureclients.AzureClientsFactory) (*AzureManager, error) {
 	az := AzureManager{
 		CloudConfig: cloud,
 	}
@@ -50,28 +54,49 @@ func CreateAzureManager(cloud *config.CloudConfig, factory azureclients.AzureCli
 
 	lbClient, err := factory.GetLoadBalancersClient()
 	if err != nil {
-		return AzureManager{}, err
+		return &AzureManager{}, err
 	}
 	az.LoadBalancerClient = lbClient
+
 	vmssClient, err := factory.GetVirtualMachineScaleSetsClient()
 	if err != nil {
-		return AzureManager{}, err
+		return &AzureManager{}, err
 	}
 	az.VmssClient = vmssClient
 
-	return az, nil
+	publicIPPrefixClient, err := factory.GetPublicIPPrefixesClient()
+	if err != nil {
+		return &AzureManager{}, err
+	}
+	az.PublicIPPrefixClient = publicIPPrefixClient
+
+	vmssVMClient, err := factory.GetVirtualMachineScaleSetVMsClient()
+	if err != nil {
+		return &AzureManager{}, err
+	}
+	az.VmssVMClient = vmssVMClient
+
+	return &az, nil
+}
+
+func (az *AzureManager) SubscriptionID() string {
+	return az.CloudConfig.SubscriptionID
+}
+
+func (az *AzureManager) Location() string {
+	return az.CloudConfig.Location
 }
 
 func (az *AzureManager) GetLBFrontendIPConfigurationID(name string) *string {
-	return to.Ptr(fmt.Sprintf(LBFrontendIPConfigTemplate, az.SubscriptionID, az.LoadBalancerResourceGroup, az.LoadBalancerName, name))
+	return to.Ptr(fmt.Sprintf(LBFrontendIPConfigTemplate, az.SubscriptionID(), az.LoadBalancerResourceGroup, az.LoadBalancerName, name))
 }
 
 func (az *AzureManager) GetLBBackendAddressPoolID(name string) *string {
-	return to.Ptr(fmt.Sprintf(LBBackendPoolIDTemplate, az.SubscriptionID, az.LoadBalancerResourceGroup, az.LoadBalancerName, name))
+	return to.Ptr(fmt.Sprintf(LBBackendPoolIDTemplate, az.SubscriptionID(), az.LoadBalancerResourceGroup, az.LoadBalancerName, name))
 }
 
 func (az *AzureManager) GetLBProbeID(name string) *string {
-	return to.Ptr(fmt.Sprintf(LBProbeIDTemplate, az.SubscriptionID, az.LoadBalancerResourceGroup, az.LoadBalancerName, name))
+	return to.Ptr(fmt.Sprintf(LBProbeIDTemplate, az.SubscriptionID(), az.LoadBalancerResourceGroup, az.LoadBalancerName, name))
 }
 
 func (az *AzureManager) GetLB() (*network.LoadBalancer, error) {
@@ -109,4 +134,80 @@ func (az *AzureManager) GetVMSS(resourceGroup, vmssName string) (*compute.Virtua
 		return nil, err
 	}
 	return vmss, nil
+}
+
+func (az *AzureManager) CreateOrUpdateVMSS(resourceGroup, vmssName string, vmss compute.VirtualMachineScaleSet) (*compute.VirtualMachineScaleSet, error) {
+	if resourceGroup == "" {
+		resourceGroup = az.ResourceGroup
+	}
+	if vmssName == "" {
+		return nil, fmt.Errorf("vmss name is empty")
+	}
+	retVmss, err := az.VmssClient.CreateOrUpdate(context.Background(), resourceGroup, vmssName, vmss)
+	if err != nil {
+		return nil, err
+	}
+	return retVmss, nil
+}
+
+func (az *AzureManager) UpdateVMSSInstances(resourceGroup, vmssName string, instanceIDs []*string) error {
+	if resourceGroup == "" {
+		resourceGroup = az.ResourceGroup
+	}
+	if vmssName == "" {
+		return fmt.Errorf("vmss name is empty")
+	}
+	return az.VmssClient.UpdateInstances(context.Background(), resourceGroup, vmssName, instanceIDs)
+}
+
+func (az *AzureManager) ListVMSSInstances(resourceGroup, vmssName string) ([]*compute.VirtualMachineScaleSetVM, error) {
+	if resourceGroup == "" {
+		resourceGroup = az.ResourceGroup
+	}
+	if vmssName == "" {
+		return nil, fmt.Errorf("vmss name is empty")
+	}
+	vms, err := az.VmssVMClient.List(context.Background(), resourceGroup, vmssName)
+	if err != nil {
+		return nil, err
+	}
+	return vms, nil
+}
+
+func (az *AzureManager) GetPublicIPPrefix(resourceGroup, prefixName string) (*network.PublicIPPrefix, error) {
+	if resourceGroup == "" {
+		resourceGroup = az.ResourceGroup
+	}
+	if prefixName == "" {
+		return nil, fmt.Errorf("public ip prefix name is empty")
+	}
+	prefix, err := az.PublicIPPrefixClient.Get(context.Background(), resourceGroup, prefixName, "")
+	if err != nil {
+		return nil, err
+	}
+	return prefix, nil
+}
+
+func (az *AzureManager) CreateOrUpdatePublicIPPrefix(resourceGroup, prefixName string, ipPrefix network.PublicIPPrefix) (*network.PublicIPPrefix, error) {
+	if resourceGroup == "" {
+		resourceGroup = az.ResourceGroup
+	}
+	if prefixName == "" {
+		return nil, fmt.Errorf("public ip prefix name is empty")
+	}
+	prefix, err := az.PublicIPPrefixClient.CreateOrUpdate(context.Background(), resourceGroup, prefixName, ipPrefix)
+	if err != nil {
+		return nil, err
+	}
+	return prefix, nil
+}
+
+func (az *AzureManager) DeletePublicIPPrefix(resourceGroup, prefixName string) error {
+	if resourceGroup == "" {
+		resourceGroup = az.ResourceGroup
+	}
+	if prefixName == "" {
+		return fmt.Errorf("public ip prefix name is empty")
+	}
+	return az.PublicIPPrefixClient.Delete(context.Background(), resourceGroup, prefixName)
 }

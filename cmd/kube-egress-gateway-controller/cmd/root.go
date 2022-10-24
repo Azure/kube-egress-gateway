@@ -170,13 +170,13 @@ func startControllers(cmd *cobra.Command, args []string) {
 
 	var factory azureclients.AzureClientsFactory
 	if cloudConfig.UseUserAssignedIdentity {
-		factory, err = azureclients.NewAzureClientsFactoryWithManagedIdentity(cloudConfig.SubscriptionID, cloudConfig.UserAssignedIdentityID)
+		factory, err = azureclients.NewAzureClientsFactoryWithManagedIdentity(cloudConfig.Cloud, cloudConfig.SubscriptionID, cloudConfig.UserAssignedIdentityID)
 		if err != nil {
 			setupLog.Error(err, "unable to create azure clients")
 			os.Exit(1)
 		}
 	} else {
-		factory, err = azureclients.NewAzureClientsFactoryWithClientSecret(cloudConfig.SubscriptionID, cloudConfig.TenantID,
+		factory, err = azureclients.NewAzureClientsFactoryWithClientSecret(cloudConfig.Cloud, cloudConfig.SubscriptionID, cloudConfig.TenantID,
 			cloudConfig.AADClientID, cloudConfig.AADClientSecret)
 		if err != nil {
 			setupLog.Error(err, "unable to create azure clients")

@@ -96,6 +96,7 @@ func (r *StaticGatewayConfigurationReconciler) SetupWithManager(mgr ctrl.Manager
 		For(&kubeegressgatewayv1alpha1.StaticGatewayConfiguration{}).
 		Owns(&corev1.Secret{}).
 		Owns(&kubeegressgatewayv1alpha1.GatewayLBConfiguration{}).
+		Owns(&kubeegressgatewayv1alpha1.GatewayVMConfiguration{}).
 		Complete(r)
 }
 
@@ -129,6 +130,12 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 	// reconcile lbconfig
 	if err := r.reconcileGatewayLBConfig(ctx, gwConfig); err != nil {
 		log.Error(err, "failed to reconcile gateway LB configuration")
+		return ctrl.Result{}, err
+	}
+
+	// reconcile vmconfig
+	if err := r.reconcileGatewayVMConfig(ctx, gwConfig); err != nil {
+		log.Error(err, "failed to reconcile gateway VM configuration")
 		return ctrl.Result{}, err
 	}
 
@@ -250,11 +257,7 @@ func (r *StaticGatewayConfigurationReconciler) createWireguardSecret(
 		return nil, err
 	}
 
-	retSecret := &corev1.Secret{}
-	if err := r.Get(ctx, *secretKey, retSecret); err != nil {
-		return nil, err
-	}
-	return retSecret, nil
+	return secret, nil
 }
 
 func (r *StaticGatewayConfigurationReconciler) reconcileGatewayLBConfig(
@@ -283,23 +286,25 @@ func (r *StaticGatewayConfigurationReconciler) reconcileGatewayLBConfig(
 		}
 	}
 
-	// Collect status from lbConfig to staticGatewayConfiguration
-	if lbConfig.Status.FrontendIP != "" {
-		gwConfig.Status.WireguardServerIP = lbConfig.Status.FrontendIP
-	}
-	if lbConfig.Status.ServerPort >= WireguardPortStart && lbConfig.Status.ServerPort < WireguardPortEnd {
-		gwConfig.Status.WireguardServerPort = lbConfig.Status.ServerPort
-	}
-
 	// Update lbConfig if needed
 	if gwConfig.Spec.GatewayNodepoolName != lbConfig.Spec.GatewayNodepoolName ||
 		gwConfig.Spec.GatewayVMSSProfile != lbConfig.Spec.GatewayVMSSProfile {
+		log.Info("Updating gateway lb configuration")
 		lbConfig.Spec.GatewayNodepoolName = gwConfig.Spec.GatewayNodepoolName
 		lbConfig.Spec.GatewayVMSSProfile = gwConfig.Spec.GatewayVMSSProfile
 		if err := r.Update(ctx, lbConfig); err != nil {
 			log.Error(err, "failed to update gateway lb configuration")
 			return err
 		}
+		return nil
+	}
+
+	// Collect status from lbConfig to staticGatewayConfiguration
+	if lbConfig.Status.FrontendIP != "" {
+		gwConfig.Status.WireguardServerIP = lbConfig.Status.FrontendIP
+	}
+	if lbConfig.Status.ServerPort >= WireguardPortStart && lbConfig.Status.ServerPort < WireguardPortEnd {
+		gwConfig.Status.WireguardServerPort = lbConfig.Status.ServerPort
 	}
 
 	return nil
@@ -310,6 +315,7 @@ func (r *StaticGatewayConfigurationReconciler) createGatewayLBConfig(
 	lbConfigKey *types.NamespacedName,
 	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
 ) (*kubeegressgatewayv1alpha1.GatewayLBConfiguration, error) {
+	log := log.FromContext(ctx)
 	lbConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      lbConfigKey.Name,
@@ -325,13 +331,89 @@ func (r *StaticGatewayConfigurationReconciler) createGatewayLBConfig(
 		return nil, err
 	}
 
+	log.Info("Creating new gateway lb configuration")
 	if err := r.Create(ctx, lbConfig); err != nil {
 		return nil, err
 	}
 
-	retLBConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{}
-	if err := r.Get(ctx, *lbConfigKey, retLBConfig); err != nil {
+	return lbConfig, nil
+}
+
+func (r *StaticGatewayConfigurationReconciler) reconcileGatewayVMConfig(
+	ctx context.Context,
+	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+) error {
+	log := log.FromContext(ctx)
+
+	// check existence of the gatewayVMConfig
+	vmConfigKey := getSubresourceKey(gwConfig)
+	vmConfig := &kubeegressgatewayv1alpha1.GatewayVMConfiguration{}
+	if err := r.Get(ctx, *vmConfigKey, vmConfig); err != nil {
+		if !apierrors.IsNotFound(err) {
+			log.Error(err, "failed to get existing gateway VM configuration %s/%s", vmConfigKey.Namespace, vmConfigKey.Name)
+			return err
+		} else {
+			// vmConfig does not exist, create a new one
+			log.Info(fmt.Sprintf("Creating new gateway VM configuration for %s/%s", gwConfig.Namespace, gwConfig.Name))
+
+			// create vmConfig
+			vmConfig, err = r.createGatewayVMConfig(ctx, vmConfigKey, gwConfig)
+			if err != nil {
+				log.Error(err, "failed to create gateway VM configuration")
+				return err
+			}
+		}
+	}
+
+	// Update vmConfig if needed
+	if gwConfig.Spec.GatewayNodepoolName != vmConfig.Spec.GatewayNodepoolName ||
+		gwConfig.Spec.GatewayVMSSProfile != vmConfig.Spec.GatewayVMSSProfile ||
+		gwConfig.Spec.PublicIpPrefixId != vmConfig.Spec.PublicIpPrefixId {
+		vmConfig.Spec.GatewayNodepoolName = gwConfig.Spec.GatewayNodepoolName
+		vmConfig.Spec.GatewayVMSSProfile = gwConfig.Spec.GatewayVMSSProfile
+		vmConfig.Spec.PublicIpPrefixId = gwConfig.Spec.PublicIpPrefixId
+		log.Info("Updating gateway vm configuration")
+		if err := r.Update(ctx, vmConfig); err != nil {
+			log.Error(err, "failed to update gateway vm configuration")
+			return err
+		}
+		return nil
+	}
+
+	// Collect status from vmConfig to staticGatewayConfiguration
+	if vmConfig.Status.EgressIpPrefix != "" {
+		gwConfig.Status.PublicIpPrefix = vmConfig.Status.EgressIpPrefix
+	}
+
+	return nil
+}
+
+func (r *StaticGatewayConfigurationReconciler) createGatewayVMConfig(
+	ctx context.Context,
+	vmConfigKey *types.NamespacedName,
+	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+) (*kubeegressgatewayv1alpha1.GatewayVMConfiguration, error) {
+	log := log.FromContext(ctx)
+	vmConfig := &kubeegressgatewayv1alpha1.GatewayVMConfiguration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      vmConfigKey.Name,
+			Namespace: vmConfigKey.Namespace,
+		},
+		Spec: kubeegressgatewayv1alpha1.GatewayVMConfigurationSpec{
+			GatewayNodepoolName: gwConfig.Spec.GatewayNodepoolName,
+			GatewayVMSSProfile:  gwConfig.Spec.GatewayVMSSProfile,
+			PublicIpPrefixId:    gwConfig.Spec.PublicIpPrefixId,
+		},
+	}
+
+	if err := controllerutil.SetControllerReference(gwConfig, vmConfig, r.Client.Scheme()); err != nil {
 		return nil, err
 	}
-	return retLBConfig, nil
+
+	log.Info("Creating new gateway vm configuration")
+	if err := r.Create(ctx, vmConfig); err != nil {
+		return nil, err
+	}
+
+	return vmConfig, nil
 }
