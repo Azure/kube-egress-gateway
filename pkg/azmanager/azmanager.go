@@ -150,16 +150,6 @@ func (az *AzureManager) CreateOrUpdateVMSS(resourceGroup, vmssName string, vmss 
 	return retVmss, nil
 }
 
-func (az *AzureManager) UpdateVMSSInstances(resourceGroup, vmssName string, instanceIDs []*string) error {
-	if resourceGroup == "" {
-		resourceGroup = az.ResourceGroup
-	}
-	if vmssName == "" {
-		return fmt.Errorf("vmss name is empty")
-	}
-	return az.VmssClient.UpdateInstances(context.Background(), resourceGroup, vmssName, instanceIDs)
-}
-
 func (az *AzureManager) ListVMSSInstances(resourceGroup, vmssName string) ([]*compute.VirtualMachineScaleSetVM, error) {
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
@@ -172,6 +162,23 @@ func (az *AzureManager) ListVMSSInstances(resourceGroup, vmssName string) ([]*co
 		return nil, err
 	}
 	return vms, nil
+}
+
+func (az *AzureManager) UpdateVMSSInstance(resourceGroup, vmssName, instanceID string, vm compute.VirtualMachineScaleSetVM) (*compute.VirtualMachineScaleSetVM, error) {
+	if resourceGroup == "" {
+		resourceGroup = az.ResourceGroup
+	}
+	if vmssName == "" {
+		return nil, fmt.Errorf("vmss name is empty")
+	}
+	if instanceID == "" {
+		return nil, fmt.Errorf("vmss instanceID is empty")
+	}
+	retVM, err := az.VmssVMClient.Update(context.Background(), resourceGroup, vmssName, instanceID, vm)
+	if err != nil {
+		return nil, err
+	}
+	return retVM, nil
 }
 
 func (az *AzureManager) GetPublicIPPrefix(resourceGroup, prefixName string) (*network.PublicIPPrefix, error) {

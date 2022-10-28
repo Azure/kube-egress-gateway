@@ -53,13 +53,3 @@ func (client *VirtualMachineScaleSetsClient) CreateOrUpdate(ctx context.Context,
 	}
 	return &resp.VirtualMachineScaleSet, nil
 }
-
-func (client *VirtualMachineScaleSetsClient) UpdateInstances(ctx context.Context, resourceGroupName string, vmScaleSetName string, vmInstanceIDs []*string) error {
-	instanceIDs := compute.VirtualMachineScaleSetVMInstanceRequiredIDs{
-		InstanceIDs: vmInstanceIDs,
-	}
-	_, err := utils.PollUntilDone(ctx, func() (*runtime.Poller[compute.VirtualMachineScaleSetsClientUpdateInstancesResponse], error) {
-		return client.VirtualMachineScaleSetsClient.BeginUpdateInstances(ctx, resourceGroupName, vmScaleSetName, instanceIDs, nil)
-	})
-	return err
-}
