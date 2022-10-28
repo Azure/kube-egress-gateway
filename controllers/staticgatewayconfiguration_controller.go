@@ -157,7 +157,51 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 	log := log.FromContext(ctx)
 	log.Info(fmt.Sprintf("Reconciling staticGatewayConfiguration deletion %s/%s", gwConfig.Namespace, gwConfig.Name))
 
-	if controllerutil.ContainsFinalizer(gwConfig, SGCFinalizerName) {
+	if !controllerutil.ContainsFinalizer(gwConfig, SGCFinalizerName) {
+		log.Info("gwConfig does not have finalizer, no additional cleanup needed")
+		return ctrl.Result{}, nil
+	}
+
+	lbConfigDeleted, vmConfigDeleted := false, false
+	subresourceKey := getSubresourceKey(gwConfig)
+	lbConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{}
+	if err := r.Get(ctx, *subresourceKey, lbConfig); err != nil {
+		if !apierrors.IsNotFound(err) {
+			log.Error(err, "failed to get existing gateway LB configuration")
+			return ctrl.Result{}, err
+		}
+		// lbConfig does not exist, no additional action needed
+		log.Info("LBConfig is already deleted")
+		lbConfigDeleted = true
+	} else {
+		if lbConfig.GetDeletionTimestamp().IsZero() {
+			log.Info("Deleting LBConfig")
+			if err := r.Delete(ctx, lbConfig); err != nil {
+				log.Error(err, "failed to delete existing gateway LB configuration")
+				return ctrl.Result{}, err
+			}
+		}
+	}
+	vmConfig := &kubeegressgatewayv1alpha1.GatewayVMConfiguration{}
+	if err := r.Get(ctx, *subresourceKey, vmConfig); err != nil {
+		if !apierrors.IsNotFound(err) {
+			log.Error(err, "failed to get existing gateway VM configuration")
+			return ctrl.Result{}, err
+		}
+		// vmConfig does not exist, no additional action needed
+		log.Info("VMConfig is already deleted")
+		vmConfigDeleted = true
+	} else {
+		if vmConfig.GetDeletionTimestamp().IsZero() {
+			log.Info("Deleting VMConfig")
+			if err := r.Delete(ctx, vmConfig); err != nil {
+				log.Error(err, "failed to delete existing gateway VM configuration")
+				return ctrl.Result{}, err
+			}
+		}
+	}
+
+	if lbConfigDeleted && vmConfigDeleted && controllerutil.ContainsFinalizer(gwConfig, SGCFinalizerName) {
 		log.Info("Removing finalizer")
 		controllerutil.RemoveFinalizer(gwConfig, SGCFinalizerName)
 		if err := r.Update(ctx, gwConfig); err != nil {
