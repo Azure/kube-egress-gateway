@@ -23,12 +23,6 @@ type CloudConfig struct {
 	UserAgent string
 	// default resource group where the gateway nodes are deployed
 	ResourceGroup string
-	// name of the virtual network where the gateway nodes and lb frontend ip belongs
-	VnetName string
-	// resource group where the virtual network is deployed
-	VnetResourceGroup string
-	// name of the subnet where the gateway nodes and lb frontend ip belongs
-	SubnetName string
 	// name of the gateway ILB
 	LoadBalancerName string
 	// resource group where the gateway ILB belongs
@@ -60,14 +54,6 @@ func (cfg *CloudConfig) Validate() error {
 
 	if cfg.ResourceGroup == "" {
 		return fmt.Errorf("resource group is empty")
-	}
-
-	if cfg.VnetName == "" {
-		return fmt.Errorf("vnet name is empty")
-	}
-
-	if cfg.SubnetName == "" {
-		return fmt.Errorf("subnet name is empty")
 	}
 
 	if cfg.LoadBalancerName == "" {

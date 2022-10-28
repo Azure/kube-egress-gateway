@@ -16,16 +16,16 @@ import (
 
 type AzureClientsFactory interface {
 	// get load balancers client
-	GetLoadBalancersClient() (*loadbalancerclient.LoadBalancersClient, error)
+	GetLoadBalancersClient() (loadbalancerclient.Interface, error)
 
 	// get virtual machine scale sets client
-	GetVirtualMachineScaleSetsClient() (*vmssclient.VirtualMachineScaleSetsClient, error)
+	GetVirtualMachineScaleSetsClient() (vmssclient.Interface, error)
 
 	// get virtual machine scale set vms client
-	GetVirtualMachineScaleSetVMsClient() (*vmssvmclient.VirtualMachineScaleSetVMsClient, error)
+	GetVirtualMachineScaleSetVMsClient() (vmssvmclient.Interface, error)
 
 	// get public ip prefixes client
-	GetPublicIPPrefixesClient() (*publicipprefixclient.PublicIPPrefixesClient, error)
+	GetPublicIPPrefixesClient() (publicipprefixclient.Interface, error)
 }
 
 type azureClientsFactory struct {
@@ -66,7 +66,7 @@ func NewAzureClientsFactoryWithManagedIdentity(cloud, subscriptionID, managedIde
 	}, nil
 }
 
-func (factory *azureClientsFactory) GetLoadBalancersClient() (*loadbalancerclient.LoadBalancersClient, error) {
+func (factory *azureClientsFactory) GetLoadBalancersClient() (loadbalancerclient.Interface, error) {
 	client, err := loadbalancerclient.NewLoadBalancersClient(factory.subscriptionID, factory.credentials, factory.clientOptions)
 	if err != nil {
 		return nil, err
@@ -74,7 +74,7 @@ func (factory *azureClientsFactory) GetLoadBalancersClient() (*loadbalancerclien
 	return client, nil
 }
 
-func (factory *azureClientsFactory) GetVirtualMachineScaleSetsClient() (*vmssclient.VirtualMachineScaleSetsClient, error) {
+func (factory *azureClientsFactory) GetVirtualMachineScaleSetsClient() (vmssclient.Interface, error) {
 	client, err := vmssclient.NewVirtualMachineScaleSetsClient(factory.subscriptionID, factory.credentials, factory.clientOptions)
 	if err != nil {
 		return nil, err
@@ -82,7 +82,7 @@ func (factory *azureClientsFactory) GetVirtualMachineScaleSetsClient() (*vmsscli
 	return client, nil
 }
 
-func (factory *azureClientsFactory) GetVirtualMachineScaleSetVMsClient() (*vmssvmclient.VirtualMachineScaleSetVMsClient, error) {
+func (factory *azureClientsFactory) GetVirtualMachineScaleSetVMsClient() (vmssvmclient.Interface, error) {
 	client, err := vmssvmclient.NewVirtualMachineScaleSetVMsClient(factory.subscriptionID, factory.credentials, factory.clientOptions)
 	if err != nil {
 		return nil, err
@@ -90,7 +90,7 @@ func (factory *azureClientsFactory) GetVirtualMachineScaleSetVMsClient() (*vmssv
 	return client, nil
 }
 
-func (factory *azureClientsFactory) GetPublicIPPrefixesClient() (*publicipprefixclient.PublicIPPrefixesClient, error) {
+func (factory *azureClientsFactory) GetPublicIPPrefixesClient() (publicipprefixclient.Interface, error) {
 	client, err := publicipprefixclient.NewPublicIPPrefixesClient(factory.subscriptionID, factory.credentials, factory.clientOptions)
 	if err != nil {
 		return nil, err

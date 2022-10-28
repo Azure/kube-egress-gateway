@@ -44,10 +44,6 @@ func CreateAzureManager(cloud *config.CloudConfig, factory azureclients.AzureCli
 		az.UserAgent = DefaultUserAgent
 	}
 
-	if az.VnetResourceGroup == "" {
-		az.VnetResourceGroup = az.ResourceGroup
-	}
-
 	if az.LoadBalancerResourceGroup == "" {
 		az.LoadBalancerResourceGroup = az.ResourceGroup
 	}
