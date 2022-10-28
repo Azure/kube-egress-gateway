@@ -105,9 +105,6 @@ cat << EOF > ./azure.json
     "aadClientSecret": "${AZURE_CLIENT_SECRET}",
     "resourceGroup": "${AKS_NODE_RESOURCE_GROUP}",
     "location": "${LOCATION}",
-    "vnetName": "${VNET_NAME}",
-    "vnetResourceGroup": "${RESOURCE_GROUP}",
-    "subnetName": "gateway",
     "loadBalancerName": "${LB_NAME}",
     "loadBalancerResourceGroup": "${RESOURCE_GROUP}"
 }
