@@ -337,16 +337,96 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSS(
 	log := log.FromContext(ctx)
 	ipConfigName := managedSubresourceName(vmConfig)
 	needUpdate := false
-	foundConfig := false
-	var primaryNic *compute.VirtualMachineScaleSetNetworkConfiguration
 
 	if vmss.Properties == nil || vmss.Properties.VirtualMachineProfile == nil ||
 		vmss.Properties.VirtualMachineProfile.NetworkProfile == nil {
 		return fmt.Errorf("vmss has empty network profile")
 	}
 
-	expectedConfig := r.getExpectedIPConfig(ipConfigName, ipPrefixID, vmss)
-	for _, nic := range vmss.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations {
+	interfaces := vmss.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
+	needUpdate, err := r.reconcileVMSSNetworkInterface(ctx, ipConfigName, ipPrefixID, wantIPConfig, interfaces)
+	if err != nil {
+		return fmt.Errorf("failed to reconcile vmss interface(%s): %v", to.Val(vmss.Name), err)
+	}
+
+	if needUpdate {
+		log.Info("Updating vmss", "vmssName", to.Val(vmss.Name))
+		newVmss := compute.VirtualMachineScaleSet{
+			Location: vmss.Location,
+			Properties: &compute.VirtualMachineScaleSetProperties{
+				VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
+					NetworkProfile: vmss.Properties.VirtualMachineProfile.NetworkProfile,
+				},
+			},
+		}
+		if _, err := r.CreateOrUpdateVMSS("", to.Val(vmss.Name), newVmss); err != nil {
+			return fmt.Errorf("failed to update vmss(%s): %v", to.Val(vmss.Name), err)
+		}
+	}
+
+	// check and update VMSS instances
+	instances, err := r.ListVMSSInstances("", to.Val(vmss.Name))
+	if err != nil {
+		return fmt.Errorf("failed to get vm instances from vmss(%s): %v", to.Val(vmss.Name), err)
+	}
+	for _, instance := range instances {
+		if err != r.reconcileVMSSVM(ctx, vmConfig, to.Val(vmss.Name), instance, ipPrefixID, wantIPConfig) {
+			return fmt.Errorf("failed to update vmss instance(%s): %v", to.Val(instance.Name), err)
+		}
+	}
+	return nil
+}
+
+func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
+	ctx context.Context,
+	vmConfig *kubeegressgatewayv1alpha1.GatewayVMConfiguration,
+	vmssName string,
+	vm *compute.VirtualMachineScaleSetVM,
+	ipPrefixID string,
+	wantIPConfig bool,
+) error {
+	log := log.FromContext(ctx)
+	ipConfigName := managedSubresourceName(vmConfig)
+
+	if vm.Properties == nil || vm.Properties.NetworkProfileConfiguration == nil {
+		return fmt.Errorf("vmss vm(%s) has empty network profile", to.Val(vm.InstanceID))
+	}
+
+	interfaces := vm.Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations
+	needUpdate, err := r.reconcileVMSSNetworkInterface(ctx, ipConfigName, ipPrefixID, wantIPConfig, interfaces)
+	if err != nil {
+		return fmt.Errorf("failed to reconcile vm interface(%s): %v", to.Val(vm.InstanceID), err)
+	}
+	if needUpdate {
+		log.Info("Updating vmss instance", "vmInstanceID", to.Val(vm.InstanceID))
+		newVM := compute.VirtualMachineScaleSetVM{
+			Properties: &compute.VirtualMachineScaleSetVMProperties{
+				NetworkProfileConfiguration: &compute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
+					NetworkInterfaceConfigurations: interfaces,
+				},
+			},
+		}
+		if _, err := r.UpdateVMSSInstance("", vmssName, to.Val(vm.InstanceID), newVM); err != nil {
+			return fmt.Errorf("failed to update vmss instance(%s): %v", to.Val(vm.InstanceID), err)
+		}
+	}
+	return nil
+}
+
+func (r *GatewayVMConfigurationReconciler) reconcileVMSSNetworkInterface(
+	ctx context.Context,
+	ipConfigName string,
+	ipPrefixID string,
+	wantIPConfig bool,
+	interfaces []*compute.VirtualMachineScaleSetNetworkConfiguration,
+) (bool, error) {
+	log := log.FromContext(ctx)
+	expectedConfig := r.getExpectedIPConfig(ipConfigName, ipPrefixID, interfaces)
+	var primaryNic *compute.VirtualMachineScaleSetNetworkConfiguration
+	needUpdate := false
+	foundConfig := false
+
+	for _, nic := range interfaces {
 		if nic.Properties != nil && to.Val(nic.Properties.Primary) {
 			primaryNic = nic
 			for i, ipConfig := range nic.Properties.IPConfigurations {
@@ -372,54 +452,22 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSS(
 	}
 
 	if wantIPConfig && !foundConfig {
-		if primaryNic == nil || primaryNic.Properties == nil {
-			return fmt.Errorf("vmss primary network interface not found")
+		if primaryNic == nil {
+			return false, fmt.Errorf("vmss primary network interface not found")
 		}
 		primaryNic.Properties.IPConfigurations = append(primaryNic.Properties.IPConfigurations, expectedConfig)
 		needUpdate = true
 	}
-
-	if needUpdate {
-		log.Info("Updating vmss", "vmssName", to.Val(vmss.Name))
-		newVmss := compute.VirtualMachineScaleSet{
-			Location: vmss.Location,
-			Properties: &compute.VirtualMachineScaleSetProperties{
-				VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
-					NetworkProfile: vmss.Properties.VirtualMachineProfile.NetworkProfile,
-				},
-			},
-		}
-		if err := r.updateVMSS(to.Val(vmss.Name), &newVmss); err != nil {
-			return fmt.Errorf("failed to update vmss(%s): %v", to.Val(vmss.Name), err)
-		}
-	}
-	return nil
+	return needUpdate, nil
 }
 
-func (r *GatewayVMConfigurationReconciler) updateVMSS(vmssName string, newVmss *compute.VirtualMachineScaleSet) error {
-	// First, update vmss itself
-	if _, err := r.CreateOrUpdateVMSS("", vmssName, *newVmss); err != nil {
-		return fmt.Errorf("failed to update vmss(%s): %v", vmssName, err)
-	}
-
-	// Then, update all vm instances
-	instances, err := r.ListVMSSInstances("", vmssName)
-	if err != nil {
-		return fmt.Errorf("failed to get vm instances from vmss(%s): %v", vmssName, err)
-	}
-	instanceIDs := make([]*string, 0)
-	for _, instance := range instances {
-		instanceIDs = append(instanceIDs, instance.InstanceID)
-	}
-	if err := r.UpdateVMSSInstances("", vmssName, instanceIDs); err != nil {
-		return fmt.Errorf("failed to update vmss instances for vmss(%s): %v", vmssName, err)
-	}
-	return nil
-}
-
-func (r *GatewayVMConfigurationReconciler) getExpectedIPConfig(ipConfigName, ipPrefixID string, vmss *compute.VirtualMachineScaleSet) *compute.VirtualMachineScaleSetIPConfiguration {
+func (r *GatewayVMConfigurationReconciler) getExpectedIPConfig(
+	ipConfigName,
+	ipPrefixID string,
+	interfaces []*compute.VirtualMachineScaleSetNetworkConfiguration,
+) *compute.VirtualMachineScaleSetIPConfiguration {
 	var subnetID *string
-	for _, nic := range vmss.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations {
+	for _, nic := range interfaces {
 		if nic.Properties != nil && to.Val(nic.Properties.Primary) {
 			for _, ipConfig := range nic.Properties.IPConfigurations {
 				if ipConfig.Properties != nil && to.Val(ipConfig.Properties.Primary) {
