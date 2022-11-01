@@ -22,10 +22,10 @@ import (
 )
 
 const (
-	Name      = "test"
-	Namespace = "testns"
-	privK     = "GHuMwljFfqd2a7cs6BaUOmHflK23zME8VNvC5B37S3k="
-	pubK      = "aPxGwq8zERHQ3Q1cOZFdJ+cvJX5Ka4mLN38AyYKYF10="
+	testName      = "test"
+	testNamespace = "testns"
+	privK         = "GHuMwljFfqd2a7cs6BaUOmHflK23zME8VNvC5B37S3k="
+	pubK          = "aPxGwq8zERHQ3Q1cOZFdJ+cvJX5Ka4mLN38AyYKYF10="
 )
 
 var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
@@ -48,14 +48,14 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 		BeforeEach(func() {
 			req = reconcile.Request{
 				NamespacedName: types.NamespacedName{
-					Name:      Name,
-					Namespace: Namespace,
+					Name:      testName,
+					Namespace: testNamespace,
 				},
 			}
 			gwConfig = &kubeegressgatewayv1alpha1.StaticGatewayConfiguration{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      Name,
-					Namespace: Namespace,
+					Name:      testName,
+					Namespace: testNamespace,
 				},
 				Spec: kubeegressgatewayv1alpha1.StaticGatewayConfigurationSpec{
 					GatewayNodepoolName: "testgw",
@@ -132,10 +132,10 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 
 				existing := metav1.GetControllerOf(secret)
 				Expect(existing).NotTo(BeNil())
-				Expect(existing.Name).To(Equal(Name))
+				Expect(existing.Name).To(Equal(testName))
 
 				Expect(foundGWConfig.Status.WireguardPrivateKeySecretRef).NotTo(BeNil())
-				Expect(foundGWConfig.Status.WireguardPrivateKeySecretRef.Name).To(Equal(Name))
+				Expect(foundGWConfig.Status.WireguardPrivateKeySecretRef.Name).To(Equal(testName))
 
 				wgPrivateKey, err := wgtypes.ParseKey(string(privateKeyBytes))
 				Expect(err).To(BeNil())
@@ -153,7 +153,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 
 				existing := metav1.GetControllerOf(lbConfig)
 				Expect(existing).NotTo(BeNil())
-				Expect(existing.Name).To(Equal(Name))
+				Expect(existing.Name).To(Equal(testName))
 
 				Expect(foundGWConfig.Status.WireguardServerIP).To(BeEmpty())
 				Expect(foundGWConfig.Status.WireguardServerPort).To(BeZero())
@@ -170,7 +170,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 
 				existing := metav1.GetControllerOf(vmConfig)
 				Expect(existing).NotTo(BeNil())
-				Expect(existing.Name).To(Equal(Name))
+				Expect(existing.Name).To(Equal(testName))
 
 				Expect(foundGWConfig.Status.PublicIpPrefix).To(BeEmpty())
 			})
@@ -181,8 +181,8 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 				controllerutil.AddFinalizer(gwConfig, SGCFinalizerName)
 				secret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      Name,
-						Namespace: Namespace,
+						Name:      testName,
+						Namespace: testNamespace,
 					},
 					Data: map[string][]byte{
 						WireguardSecretKeyName: []byte(privK),
@@ -190,8 +190,8 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 				}
 				lbConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      Name,
-						Namespace: Namespace,
+						Name:      testName,
+						Namespace: testNamespace,
 					},
 					Spec: kubeegressgatewayv1alpha1.GatewayLBConfigurationSpec{
 						GatewayNodepoolName: "testgw",
@@ -208,8 +208,8 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 				}
 				vmConfig := &kubeegressgatewayv1alpha1.GatewayVMConfiguration{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      Name,
-						Namespace: Namespace,
+						Name:      testName,
+						Namespace: testNamespace,
 					},
 					Spec: kubeegressgatewayv1alpha1.GatewayVMConfigurationSpec{
 						GatewayNodepoolName: "testgw",
@@ -249,8 +249,8 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 				controllerutil.AddFinalizer(gwConfig, SGCFinalizerName)
 				secret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      Name,
-						Namespace: Namespace,
+						Name:      testName,
+						Namespace: testNamespace,
 					},
 					Data: map[string][]byte{
 						WireguardSecretKeyName: []byte(privK),
@@ -258,8 +258,8 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 				}
 				lbConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      Name,
-						Namespace: Namespace,
+						Name:      testName,
+						Namespace: testNamespace,
 					},
 					Spec: kubeegressgatewayv1alpha1.GatewayLBConfigurationSpec{
 						GatewayNodepoolName: "testgw1",
@@ -276,8 +276,8 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 				}
 				vmConfig := &kubeegressgatewayv1alpha1.GatewayVMConfiguration{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      Name,
-						Namespace: Namespace,
+						Name:      testName,
+						Namespace: testNamespace,
 					},
 					Spec: kubeegressgatewayv1alpha1.GatewayVMConfigurationSpec{
 						GatewayNodepoolName: "testgw1",
@@ -364,14 +364,14 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 				controllerutil.AddFinalizer(gwConfig, SGCFinalizerName)
 				lbConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      Name,
-						Namespace: Namespace,
+						Name:      testName,
+						Namespace: testNamespace,
 					},
 				}
 				vmConfig := &kubeegressgatewayv1alpha1.GatewayVMConfiguration{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      Name,
-						Namespace: Namespace,
+						Name:      testName,
+						Namespace: testNamespace,
 					},
 				}
 				controllerutil.AddFinalizer(lbConfig, LBConfigFinalizerName)
@@ -410,8 +410,8 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 
 func getResource(cl client.Client, object client.Object) error {
 	key := types.NamespacedName{
-		Name:      Name,
-		Namespace: Namespace,
+		Name:      testName,
+		Namespace: testNamespace,
 	}
 	err := cl.Get(context.TODO(), key, object)
 	return err

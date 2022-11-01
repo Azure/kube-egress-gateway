@@ -300,7 +300,7 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 				} else {
 					log.Info("Found expected LB rule, keeping")
 					foundRule = true
-					lbPort = *lbRule.Properties.FrontendPort
+					lbPort = to.Val(lbRule.Properties.FrontendPort)
 				}
 				break
 			}
@@ -383,9 +383,8 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 }
 
 func getExpectedLBRule(lbRuleName, frontendID, backendID, probeID *string) *network.LoadBalancingRule {
-	proto := network.TransportProtocolUDP
 	ruleProp := &network.LoadBalancingRulePropertiesFormat{
-		Protocol:         &proto,
+		Protocol:         to.Ptr(network.TransportProtocolUDP),
 		EnableFloatingIP: to.Ptr(true),
 		FrontendIPConfiguration: &network.SubResource{
 			ID: frontendID,
@@ -407,10 +406,9 @@ func getExpectedLBProbe(
 	probeName *string,
 	lbConfig *kubeegressgatewayv1alpha1.GatewayLBConfiguration,
 ) *network.Probe {
-	proto := network.ProbeProtocolHTTP
 	probeProp := &network.ProbePropertiesFormat{
 		RequestPath: to.Ptr("/" + lbConfig.Namespace + "/" + lbConfig.Name),
-		Protocol:    &proto,
+		Protocol:    to.Ptr(network.ProbeProtocolHTTP),
 		Port:        to.Ptr(int32(WireguardDaemonServicePort)),
 	}
 	return &network.Probe{
@@ -449,11 +447,11 @@ func sameLBRuleConfig(ctx context.Context, lbRule1, lbRule2 *network.LoadBalanci
 		log.Info("lb rule probes are different")
 		return false
 	}
-	if *lbRule1.Properties.Protocol != *lbRule2.Properties.Protocol {
+	if to.Val(lbRule1.Properties.Protocol) != to.Val(lbRule2.Properties.Protocol) {
 		log.Info("lb rule protocols are different")
 		return false
 	}
-	if *lbRule1.Properties.EnableFloatingIP != *lbRule2.Properties.EnableFloatingIP {
+	if to.Val(lbRule1.Properties.EnableFloatingIP) != to.Val(lbRule2.Properties.EnableFloatingIP) {
 		log.Info("lb rule enableFloatingIPs are different")
 		return false
 	}

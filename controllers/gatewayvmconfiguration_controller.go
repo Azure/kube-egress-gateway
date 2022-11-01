@@ -258,7 +258,7 @@ func (r *GatewayVMConfigurationReconciler) ensurePublicIPPrefix(
 		}
 		ipPrefix, err := r.GetPublicIPPrefix(resourceGroupName, publicIpPrefixName)
 		if err != nil {
-			return "", "", false, fmt.Errorf("failed to get public ip prefix(%s): %v", vmConfig.Spec.PublicIpPrefixId, err)
+			return "", "", false, fmt.Errorf("failed to get public ip prefix(%s): %w", vmConfig.Spec.PublicIpPrefixId, err)
 		}
 		if ipPrefix.Properties == nil {
 			return "", "", false, fmt.Errorf("public ip prefix(%s) has empty properties", vmConfig.Spec.PublicIpPrefixId)
@@ -267,7 +267,7 @@ func (r *GatewayVMConfigurationReconciler) ensurePublicIPPrefix(
 			return "", "", false, fmt.Errorf("provided public ip prefix has invalid length(%d), required(%d)", to.Val(ipPrefix.Properties.PrefixLength), ipPrefixLength)
 		}
 		log.Info("Found existing unmanaged public ip prefix", "public ip prefix", to.Val(ipPrefix.Properties.IPPrefix))
-		return to.Val(ipPrefix.Properties.IPPrefix), vmConfig.Spec.PublicIpPrefixId, false, nil
+		return to.Val(ipPrefix.Properties.IPPrefix), to.Val(ipPrefix.ID), false, nil
 	} else {
 		// check if there's managed public prefix ip
 		publicIpPrefixName := managedSubresourceName(vmConfig)
@@ -281,7 +281,7 @@ func (r *GatewayVMConfigurationReconciler) ensurePublicIPPrefix(
 			}
 		} else {
 			if !isErrorNotFound(err) {
-				return "", "", false, fmt.Errorf("failed to get managed public ip prefix: %v", err)
+				return "", "", false, fmt.Errorf("failed to get managed public ip prefix: %w", err)
 			}
 			// create new public ip prefix
 			newIPPrefix := network.PublicIPPrefix{
@@ -299,7 +299,7 @@ func (r *GatewayVMConfigurationReconciler) ensurePublicIPPrefix(
 			log.Info("Creating new managed public ip prefix")
 			ipPrefix, err := r.CreateOrUpdatePublicIPPrefix("", publicIpPrefixName, newIPPrefix)
 			if err != nil {
-				return "", "", false, fmt.Errorf("failed to create managed public ip prefix: %v", err)
+				return "", "", false, fmt.Errorf("failed to create managed public ip prefix: %w", err)
 			}
 			return to.Val(ipPrefix.Properties.IPPrefix), to.Val(ipPrefix.ID), true, nil
 		}
@@ -319,11 +319,14 @@ func (r *GatewayVMConfigurationReconciler) ensurePublicIPPrefixDeleted(
 			// resource does not exist, directly return
 			return nil
 		} else {
-			return err
+			return fmt.Errorf("failed to get public ip prefix(%s): %w", publicIpPrefixName, err)
 		}
 	} else {
 		log.Info("Deleting managed public ip prefix", "public ip prefix name", publicIpPrefixName)
-		return r.DeletePublicIPPrefix("", publicIpPrefixName)
+		if err := r.DeletePublicIPPrefix("", publicIpPrefixName); err != nil {
+			return fmt.Errorf("failed to delete public ip prefix(%s): %w", publicIpPrefixName, err)
+		}
+		return nil
 	}
 }
 
@@ -346,7 +349,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSS(
 	interfaces := vmss.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
 	needUpdate, err := r.reconcileVMSSNetworkInterface(ctx, ipConfigName, ipPrefixID, wantIPConfig, interfaces)
 	if err != nil {
-		return fmt.Errorf("failed to reconcile vmss interface(%s): %v", to.Val(vmss.Name), err)
+		return fmt.Errorf("failed to reconcile vmss interface(%s): %w", to.Val(vmss.Name), err)
 	}
 
 	if needUpdate {
@@ -360,18 +363,18 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSS(
 			},
 		}
 		if _, err := r.CreateOrUpdateVMSS("", to.Val(vmss.Name), newVmss); err != nil {
-			return fmt.Errorf("failed to update vmss(%s): %v", to.Val(vmss.Name), err)
+			return fmt.Errorf("failed to update vmss(%s): %w", to.Val(vmss.Name), err)
 		}
 	}
 
 	// check and update VMSS instances
 	instances, err := r.ListVMSSInstances("", to.Val(vmss.Name))
 	if err != nil {
-		return fmt.Errorf("failed to get vm instances from vmss(%s): %v", to.Val(vmss.Name), err)
+		return fmt.Errorf("failed to get vm instances from vmss(%s): %w", to.Val(vmss.Name), err)
 	}
 	for _, instance := range instances {
-		if err != r.reconcileVMSSVM(ctx, vmConfig, to.Val(vmss.Name), instance, ipPrefixID, wantIPConfig) {
-			return fmt.Errorf("failed to update vmss instance(%s): %v", to.Val(instance.Name), err)
+		if err := r.reconcileVMSSVM(ctx, vmConfig, to.Val(vmss.Name), instance, ipPrefixID, wantIPConfig); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -395,7 +398,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 	interfaces := vm.Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations
 	needUpdate, err := r.reconcileVMSSNetworkInterface(ctx, ipConfigName, ipPrefixID, wantIPConfig, interfaces)
 	if err != nil {
-		return fmt.Errorf("failed to reconcile vm interface(%s): %v", to.Val(vm.InstanceID), err)
+		return fmt.Errorf("failed to reconcile vm interface(%s): %w", to.Val(vm.InstanceID), err)
 	}
 	if needUpdate {
 		log.Info("Updating vmss instance", "vmInstanceID", to.Val(vm.InstanceID))
@@ -407,7 +410,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 			},
 		}
 		if _, err := r.UpdateVMSSInstance("", vmssName, to.Val(vm.InstanceID), newVM); err != nil {
-			return fmt.Errorf("failed to update vmss instance(%s): %v", to.Val(vm.InstanceID), err)
+			return fmt.Errorf("failed to update vmss instance(%s): %w", to.Val(vm.InstanceID), err)
 		}
 	}
 	return nil
@@ -453,7 +456,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSNetworkInterface(
 
 	if wantIPConfig && !foundConfig {
 		if primaryNic == nil {
-			return false, fmt.Errorf("vmss primary network interface not found")
+			return false, fmt.Errorf("vmss(vm) primary network interface not found")
 		}
 		primaryNic.Properties.IPConfigurations = append(primaryNic.Properties.IPConfigurations, expectedConfig)
 		needUpdate = true
@@ -510,6 +513,8 @@ func different(ipConfig1, ipConfig2 *compute.VirtualMachineScaleSetIPConfigurati
 	}
 
 	if (prop1.Subnet != nil) != (prop2.Subnet != nil) {
+		return true
+	} else if prop1.Subnet != nil && prop2.Subnet != nil && !strings.EqualFold(to.Val(prop1.Subnet.ID), to.Val(prop2.Subnet.ID)) {
 		return true
 	}
 
