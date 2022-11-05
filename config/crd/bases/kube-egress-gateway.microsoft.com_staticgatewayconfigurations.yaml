@@ -122,6 +122,7 @@ spec:
                     type: string
                   wireguardServerPort:
                     description: Listening port of the gateway side wireguard daemon.
+                    format: int32
                     type: integer
                 type: object
               message:

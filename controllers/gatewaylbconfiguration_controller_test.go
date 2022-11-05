@@ -326,7 +326,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					getErr = getResource(cl, foundLBConfig)
 					Expect(getErr).To(BeNil())
 					Expect(foundLBConfig.Status.FrontendIP).To(Equal("10.0.0.4"))
-					Expect(foundLBConfig.Status.ServerPort).To(Equal(6000))
+					Expect(foundLBConfig.Status.ServerPort).To(Equal(int32(6000)))
 				})
 
 				It("should not update LB when lb rule and probe are expected", func() {
@@ -337,7 +337,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					Expect(reconcileErr).To(BeNil())
 					Expect(res).To(Equal(ctrl.Result{}))
 					Expect(foundLBConfig.Status.FrontendIP).To(Equal("10.0.0.4"))
-					Expect(foundLBConfig.Status.ServerPort).To(Equal(6000))
+					Expect(foundLBConfig.Status.ServerPort).To(Equal(int32(6000)))
 				})
 
 				It("should drop incorrect lbRule and create new one", func() {
@@ -356,7 +356,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					getErr = getResource(cl, foundLBConfig)
 					Expect(getErr).To(BeNil())
 					Expect(foundLBConfig.Status.FrontendIP).To(Equal("10.0.0.4"))
-					Expect(foundLBConfig.Status.ServerPort).To(Equal(6000))
+					Expect(foundLBConfig.Status.ServerPort).To(Equal(int32(6000)))
 				})
 
 				It("should drop incorrect lbProbe and create new one", func() {
@@ -365,17 +365,17 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 						{
 							RequestPath: to.Ptr("/" + testNamespace + "/" + testName + "1"),
 							Protocol:    to.Ptr(network.ProbeProtocolHTTP),
-							Port:        to.Ptr(int32(WireguardDaemonServicePort)),
+							Port:        to.Ptr(WireguardDaemonServicePort),
 						},
 						{
 							RequestPath: to.Ptr("/" + testNamespace + "/" + testName),
 							Protocol:    to.Ptr(network.ProbeProtocolTCP),
-							Port:        to.Ptr(int32(WireguardDaemonServicePort)),
+							Port:        to.Ptr(WireguardDaemonServicePort),
 						},
 						{
 							RequestPath: to.Ptr("/" + testNamespace + "/" + testName),
 							Protocol:    to.Ptr(network.ProbeProtocolHTTP),
-							Port:        to.Ptr(int32(WireguardDaemonServicePort) + 1),
+							Port:        to.Ptr(WireguardDaemonServicePort + 1),
 						},
 					} {
 						existingLB.Properties.Probes[0].Properties = prop
@@ -392,7 +392,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 						getErr = getResource(cl, foundLBConfig)
 						Expect(getErr).To(BeNil())
 						Expect(foundLBConfig.Status.FrontendIP).To(Equal("10.0.0.4"))
-						Expect(foundLBConfig.Status.ServerPort).To(Equal(6000))
+						Expect(foundLBConfig.Status.ServerPort).To(Equal(int32(6000)))
 					}
 				})
 
@@ -418,7 +418,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					getErr = getResource(cl, foundLBConfig)
 					Expect(getErr).To(BeNil())
 					Expect(foundLBConfig.Status.FrontendIP).To(Equal("10.0.0.4"))
-					Expect(foundLBConfig.Status.ServerPort).To(Equal(6001))
+					Expect(foundLBConfig.Status.ServerPort).To(Equal(int32(6001)))
 				})
 			})
 		})
@@ -695,7 +695,7 @@ func getExpectedLB() *network.LoadBalancer {
 					Properties: &network.ProbePropertiesFormat{
 						RequestPath: to.Ptr("/" + testNamespace + "/" + testName),
 						Protocol:    to.Ptr(network.ProbeProtocolHTTP),
-						Port:        to.Ptr(int32(WireguardDaemonServicePort)),
+						Port:        to.Ptr(WireguardDaemonServicePort),
 					},
 				},
 			},

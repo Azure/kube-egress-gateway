@@ -128,7 +128,7 @@ func (r *GatewayLBConfigurationReconciler) reconcile(
 		return ctrl.Result{}, err
 	}
 	lbConfig.Status.FrontendIP = ip
-	lbConfig.Status.ServerPort = int(port)
+	lbConfig.Status.ServerPort = port
 
 	if !equality.Semantic.DeepEqual(existing, lbConfig) {
 		log.Info(fmt.Sprintf("Updating GatewayLBConfiguration %s/%s", lbConfig.Namespace, lbConfig.Name))
@@ -409,7 +409,7 @@ func getExpectedLBProbe(
 	probeProp := &network.ProbePropertiesFormat{
 		RequestPath: to.Ptr("/" + lbConfig.Namespace + "/" + lbConfig.Name),
 		Protocol:    to.Ptr(network.ProbeProtocolHTTP),
-		Port:        to.Ptr(int32(WireguardDaemonServicePort)),
+		Port:        to.Ptr(WireguardDaemonServicePort),
 	}
 	return &network.Probe{
 		Name:       probeName,
@@ -472,7 +472,7 @@ func selectPortForLBRule(targetRule *network.LoadBalancingRule, lbRules []*netwo
 	}
 	for i, portInUse := range ports {
 		if !portInUse {
-			return int32(i + WireguardPortStart), nil
+			return int32(i) + WireguardPortStart, nil
 		}
 	}
 	return 0, fmt.Errorf("selectPortForLBRule: No available ports")

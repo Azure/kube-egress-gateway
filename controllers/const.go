@@ -14,13 +14,13 @@ const (
 	WireguardSecretKeyName = "WireguardPrivateKey"
 
 	// Wireguard listening port range start, inclusive
-	WireguardPortStart = 6000
+	WireguardPortStart int32 = 6000
 
 	// Wireguard listening port range end, exclusive
-	WireguardPortEnd = 7000
+	WireguardPortEnd int32 = 7000
 
 	// Wireguard daemon on gateway nodes listening port
-	WireguardDaemonServicePort = 8080
+	WireguardDaemonServicePort int32 = 8080
 
 	// nodepool name tag key in aks clusters
 	AKSNodepoolTagKey = "aks-managed-poolName"

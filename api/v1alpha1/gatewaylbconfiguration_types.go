@@ -54,7 +54,7 @@ type GatewayLBConfigurationStatus struct {
 	FrontendIP string `json:"frontendIP,omitempty"`
 
 	// Listening port of the gateway side wireguard daemon.
-	ServerPort int `json:"serverPort,omitempty"`
+	ServerPort int32 `json:"serverPort,omitempty"`
 }
 
 //+kubebuilder:object:root=true

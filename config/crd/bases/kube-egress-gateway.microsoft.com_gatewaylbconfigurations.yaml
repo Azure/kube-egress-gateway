@@ -63,6 +63,7 @@ spec:
                 type: string
               serverPort:
                 description: Listening port of the gateway side wireguard daemon.
+                format: int32
                 type: integer
             type: object
         type: object
