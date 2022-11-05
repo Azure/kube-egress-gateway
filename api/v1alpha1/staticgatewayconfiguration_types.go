@@ -72,7 +72,7 @@ type GatewayWireguardProfile struct {
 	WireguardServerIP string `json:"wireguardServerIP,omitempty"`
 
 	// Listening port of the gateway side wireguard daemon.
-	WireguardServerPort int `json:"wireguardServerPort,omitempty"`
+	WireguardServerPort int32 `json:"wireguardServerPort,omitempty"`
 
 	// Gateway side wireguard public key.
 	WireguardPublicKey string `json:"wireguardPublicKey,omitempty"`

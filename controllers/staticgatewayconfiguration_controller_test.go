@@ -239,7 +239,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 			It("should update gwConfig's status from secret, lbConfig and vmConfig", func() {
 				Expect(foundGWConfig.Status.WireguardPublicKey).To(Equal(pubK))
 				Expect(foundGWConfig.Status.WireguardServerIP).To(Equal("1.1.1.1"))
-				Expect(foundGWConfig.Status.WireguardServerPort).To(Equal(6000))
+				Expect(foundGWConfig.Status.WireguardServerPort).To(Equal(int32(6000)))
 				Expect(foundGWConfig.Status.PublicIpPrefix).To(Equal("1.2.3.4/31"))
 			})
 		})
