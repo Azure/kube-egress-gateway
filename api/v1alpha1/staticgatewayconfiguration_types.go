@@ -57,10 +57,6 @@ type StaticGatewayConfigurationSpec struct {
 	// +optional
 	GatewayVMSSProfile `json:"gatewayVmssProfile,omitempty"`
 
-	// List of destination cidrs not to be routed via gateway.
-	// +optional
-	ExceptionCIDRs []string `json:"exceptionCIDRs,omitempty"`
-
 	// BYO Resource ID of public IP prefix to be used as outbound.
 	// +optional
 	PublicIpPrefixId string `json:"publicIpPrefixId,omitempty"`

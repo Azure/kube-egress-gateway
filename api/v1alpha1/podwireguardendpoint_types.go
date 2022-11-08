@@ -42,8 +42,8 @@ type PodWireguardEndpointSpec struct {
 	// IPv4 address assigned to the pod.
 	PodIpAddress string `json:"podIpAddress,omitempty"`
 
-	// Name of the secret containing pod's public wireguard key.
-	PodWireguardKeySecret string `json:"podWireguardKeySecret,omitempty"`
+	// wireguard public key on pod side.
+	PodWireguardPublicKey string `json:"podWireguardPublicKey,omitempty"`
 }
 
 // PodWireguardEndpointStatus defines the observed state of PodWireguardEndpoint
