@@ -39,9 +39,8 @@ spec:
               podIpAddress:
                 description: IPv4 address assigned to the pod.
                 type: string
-              podWireguardKeySecret:
-                description: Name of the secret containing pod's public wireguard
-                  key.
+              podWireguardPublicKey:
+                description: wireguard public key on pod side.
                 type: string
               staticGatewayConfiguration:
                 description: Name of StaticGatewayConfiguration the pod uses.

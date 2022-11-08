@@ -37,11 +37,6 @@ spec:
             description: StaticGatewayConfigurationSpec defines the desired state
               of StaticGatewayConfiguration
             properties:
-              exceptionCIDRs:
-                description: List of destination cidrs not to be routed via gateway.
-                items:
-                  type: string
-                type: array
               gatewayNodepoolName:
                 description: Name of the gateway nodepool to apply the gateway configuration.
                 type: string
