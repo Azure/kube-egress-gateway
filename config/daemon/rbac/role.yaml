@@ -1,0 +1,47 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: daemon-manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - kube-egress-gateway.microsoft.com
+  resources:
+  - podwireguardendpoints
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - kube-egress-gateway.microsoft.com
+  resources:
+  - podwireguardendpoints/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - kube-egress-gateway.microsoft.com
+  resources:
+  - staticgatewayconfigurations
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - kube-egress-gateway.microsoft.com
+  resources:
+  - staticgatewayconfigurations/status
+  verbs:
+  - get
+  - patch
+  - update

@@ -22,7 +22,7 @@
    SOFTWARE
 */
 
-package controllers
+package manager
 
 import (
 	"path/filepath"

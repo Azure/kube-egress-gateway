@@ -24,9 +24,25 @@ SOFTWARE
 package cmd
 
 import (
+	goflag "flag"
+	"fmt"
 	"os"
 
+	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	controllers "github.com/Azure/kube-egress-gateway/controllers/daemon"
+	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
+	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
+	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -36,7 +52,7 @@ var rootCmd = &cobra.Command{
 	Long:  `Monitor GatewayWireguardEndpoint CR and PodWireguardEndpoint CR, configures the network namespaces, interfaces, and routes on gateway nodes`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
+	Run: startControllers,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -48,14 +64,142 @@ func Execute() {
 	}
 }
 
+var (
+	cloudConfigFile string
+	cloudConfig     config.CloudConfig
+	scheme          = runtime.NewScheme()
+	setupLog        = ctrl.Log.WithName("setup")
+	metricsAddr     string
+	probeAddr       string
+	zapOpts         = zap.Options{
+		Development: true,
+	}
+)
+
 func init() {
+	cobra.OnInitialize(initCloudConfig)
+
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.kube-egress-gateway-daemon.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cloudConfigFile, "cloud-config", "/etc/kubernetes/kube-egress-gateway/azure.json", "cloud config file")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+
+	rootCmd.Flags().StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	rootCmd.Flags().StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+
+	zapOpts.BindFlags(goflag.CommandLine)
+	rootCmd.Flags().AddGoFlagSet(goflag.CommandLine)
+
+	utilruntime.Must(kubeegressgatewayv1alpha1.AddToScheme(scheme))
+	//+kubebuilder:scaffold:scheme
+}
+
+// initCloudConfig reads in cloud config file and ENV variables if set.
+func initCloudConfig() {
+	if cloudConfigFile == "" {
+		fmt.Fprintln(os.Stderr, "Error: cloud config file is not provided")
+		os.Exit(1)
+	}
+	viper.SetConfigFile(cloudConfigFile)
+
+	viper.AutomaticEnv() // read in environment variables that match
+
+	// If a config file is found, read it in.
+	if err := viper.ReadInConfig(); err == nil {
+		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
+	} else {
+		fmt.Fprintln(os.Stderr, "Error: failed to find cloud config file:", cloudConfigFile)
+		os.Exit(1)
+	}
+}
+
+func startControllers(cmd *cobra.Command, args []string) {
+
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
+
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Scheme:                 scheme,
+		MetricsBindAddress:     metricsAddr,
+		Port:                   9443,
+		HealthProbeBindAddress: probeAddr,
+		LeaderElection:         false, // daemonSet on each gateway node
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to start manager")
+		os.Exit(1)
+	}
+
+	if err := viper.Unmarshal(&cloudConfig); err != nil {
+		setupLog.Error(err, "unable to unmarshal cloud configuration file")
+		os.Exit(1)
+	}
+
+	if err := cloudConfig.Validate(); err != nil {
+		setupLog.Error(err, "cloud configuration is invalid")
+		os.Exit(1)
+	}
+
+	var factory azureclients.AzureClientsFactory
+	if cloudConfig.UseUserAssignedIdentity {
+		factory, err = azureclients.NewAzureClientsFactoryWithManagedIdentity(cloudConfig.Cloud, cloudConfig.SubscriptionID, cloudConfig.UserAssignedIdentityID)
+		if err != nil {
+			setupLog.Error(err, "unable to create azure clients")
+			os.Exit(1)
+		}
+	} else {
+		factory, err = azureclients.NewAzureClientsFactoryWithClientSecret(cloudConfig.Cloud, cloudConfig.SubscriptionID, cloudConfig.TenantID,
+			cloudConfig.AADClientID, cloudConfig.AADClientSecret)
+		if err != nil {
+			setupLog.Error(err, "unable to create azure clients")
+			os.Exit(1)
+		}
+	}
+	az, err := azmanager.CreateAzureManager(&cloudConfig, factory)
+	if err != nil {
+		setupLog.Error(err, "unable to create azure manager")
+		os.Exit(1)
+	}
+
+	if err = (&controllers.StaticGatewayConfigurationReconciler{
+		Client:       mgr.GetClient(),
+		Scheme:       mgr.GetScheme(),
+		AzureManager: az,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "StaticGatewayConfiguration")
+		os.Exit(1)
+	}
+	if err = (&kubeegressgatewayv1alpha1.StaticGatewayConfiguration{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "StaticGatewayConfiguration")
+		os.Exit(1)
+	}
+	if err = (&controllers.PodWireguardEndpointReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "PodWireguardEndpoint")
+		os.Exit(1)
+	}
+	//+kubebuilder:scaffold:builder
+
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up health check")
+		os.Exit(1)
+	}
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up ready check")
+		os.Exit(1)
+	}
+
+	setupLog.Info("starting manager")
+	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+		setupLog.Error(err, "problem running manager")
+		os.Exit(1)
+	}
 }
