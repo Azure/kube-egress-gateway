@@ -28,34 +28,34 @@ import (
 	"fmt"
 	"os"
 
+	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	controllers "github.com/Azure/kube-egress-gateway/controllers/manager"
+	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
+	"github.com/Azure/kube-egress-gateway/pkg/config"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
-
-	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
-	"github.com/Azure/kube-egress-gateway/controllers"
-	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
-	"github.com/Azure/kube-egress-gateway/pkg/config"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	//+kubebuilder:scaffold:imports
 )
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "kube-egress-gateway-controller",
-	Short: "Monitor StaticGatewayConfiguration CR events and node events, configures VMSS, and manages GatewayWireguardEndpoint CR",
-	Long:  `Monitor StaticGatewayConfiguration CR events and node events, configures VMSS, and manages GatewayWireguardEndpoint CR`,
+	Short: "Monitor StaticGatewayConfiguration CR events, and manage GatewayLBConfiguration and GatewayVMConfiguration",
+	Long:  `Monitor StaticGatewayConfiguration CR events, and manage GatewayLBConfiguration and GatewayVMConfiguration`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	Run: startControllers,

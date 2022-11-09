@@ -1,0 +1,9 @@
+resources:
+- staticgatewayconfiguration_viewer_role.yaml
+- staticgatewayconfiguration_editor_role.yaml
+- gatewaylbconfiguration_viewer.role.yaml
+- gatewaylbconfiguration_editor.role.yaml
+- gatewayvmconfiguration_viewer.role.yaml
+- gatewayvmconfiguration_editor.role.yaml
+- podwireguardendpoint_viewer.role.yaml
+- podwireguardendpoint_editor.role.yaml

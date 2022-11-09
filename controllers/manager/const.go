@@ -1,4 +1,4 @@
-package controllers
+package manager
 
 const (
 	// StaticGatewayConfiguration finalizer name

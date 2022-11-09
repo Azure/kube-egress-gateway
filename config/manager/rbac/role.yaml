@@ -72,22 +72,6 @@ rules:
 - apiGroups:
   - kube-egress-gateway.microsoft.com
   resources:
-  - podwireguardendpoints
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - kube-egress-gateway.microsoft.com
-  resources:
-  - podwireguardendpoints/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - kube-egress-gateway.microsoft.com
-  resources:
   - staticgatewayconfigurations
   verbs:
   - create
