@@ -46,6 +46,7 @@ import (
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
 	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	"github.com/Azure/kube-egress-gateway/controllers/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 )
@@ -108,9 +109,9 @@ func (r *GatewayVMConfigurationReconciler) reconcile(
 	vmConfig *kubeegressgatewayv1alpha1.GatewayVMConfiguration,
 ) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
-	if !controllerutil.ContainsFinalizer(vmConfig, VMConfigFinalizerName) {
+	if !controllerutil.ContainsFinalizer(vmConfig, consts.VMConfigFinalizerName) {
 		log.Info("Adding finalizer")
-		controllerutil.AddFinalizer(vmConfig, VMConfigFinalizerName)
+		controllerutil.AddFinalizer(vmConfig, consts.VMConfigFinalizerName)
 		err := r.Update(ctx, vmConfig)
 		if err != nil {
 			log.Error(err, "failed to add finalizer")
@@ -165,7 +166,7 @@ func (r *GatewayVMConfigurationReconciler) ensureDeleted(
 	log := log.FromContext(ctx)
 	log.Info(fmt.Sprintf("Reconciling gatewayVMConfiguration deletion %s/%s", vmConfig.Namespace, vmConfig.Name))
 
-	if !controllerutil.ContainsFinalizer(vmConfig, VMConfigFinalizerName) {
+	if !controllerutil.ContainsFinalizer(vmConfig, consts.VMConfigFinalizerName) {
 		log.Info("vmConfig does not have finalizer, no additional cleanup needed")
 		return ctrl.Result{}, nil
 	}
@@ -187,7 +188,7 @@ func (r *GatewayVMConfigurationReconciler) ensureDeleted(
 	}
 
 	log.Info("Removing finalizer")
-	controllerutil.RemoveFinalizer(vmConfig, VMConfigFinalizerName)
+	controllerutil.RemoveFinalizer(vmConfig, consts.VMConfigFinalizerName)
 	if err := r.Update(ctx, vmConfig); err != nil {
 		log.Error(err, "failed to remove finalizer")
 		return ctrl.Result{}, err
@@ -207,9 +208,9 @@ func (r *GatewayVMConfigurationReconciler) getGatewayVMSS(
 		}
 		for i := range vmssList {
 			vmss := vmssList[i]
-			if v, ok := vmss.Tags[AKSNodepoolTagKey]; ok {
+			if v, ok := vmss.Tags[consts.AKSNodepoolTagKey]; ok {
 				if strings.EqualFold(to.Val(v), vmConfig.Spec.GatewayNodepoolName) {
-					if prefixLenStr, ok := vmss.Tags[AKSNodepoolIPPrefixSizeTagKey]; ok {
+					if prefixLenStr, ok := vmss.Tags[consts.AKSNodepoolIPPrefixSizeTagKey]; ok {
 						if prefixLen, err := strconv.Atoi(to.Val(prefixLenStr)); err == nil && prefixLen > 0 && prefixLen <= math.MaxInt32 {
 							return vmss, int32(prefixLen), nil
 						} else {
@@ -226,7 +227,7 @@ func (r *GatewayVMConfigurationReconciler) getGatewayVMSS(
 		if err != nil {
 			return nil, 0, err
 		}
-		return vmss, vmConfig.Spec.PublicIPPrefixSize, nil
+		return vmss, vmConfig.Spec.PublicIpPrefixSize, nil
 	}
 	return nil, 0, fmt.Errorf("gateway VMSS not found")
 }

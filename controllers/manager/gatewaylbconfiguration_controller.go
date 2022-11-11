@@ -40,6 +40,7 @@ import (
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
 	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	"github.com/Azure/kube-egress-gateway/controllers/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 )
@@ -108,9 +109,9 @@ func (r *GatewayLBConfigurationReconciler) reconcile(
 	log := log.FromContext(ctx)
 	log.Info(fmt.Sprintf("Reconciling GatewayLBConfiguration %s/%s", lbConfig.Namespace, lbConfig.Name))
 
-	if !controllerutil.ContainsFinalizer(lbConfig, LBConfigFinalizerName) {
+	if !controllerutil.ContainsFinalizer(lbConfig, consts.LBConfigFinalizerName) {
 		log.Info("Adding finalizer")
-		controllerutil.AddFinalizer(lbConfig, LBConfigFinalizerName)
+		controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
 		err := r.Update(ctx, lbConfig)
 		if err != nil {
 			log.Error(err, "failed to add finalizer")
@@ -148,7 +149,7 @@ func (r *GatewayLBConfigurationReconciler) ensureDeleted(
 	log := log.FromContext(ctx)
 	log.Info(fmt.Sprintf("Reconciling gatewayLBConfiguration deletion %s/%s", lbConfig.Namespace, lbConfig.Name))
 
-	if !controllerutil.ContainsFinalizer(lbConfig, LBConfigFinalizerName) {
+	if !controllerutil.ContainsFinalizer(lbConfig, consts.LBConfigFinalizerName) {
 		log.Info("lbConfig does not have finalizer, no additional cleanup needed")
 		return ctrl.Result{}, nil
 	}
@@ -161,7 +162,7 @@ func (r *GatewayLBConfigurationReconciler) ensureDeleted(
 	}
 
 	log.Info("Removing finalizer")
-	controllerutil.RemoveFinalizer(lbConfig, LBConfigFinalizerName)
+	controllerutil.RemoveFinalizer(lbConfig, consts.LBConfigFinalizerName)
 	if err := r.Update(ctx, lbConfig); err != nil {
 		log.Error(err, "failed to remove finalizer")
 		return ctrl.Result{}, err
@@ -197,7 +198,7 @@ func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
 		}
 		for i := range vmssList {
 			vmss := vmssList[i]
-			if v, ok := vmss.Tags[AKSNodepoolTagKey]; ok {
+			if v, ok := vmss.Tags[consts.AKSNodepoolTagKey]; ok {
 				if strings.EqualFold(to.Val(v), lbConfig.Spec.GatewayNodepoolName) {
 					return vmss, nil
 				}
@@ -409,7 +410,7 @@ func getExpectedLBProbe(
 	probeProp := &network.ProbePropertiesFormat{
 		RequestPath: to.Ptr("/" + lbConfig.Namespace + "/" + lbConfig.Name),
 		Protocol:    to.Ptr(network.ProbeProtocolHTTP),
-		Port:        to.Ptr(WireguardDaemonServicePort),
+		Port:        to.Ptr(consts.WireguardDaemonServicePort),
 	}
 	return &network.Probe{
 		Name:       probeName,
@@ -459,20 +460,20 @@ func sameLBRuleConfig(ctx context.Context, lbRule1, lbRule2 *network.LoadBalanci
 }
 
 func selectPortForLBRule(targetRule *network.LoadBalancingRule, lbRules []*network.LoadBalancingRule) (int32, error) {
-	ports := make([]bool, WireguardPortEnd-WireguardPortStart)
+	ports := make([]bool, consts.WireguardPortEnd-consts.WireguardPortStart)
 	for _, rule := range lbRules {
 		if rule.Properties != nil && rule.Properties.BackendAddressPool != nil &&
 			strings.EqualFold(to.Val(rule.Properties.BackendAddressPool.ID), to.Val(targetRule.Properties.BackendAddressPool.ID)) {
 			if rule.Properties.FrontendPort == nil || rule.Properties.BackendPort == nil || *rule.Properties.FrontendPort != *rule.Properties.BackendPort ||
-				*rule.Properties.BackendPort < WireguardPortStart || *rule.Properties.BackendPort >= WireguardPortEnd {
+				*rule.Properties.BackendPort < consts.WireguardPortStart || *rule.Properties.BackendPort >= consts.WireguardPortEnd {
 				return 0, fmt.Errorf("selectPortForLBRule: found rule with invalid LB port")
 			}
-			ports[*rule.Properties.BackendPort-WireguardPortStart] = true
+			ports[*rule.Properties.BackendPort-consts.WireguardPortStart] = true
 		}
 	}
 	for i, portInUse := range ports {
 		if !portInUse {
-			return int32(i) + WireguardPortStart, nil
+			return int32(i) + consts.WireguardPortStart, nil
 		}
 	}
 	return 0, fmt.Errorf("selectPortForLBRule: No available ports")

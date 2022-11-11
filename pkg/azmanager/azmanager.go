@@ -7,6 +7,7 @@ import (
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
+	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/loadbalancerclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/publicipprefixclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssclient"
@@ -33,6 +34,7 @@ type AzureManager struct {
 	VmssClient           vmssclient.Interface
 	VmssVMClient         vmssvmclient.Interface
 	PublicIPPrefixClient publicipprefixclient.Interface
+	InterfaceClient      interfaceclient.Interface
 }
 
 func CreateAzureManager(cloud *config.CloudConfig, factory azureclients.AzureClientsFactory) (*AzureManager, error) {
@@ -71,6 +73,12 @@ func CreateAzureManager(cloud *config.CloudConfig, factory azureclients.AzureCli
 		return &AzureManager{}, err
 	}
 	az.VmssVMClient = vmssVMClient
+
+	interfaceClient, err := factory.GetInterfacesClient()
+	if err != nil {
+		return &AzureManager{}, err
+	}
+	az.InterfaceClient = interfaceClient
 
 	return &az, nil
 }
@@ -160,6 +168,23 @@ func (az *AzureManager) ListVMSSInstances(resourceGroup, vmssName string) ([]*co
 	return vms, nil
 }
 
+func (az *AzureManager) GetVMSSInstance(resourceGroup, vmssName, instanceID string) (*compute.VirtualMachineScaleSetVM, error) {
+	if resourceGroup == "" {
+		resourceGroup = az.ResourceGroup
+	}
+	if vmssName == "" {
+		return nil, fmt.Errorf("vmss name is empty")
+	}
+	if instanceID == "" {
+		return nil, fmt.Errorf("vmss instanceID is empty")
+	}
+	vm, err := az.VmssVMClient.Get(context.Background(), resourceGroup, vmssName, instanceID, "")
+	if err != nil {
+		return nil, err
+	}
+	return vm, nil
+}
+
 func (az *AzureManager) UpdateVMSSInstance(resourceGroup, vmssName, instanceID string, vm compute.VirtualMachineScaleSetVM) (*compute.VirtualMachineScaleSetVM, error) {
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
@@ -213,4 +238,24 @@ func (az *AzureManager) DeletePublicIPPrefix(resourceGroup, prefixName string) e
 		return fmt.Errorf("public ip prefix name is empty")
 	}
 	return az.PublicIPPrefixClient.Delete(context.Background(), resourceGroup, prefixName)
+}
+
+func (az *AzureManager) GetVMSSInterface(resourceGroup, vmssName, instanceID, interfaceName string) (*network.Interface, error) {
+	if resourceGroup == "" {
+		resourceGroup = az.ResourceGroup
+	}
+	if vmssName == "" {
+		return nil, fmt.Errorf("vmss name is empty")
+	}
+	if instanceID == "" {
+		return nil, fmt.Errorf("instanceID is empty")
+	}
+	if interfaceName == "" {
+		return nil, fmt.Errorf("interface name is empty")
+	}
+	nic, err := az.InterfaceClient.GetVirtualMachineScaleSetNetworkInterface(context.Background(), resourceGroup, vmssName, instanceID, interfaceName, "")
+	if err != nil {
+		return nil, err
+	}
+	return nic, nil
 }

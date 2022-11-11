@@ -11,6 +11,7 @@ target "daemon" {
   inherits = ["base","daemon-tags"]
   args = {
     MAIN_ENTRY = "kube-egress-gateway-daemon",
+    BASE_IMAGE = "mcr.microsoft.com/aks/devinfra/base-os-runtime-nettools:master.221105.1",
   }
 }
 

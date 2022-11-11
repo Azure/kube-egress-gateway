@@ -7,8 +7,5 @@ spec:
   gatewayVmssProfile:
     vmssResourceGroup: gw-rg
     vmssName: gatewaypool1-12345678-vmss
-  exceptionCIDRs:
-  - 10.0.0.0/8
-  - 172.16.0.0/12
-  - 120.123.0.0/16
+    publicIpPrefixSize: 31
   # publicIpPrefixId: /subscriptions/<subscription_id>/resourceGroups/<rg_name>/providers/Microsoft.Network/publicIPPrefixes/<prefix_name>

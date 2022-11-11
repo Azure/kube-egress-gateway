@@ -42,6 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	"github.com/Azure/kube-egress-gateway/controllers/consts"
 )
 
 var _ reconcile.Reconciler = &StaticGatewayConfigurationReconciler{}
@@ -109,9 +110,9 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 	log := log.FromContext(ctx)
 	log.Info(fmt.Sprintf("Reconciling staticGatewayConfiguration %s/%s", gwConfig.Namespace, gwConfig.Name))
 
-	if !controllerutil.ContainsFinalizer(gwConfig, SGCFinalizerName) {
+	if !controllerutil.ContainsFinalizer(gwConfig, consts.SGCFinalizerName) {
 		log.Info("Adding finalizer")
-		controllerutil.AddFinalizer(gwConfig, SGCFinalizerName)
+		controllerutil.AddFinalizer(gwConfig, consts.SGCFinalizerName)
 		err := r.Update(ctx, gwConfig)
 		if err != nil {
 			log.Error(err, "failed to add finalizer")
@@ -159,7 +160,7 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 	log := log.FromContext(ctx)
 	log.Info(fmt.Sprintf("Reconciling staticGatewayConfiguration deletion %s/%s", gwConfig.Namespace, gwConfig.Name))
 
-	if !controllerutil.ContainsFinalizer(gwConfig, SGCFinalizerName) {
+	if !controllerutil.ContainsFinalizer(gwConfig, consts.SGCFinalizerName) {
 		log.Info("gwConfig does not have finalizer, no additional cleanup needed")
 		return ctrl.Result{}, nil
 	}
@@ -203,9 +204,9 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 		}
 	}
 
-	if lbConfigDeleted && vmConfigDeleted && controllerutil.ContainsFinalizer(gwConfig, SGCFinalizerName) {
+	if lbConfigDeleted && vmConfigDeleted && controllerutil.ContainsFinalizer(gwConfig, consts.SGCFinalizerName) {
 		log.Info("Removing finalizer")
-		controllerutil.RemoveFinalizer(gwConfig, SGCFinalizerName)
+		controllerutil.RemoveFinalizer(gwConfig, consts.SGCFinalizerName)
 		if err := r.Update(ctx, gwConfig); err != nil {
 			log.Error(err, "failed to remove finalizer")
 			return ctrl.Result{}, err
@@ -250,7 +251,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcileWireguardKey(
 	}
 
 	// Update public key
-	wgPrivateKeyByte, ok := secret.Data[WireguardSecretKeyName]
+	wgPrivateKeyByte, ok := secret.Data[consts.WireguardSecretKeyName]
 	if !ok {
 		return fmt.Errorf("failed to retrieve private key from secret %s/%s", secretKey.Namespace, secretKey.Name)
 	}
@@ -286,7 +287,7 @@ func (r *StaticGatewayConfigurationReconciler) createWireguardSecret(
 	}
 
 	data := map[string][]byte{
-		WireguardSecretKeyName: []byte(wgPrivateKey.String()),
+		consts.WireguardSecretKeyName: []byte(wgPrivateKey.String()),
 	}
 	secret := &corev1.Secret{
 		Data: data,
@@ -349,7 +350,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcileGatewayLBConfig(
 	if lbConfig.Status.FrontendIP != "" {
 		gwConfig.Status.WireguardServerIP = lbConfig.Status.FrontendIP
 	}
-	if lbConfig.Status.ServerPort >= WireguardPortStart && lbConfig.Status.ServerPort < WireguardPortEnd {
+	if lbConfig.Status.ServerPort >= consts.WireguardPortStart && lbConfig.Status.ServerPort < consts.WireguardPortEnd {
 		gwConfig.Status.WireguardServerPort = lbConfig.Status.ServerPort
 	}
 

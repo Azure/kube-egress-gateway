@@ -7,6 +7,7 @@ import (
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
 	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	"github.com/Azure/kube-egress-gateway/controllers/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
@@ -72,7 +73,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					GatewayVMSSProfile: kubeegressgatewayv1alpha1.GatewayVMSSProfile{
 						VMSSResourceGroup:  "vmssRG",
 						VMSSName:           "vmss",
-						PublicIPPrefixSize: 31,
+						PublicIpPrefixSize: 31,
 					},
 				},
 			}
@@ -111,7 +112,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			})
 
 			It("should add finalizer", func() {
-				Expect(controllerutil.ContainsFinalizer(foundLBConfig, LBConfigFinalizerName)).To(BeTrue())
+				Expect(controllerutil.ContainsFinalizer(foundLBConfig, consts.LBConfigFinalizerName)).To(BeTrue())
 			})
 		})
 
@@ -140,7 +141,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			})
 
 			It("should return expected vmss in list", func() {
-				vmss := &compute.VirtualMachineScaleSet{Tags: map[string]*string{AKSNodepoolTagKey: to.Ptr("testgw")}}
+				vmss := &compute.VirtualMachineScaleSet{Tags: map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")}}
 				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{
 					&compute.VirtualMachineScaleSet{ID: to.Ptr("dummy")},
@@ -173,7 +174,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 
 		When("lbConfig has finalizer and GatewayNodepoolName", func() {
 			BeforeEach(func() {
-				controllerutil.AddFinalizer(lbConfig, LBConfigFinalizerName)
+				controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(lbConfig).Build()
 				r = &GatewayLBConfigurationReconciler{Client: cl, Scheme: s, AzureManager: az}
@@ -196,7 +197,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			})
 
 			It("should report error if gateway VMSS does not have UID", func() {
-				vmss := &compute.VirtualMachineScaleSet{Tags: map[string]*string{AKSNodepoolTagKey: to.Ptr("testgw")}}
+				vmss := &compute.VirtualMachineScaleSet{Tags: map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")}}
 				mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
 				mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(&network.LoadBalancer{}, nil)
 				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
@@ -208,7 +209,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			It("should report error if lb property is empty", func() {
 				vmss := &compute.VirtualMachineScaleSet{
 					Properties: &compute.VirtualMachineScaleSetProperties{UniqueID: to.Ptr(testVMSSUID)},
-					Tags:       map[string]*string{AKSNodepoolTagKey: to.Ptr("testgw")},
+					Tags:       map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")},
 				}
 				mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
 				mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(&network.LoadBalancer{}, nil)
@@ -228,7 +229,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				BeforeEach(func() {
 					vmss := &compute.VirtualMachineScaleSet{
 						Properties: &compute.VirtualMachineScaleSetProperties{UniqueID: to.Ptr(testVMSSUID)},
-						Tags:       map[string]*string{AKSNodepoolTagKey: to.Ptr("testgw")},
+						Tags:       map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")},
 					}
 					mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
 					mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(lb, nil)
@@ -276,7 +277,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			It("should report error if backend is not found", func() {
 				vmss := &compute.VirtualMachineScaleSet{
 					Properties: &compute.VirtualMachineScaleSetProperties{UniqueID: to.Ptr(testVMSSUID)},
-					Tags:       map[string]*string{AKSNodepoolTagKey: to.Ptr("testgw")},
+					Tags:       map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")},
 				}
 				lb := &network.LoadBalancer{
 					Properties: &network.LoadBalancerPropertiesFormat{
@@ -304,7 +305,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				BeforeEach(func() {
 					vmss := &compute.VirtualMachineScaleSet{
 						Properties: &compute.VirtualMachineScaleSetProperties{UniqueID: to.Ptr(testVMSSUID)},
-						Tags:       map[string]*string{AKSNodepoolTagKey: to.Ptr("testgw")},
+						Tags:       map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")},
 					}
 					mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
 					mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil).AnyTimes()
@@ -365,17 +366,17 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 						{
 							RequestPath: to.Ptr("/" + testNamespace + "/" + testName + "1"),
 							Protocol:    to.Ptr(network.ProbeProtocolHTTP),
-							Port:        to.Ptr(WireguardDaemonServicePort),
+							Port:        to.Ptr(consts.WireguardDaemonServicePort),
 						},
 						{
 							RequestPath: to.Ptr("/" + testNamespace + "/" + testName),
 							Protocol:    to.Ptr(network.ProbeProtocolTCP),
-							Port:        to.Ptr(WireguardDaemonServicePort),
+							Port:        to.Ptr(consts.WireguardDaemonServicePort),
 						},
 						{
 							RequestPath: to.Ptr("/" + testNamespace + "/" + testName),
 							Protocol:    to.Ptr(network.ProbeProtocolHTTP),
-							Port:        to.Ptr(WireguardDaemonServicePort + 1),
+							Port:        to.Ptr(consts.WireguardDaemonServicePort + 1),
 						},
 					} {
 						existingLB.Properties.Probes[0].Properties = prop
@@ -442,14 +443,14 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 
 		When("deleting a lbConfig with finalizer", func() {
 			BeforeEach(func() {
-				controllerutil.AddFinalizer(lbConfig, LBConfigFinalizerName)
+				controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
 				lbConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(lbConfig).Build()
 				r = &GatewayLBConfigurationReconciler{Client: cl, Scheme: s, AzureManager: az}
 				vmss := &compute.VirtualMachineScaleSet{
 					Properties: &compute.VirtualMachineScaleSetProperties{UniqueID: to.Ptr(testVMSSUID)},
-					Tags:       map[string]*string{AKSNodepoolTagKey: to.Ptr("testgw")},
+					Tags:       map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")},
 				}
 				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
@@ -489,7 +490,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				Expect(reconcileErr).To(Equal(fmt.Errorf("failed to update lb")))
 				getErr = getResource(cl, foundLBConfig)
 				Expect(getErr).To(BeNil())
-				Expect(controllerutil.ContainsFinalizer(foundLBConfig, LBConfigFinalizerName)).To(BeTrue())
+				Expect(controllerutil.ContainsFinalizer(foundLBConfig, consts.LBConfigFinalizerName)).To(BeTrue())
 			})
 		})
 
@@ -595,7 +596,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			})
 
 			It("should report error when all ports are occupied", func() {
-				for i := WireguardPortStart; i < WireguardPortEnd; i++ {
+				for i := consts.WireguardPortStart; i < consts.WireguardPortEnd; i++ {
 					lbRules = append(lbRules, &network.LoadBalancingRule{
 						Properties: &network.LoadBalancingRulePropertiesFormat{
 							BackendAddressPool: &network.SubResource{ID: to.Ptr("123")},
@@ -695,7 +696,7 @@ func getExpectedLB() *network.LoadBalancer {
 					Properties: &network.ProbePropertiesFormat{
 						RequestPath: to.Ptr("/" + testNamespace + "/" + testName),
 						Protocol:    to.Ptr(network.ProbeProtocolHTTP),
-						Port:        to.Ptr(WireguardDaemonServicePort),
+						Port:        to.Ptr(consts.WireguardDaemonServicePort),
 					},
 				},
 			},

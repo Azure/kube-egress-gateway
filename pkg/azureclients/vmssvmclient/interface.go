@@ -7,6 +7,9 @@ import (
 )
 
 type Interface interface {
+	// Get() gets a virtual machine scale set (vmss) object
+	Get(ctx context.Context, resourceGroupName string, vmScaleSetName string, instanceID string, expand string) (*compute.VirtualMachineScaleSetVM, error)
+
 	// List() gets a list of VMs in VM scale sets
 	List(ctx context.Context, resourceGroupName, vmScaleSetName string) ([]*compute.VirtualMachineScaleSetVM, error)
 

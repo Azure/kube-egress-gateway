@@ -4,6 +4,7 @@ import (
 	"context"
 
 	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	"github.com/Azure/kube-egress-gateway/controllers/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -62,7 +63,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 					GatewayVMSSProfile: kubeegressgatewayv1alpha1.GatewayVMSSProfile{
 						VMSSResourceGroup:  "vmssRG",
 						VMSSName:           "vmss",
-						PublicIPPrefixSize: 31,
+						PublicIpPrefixSize: 31,
 					},
 					PublicIpPrefixId: "testPipPrefix",
 				},
@@ -102,13 +103,13 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 			})
 
 			It("should add finalizer", func() {
-				Expect(controllerutil.ContainsFinalizer(foundGWConfig, SGCFinalizerName)).To(BeTrue())
+				Expect(controllerutil.ContainsFinalizer(foundGWConfig, consts.SGCFinalizerName)).To(BeTrue())
 			})
 		})
 
 		When("gwConfig only has finalizer", func() {
 			BeforeEach(func() {
-				controllerutil.AddFinalizer(gwConfig, SGCFinalizerName)
+				controllerutil.AddFinalizer(gwConfig, consts.SGCFinalizerName)
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig).Build()
 				r = &StaticGatewayConfigurationReconciler{Client: cl, Scheme: s}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
@@ -126,7 +127,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 				err := getResource(cl, secret)
 				Expect(err).To(BeNil())
 
-				privateKeyBytes, ok := secret.Data[WireguardSecretKeyName]
+				privateKeyBytes, ok := secret.Data[consts.WireguardSecretKeyName]
 				Expect(ok).To(BeTrue())
 				Expect(privateKeyBytes).NotTo(BeEmpty())
 
@@ -178,14 +179,14 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 
 		When("secret, lbConfig, vmConfig can all be found with status", func() {
 			BeforeEach(func() {
-				controllerutil.AddFinalizer(gwConfig, SGCFinalizerName)
+				controllerutil.AddFinalizer(gwConfig, consts.SGCFinalizerName)
 				secret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      testName,
 						Namespace: testNamespace,
 					},
 					Data: map[string][]byte{
-						WireguardSecretKeyName: []byte(privK),
+						consts.WireguardSecretKeyName: []byte(privK),
 					},
 				}
 				lbConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{
@@ -198,7 +199,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 						GatewayVMSSProfile: kubeegressgatewayv1alpha1.GatewayVMSSProfile{
 							VMSSResourceGroup:  "vmssRG",
 							VMSSName:           "vmss",
-							PublicIPPrefixSize: 31,
+							PublicIpPrefixSize: 31,
 						},
 					},
 					Status: kubeegressgatewayv1alpha1.GatewayLBConfigurationStatus{
@@ -216,7 +217,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 						GatewayVMSSProfile: kubeegressgatewayv1alpha1.GatewayVMSSProfile{
 							VMSSResourceGroup:  "vmssRG",
 							VMSSName:           "vmss",
-							PublicIPPrefixSize: 31,
+							PublicIpPrefixSize: 31,
 						},
 						PublicIpPrefixId: "testPipPrefix",
 					},
@@ -246,14 +247,14 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 
 		When("updating gwConfig", func() {
 			BeforeEach(func() {
-				controllerutil.AddFinalizer(gwConfig, SGCFinalizerName)
+				controllerutil.AddFinalizer(gwConfig, consts.SGCFinalizerName)
 				secret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      testName,
 						Namespace: testNamespace,
 					},
 					Data: map[string][]byte{
-						WireguardSecretKeyName: []byte(privK),
+						consts.WireguardSecretKeyName: []byte(privK),
 					},
 				}
 				lbConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{
@@ -266,7 +267,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 						GatewayVMSSProfile: kubeegressgatewayv1alpha1.GatewayVMSSProfile{
 							VMSSResourceGroup:  "vmssRG1",
 							VMSSName:           "vmss1",
-							PublicIPPrefixSize: 30,
+							PublicIpPrefixSize: 30,
 						},
 					},
 					Status: kubeegressgatewayv1alpha1.GatewayLBConfigurationStatus{
@@ -284,7 +285,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 						GatewayVMSSProfile: kubeegressgatewayv1alpha1.GatewayVMSSProfile{
 							VMSSResourceGroup:  "vmssRG1",
 							VMSSName:           "vmss1",
-							PublicIPPrefixSize: 30,
+							PublicIpPrefixSize: 30,
 						},
 						PublicIpPrefixId: "testPipPrefix1",
 					},
@@ -341,7 +342,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 		When("deleting a gwConfig with finalizer but no subresources", func() {
 			BeforeEach(func() {
 				gwConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
-				controllerutil.AddFinalizer(gwConfig, SGCFinalizerName)
+				controllerutil.AddFinalizer(gwConfig, consts.SGCFinalizerName)
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig).Build()
 				r = &StaticGatewayConfigurationReconciler{Client: cl, Scheme: s}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
@@ -361,7 +362,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 		When("deleting a gwConfig with finalizer and subresources", func() {
 			BeforeEach(func() {
 				gwConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
-				controllerutil.AddFinalizer(gwConfig, SGCFinalizerName)
+				controllerutil.AddFinalizer(gwConfig, consts.SGCFinalizerName)
 				lbConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      testName,
@@ -374,8 +375,8 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 						Namespace: testNamespace,
 					},
 				}
-				controllerutil.AddFinalizer(lbConfig, LBConfigFinalizerName)
-				controllerutil.AddFinalizer(vmConfig, VMConfigFinalizerName)
+				controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
+				controllerutil.AddFinalizer(vmConfig, consts.VMConfigFinalizerName)
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig, lbConfig, vmConfig).Build()
 				r = &StaticGatewayConfigurationReconciler{Client: cl, Scheme: s}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
@@ -389,7 +390,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 
 			It("should not delete gwConfig", func() {
 				Expect(getErr).To(BeNil())
-				Expect(controllerutil.ContainsFinalizer(foundGWConfig, SGCFinalizerName)).To(BeTrue())
+				Expect(controllerutil.ContainsFinalizer(foundGWConfig, consts.SGCFinalizerName)).To(BeTrue())
 			})
 
 			It("should delete subresources", func() {

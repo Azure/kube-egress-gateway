@@ -1,6 +1,8 @@
 package azureclients
 
 import (
+	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient"
+	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/loadbalancerclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/publicipprefixclient"
@@ -34,4 +36,8 @@ func (factory *MockAzureClientsFactory) GetVirtualMachineScaleSetVMsClient() (vm
 
 func (factory *MockAzureClientsFactory) GetPublicIPPrefixesClient() (publicipprefixclient.Interface, error) {
 	return mockpublicipprefixclient.NewMockInterface(factory.ctrl), nil
+}
+
+func (factory *MockAzureClientsFactory) GetInterfacesClient() (interfaceclient.Interface, error) {
+	return mockinterfaceclient.NewMockInterface(factory.ctrl), nil
 }

@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: daemon-manager
+  namespace: system
+spec:
+  template:
+    spec:
+      containers:
+      - name: daemon
+        args:
+        - "--cloud-config=/etc/config/azure.json"
+        volumeMounts:
+        - name: daemon-config-volume
+          mountPath: /etc/config
+      volumes:
+      - name: daemon-config-volume
+        configMap:
+          name: daemon-cloud-config

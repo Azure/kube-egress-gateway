@@ -8,6 +8,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/utils"
+	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 )
 
 type VirtualMachineScaleSetVMsClient struct {
@@ -20,6 +21,18 @@ func NewVirtualMachineScaleSetVMsClient(subscriptionID string, credential azcore
 		return nil, err
 	}
 	return &VirtualMachineScaleSetVMsClient{client}, nil
+}
+
+func (client *VirtualMachineScaleSetVMsClient) Get(ctx context.Context, resourceGroupName, vmScaleSetName, instanceID, expand string) (*compute.VirtualMachineScaleSetVM, error) {
+	var options *compute.VirtualMachineScaleSetVMsClientGetOptions
+	if expand != "" {
+		options = &compute.VirtualMachineScaleSetVMsClientGetOptions{Expand: to.Ptr(compute.InstanceViewTypes(expand))}
+	}
+	resp, err := client.VirtualMachineScaleSetVMsClient.Get(ctx, resourceGroupName, vmScaleSetName, instanceID, options)
+	if err != nil {
+		return nil, err
+	}
+	return &resp.VirtualMachineScaleSetVM, nil
 }
 
 func (client *VirtualMachineScaleSetVMsClient) List(ctx context.Context, resourceGroupName, vmScaleSetName string) ([]*compute.VirtualMachineScaleSetVM, error) {
