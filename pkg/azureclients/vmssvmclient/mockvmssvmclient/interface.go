@@ -8,7 +8,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	v4 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
+	armcompute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -35,11 +35,26 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 	return m.recorder
 }
 
+// Get mocks base method.
+func (m *MockInterface) Get(ctx context.Context, resourceGroupName, vmScaleSetName, instanceID, expand string) (*armcompute.VirtualMachineScaleSetVM, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", ctx, resourceGroupName, vmScaleSetName, instanceID, expand)
+	ret0, _ := ret[0].(*armcompute.VirtualMachineScaleSetVM)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockInterfaceMockRecorder) Get(ctx, resourceGroupName, vmScaleSetName, instanceID, expand interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockInterface)(nil).Get), ctx, resourceGroupName, vmScaleSetName, instanceID, expand)
+}
+
 // List mocks base method.
-func (m *MockInterface) List(ctx context.Context, resourceGroupName, vmScaleSetName string) ([]*v4.VirtualMachineScaleSetVM, error) {
+func (m *MockInterface) List(ctx context.Context, resourceGroupName, vmScaleSetName string) ([]*armcompute.VirtualMachineScaleSetVM, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "List", ctx, resourceGroupName, vmScaleSetName)
-	ret0, _ := ret[0].([]*v4.VirtualMachineScaleSetVM)
+	ret0, _ := ret[0].([]*armcompute.VirtualMachineScaleSetVM)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -51,10 +66,10 @@ func (mr *MockInterfaceMockRecorder) List(ctx, resourceGroupName, vmScaleSetName
 }
 
 // Update mocks base method.
-func (m *MockInterface) Update(ctx context.Context, resourceGroupName, vmScaleSetName, instanceID string, vmssVM v4.VirtualMachineScaleSetVM) (*v4.VirtualMachineScaleSetVM, error) {
+func (m *MockInterface) Update(ctx context.Context, resourceGroupName, vmScaleSetName, instanceID string, vmssVM armcompute.VirtualMachineScaleSetVM) (*armcompute.VirtualMachineScaleSetVM, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Update", ctx, resourceGroupName, vmScaleSetName, instanceID, vmssVM)
-	ret0, _ := ret[0].(*v4.VirtualMachineScaleSetVM)
+	ret0, _ := ret[0].(*armcompute.VirtualMachineScaleSetVM)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

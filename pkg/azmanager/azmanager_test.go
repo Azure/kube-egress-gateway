@@ -7,6 +7,7 @@ import (
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
+	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/publicipprefixclient/mockpublicipprefixclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssclient/mockvmssclient"
@@ -326,6 +327,70 @@ func TestListVMSSInstances(t *testing.T) {
 	}
 }
 
+func TestGetVMSSInstance(t *testing.T) {
+	tests := []struct {
+		desc         string
+		rg           string
+		expectedRG   string
+		vmssName     string
+		instanceID   string
+		vm           *compute.VirtualMachineScaleSetVM
+		expectedCall bool
+		testErr      error
+	}{
+		{
+			desc:         "GetVMSSInstance() should run as expected",
+			expectedRG:   "testRG",
+			vmssName:     "vmss",
+			instanceID:   "0",
+			vm:           &compute.VirtualMachineScaleSetVM{Name: to.Ptr("vm0")},
+			expectedCall: true,
+		},
+		{
+			desc:         "GetVMSSInstance() should run as expected with specified resource group",
+			rg:           "customRG",
+			expectedRG:   "customRG",
+			vmssName:     "vmss",
+			instanceID:   "0",
+			vm:           &compute.VirtualMachineScaleSetVM{Name: to.Ptr("vm0")},
+			expectedCall: true,
+		},
+		{
+			desc:         "GetVMSSInstance() should return error when vmss name is empty",
+			expectedCall: false,
+			testErr:      fmt.Errorf("vmss name is empty"),
+		},
+		{
+			desc:         "GetVMSSInstance() should return error when instanceID is empty",
+			vmssName:     "vmss",
+			expectedCall: false,
+			testErr:      fmt.Errorf("vmss instanceID is empty"),
+		},
+		{
+			desc:         "GetVMSSInstance() should return expected error",
+			expectedRG:   "testRG",
+			vmssName:     "vmss",
+			instanceID:   "0",
+			expectedCall: true,
+			testErr:      fmt.Errorf("failed to list vmss instances"),
+		},
+	}
+	for i, test := range tests {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		config := getTestCloudConfig("", "")
+		factory := getMockFactory(ctrl)
+		az, _ := CreateAzureManager(config, factory)
+		if test.expectedCall {
+			mockVMSSVMClient := az.VmssVMClient.(*mockvmssvmclient.MockInterface)
+			mockVMSSVMClient.EXPECT().Get(gomock.Any(), test.expectedRG, test.vmssName, test.instanceID, gomock.Any()).Return(test.vm, test.testErr)
+		}
+		vm, err := az.GetVMSSInstance(test.rg, test.vmssName, test.instanceID)
+		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
+		assert.Equal(t, to.Val(vm), to.Val(test.vm), "TestCase[%d]: %s", i, test.desc)
+	}
+}
+
 func TestUpdateVMSSInstance(t *testing.T) {
 	tests := []struct {
 		desc         string
@@ -545,6 +610,81 @@ func TestDeletePublicIPPrefix(t *testing.T) {
 		}
 		err := az.DeletePublicIPPrefix(test.rg, test.prefixName)
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
+	}
+}
+
+func TestGetVMSSInterface(t *testing.T) {
+	tests := []struct {
+		desc         string
+		rg           string
+		expectedRG   string
+		vmssName     string
+		instanceID   string
+		nicName      string
+		nic          *network.Interface
+		expectedCall bool
+		testErr      error
+	}{
+		{
+			desc:         "GetVMSSInterface() should run as expected",
+			expectedRG:   "testRG",
+			vmssName:     "vmss",
+			instanceID:   "0",
+			nicName:      "nic",
+			nic:          &network.Interface{Name: to.Ptr("nic")},
+			expectedCall: true,
+		},
+		{
+			desc:         "GetVMSSInterface() should run as expected with specified resource group",
+			rg:           "customRG",
+			expectedRG:   "customRG",
+			vmssName:     "vmss",
+			instanceID:   "0",
+			nicName:      "nic",
+			nic:          &network.Interface{Name: to.Ptr("nic")},
+			expectedCall: true,
+		},
+		{
+			desc:         "GetVMSSInterface() should return error when vmss name is empty",
+			expectedCall: false,
+			testErr:      fmt.Errorf("vmss name is empty"),
+		},
+		{
+			desc:         "GetVMSSInterface() should return error when instanceID is empty",
+			vmssName:     "vmss",
+			expectedCall: false,
+			testErr:      fmt.Errorf("instanceID is empty"),
+		},
+		{
+			desc:         "GetVMSSInterface() should return error when interfaceName is empty",
+			vmssName:     "vmss",
+			instanceID:   "0",
+			expectedCall: false,
+			testErr:      fmt.Errorf("interface name is empty"),
+		},
+		{
+			desc:         "GetVMSSInterface() should return expected error",
+			expectedRG:   "testRG",
+			vmssName:     "vmss",
+			instanceID:   "0",
+			nicName:      "nic",
+			expectedCall: true,
+			testErr:      fmt.Errorf("failed to list vmss instances"),
+		},
+	}
+	for i, test := range tests {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		config := getTestCloudConfig("", "")
+		factory := getMockFactory(ctrl)
+		az, _ := CreateAzureManager(config, factory)
+		if test.expectedCall {
+			mockInterfaceClient := az.InterfaceClient.(*mockinterfaceclient.MockInterface)
+			mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), test.expectedRG, test.vmssName, test.instanceID, test.nicName, gomock.Any()).Return(test.nic, test.testErr)
+		}
+		nic, err := az.GetVMSSInterface(test.rg, test.vmssName, test.instanceID, test.nicName)
+		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
+		assert.Equal(t, to.Val(nic), to.Val(test.nic), "TestCase[%d]: %s", i, test.desc)
 	}
 }
 

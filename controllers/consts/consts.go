@@ -1,4 +1,4 @@
-package manager
+package consts
 
 const (
 	// StaticGatewayConfiguration finalizer name
@@ -27,4 +27,21 @@ const (
 
 	// gateway nodepool ip prefix size tag key in aks clusters
 	AKSNodepoolIPPrefixSizeTagKey = "aks-managed-gatewayIPPrefixSize"
+)
+
+const (
+	// wireguard link name in gateway namespace
+	WireguardLinkName = "wg0"
+
+	// host link name in gateway namespace
+	HostLinkName = "host0"
+
+	// gateway IP
+	GatewayIP = "fe80::1/64"
+
+	// post routing chain name
+	PostRoutingChain = "POSTROUTING"
+
+	// nat table name
+	NatTable = "nat"
 )

@@ -10,6 +10,7 @@ import (
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
 	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	"github.com/Azure/kube-egress-gateway/controllers/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/publicipprefixclient/mockpublicipprefixclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssclient/mockvmssclient"
@@ -70,7 +71,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					GatewayVMSSProfile: kubeegressgatewayv1alpha1.GatewayVMSSProfile{
 						VMSSResourceGroup:  vmssRG,
 						VMSSName:           vmssName,
-						PublicIPPrefixSize: 31,
+						PublicIpPrefixSize: 31,
 					},
 				},
 			}
@@ -109,7 +110,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			})
 
 			It("should add finalizer", func() {
-				Expect(controllerutil.ContainsFinalizer(foundVMConfig, VMConfigFinalizerName)).To(BeTrue())
+				Expect(controllerutil.ContainsFinalizer(foundVMConfig, consts.VMConfigFinalizerName)).To(BeTrue())
 			})
 		})
 
@@ -134,15 +135,15 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					},
 					{
 						desc:        "should return error when vmss in list does not have ip prefix length tag",
-						vmss:        &compute.VirtualMachineScaleSet{Tags: map[string]*string{AKSNodepoolTagKey: to.Ptr("testgw")}},
+						vmss:        &compute.VirtualMachineScaleSet{Tags: map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")}},
 						expectedErr: fmt.Errorf("nodepool does not have IP prefix size"),
 					},
 					{
 						desc: "should return error when vmss in list has invalid ip prefix length tag",
 						vmss: &compute.VirtualMachineScaleSet{
 							Tags: map[string]*string{
-								AKSNodepoolTagKey:             to.Ptr("testgw"),
-								AKSNodepoolIPPrefixSizeTagKey: to.Ptr("0"),
+								consts.AKSNodepoolTagKey:             to.Ptr("testgw"),
+								consts.AKSNodepoolIPPrefixSizeTagKey: to.Ptr("0"),
 							},
 						},
 						expectedErr: fmt.Errorf("failed to parse nodepool IP prefix size: 0"),
@@ -151,8 +152,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						desc: "should return correct vmss in list",
 						vmss: &compute.VirtualMachineScaleSet{
 							Tags: map[string]*string{
-								AKSNodepoolTagKey:             to.Ptr("testgw"),
-								AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
+								consts.AKSNodepoolTagKey:             to.Ptr("testgw"),
+								consts.AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
 							},
 						},
 					},
@@ -691,7 +692,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 		When("reconciling vmConfig with finalizer", func() {
 			BeforeEach(func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
-				controllerutil.AddFinalizer(vmConfig, VMConfigFinalizerName)
+				controllerutil.AddFinalizer(vmConfig, consts.VMConfigFinalizerName)
 				vmConfig.Spec.PublicIpPrefixId = "/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix"
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(vmConfig).Build()
 				r = &GatewayVMConfigurationReconciler{Client: cl, Scheme: s, AzureManager: az}
@@ -708,8 +709,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				vmss := getConfiguredVMSS()
 				vmss.Name = to.Ptr(vmssName)
 				vmss.Tags = map[string]*string{
-					AKSNodepoolTagKey:             to.Ptr("testgw"),
-					AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
+					consts.AKSNodepoolTagKey:             to.Ptr("testgw"),
+					consts.AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
 				}
 				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
@@ -723,8 +724,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				vmss := getConfiguredVMSS()
 				vmss.Name = to.Ptr(vmssName)
 				vmss.Tags = map[string]*string{
-					AKSNodepoolTagKey:             to.Ptr("testgw"),
-					AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
+					consts.AKSNodepoolTagKey:             to.Ptr("testgw"),
+					consts.AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
 				}
 				ipPrefix := &network.PublicIPPrefix{
 					Name: to.Ptr("prefix"),
@@ -748,8 +749,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				vmss := getConfiguredVMSS()
 				vmss.Name = to.Ptr(vmssName)
 				vmss.Tags = map[string]*string{
-					AKSNodepoolTagKey:             to.Ptr("testgw"),
-					AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
+					consts.AKSNodepoolTagKey:             to.Ptr("testgw"),
+					consts.AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
 				}
 				ipPrefix := &network.PublicIPPrefix{
 					Name: to.Ptr("prefix"),
@@ -774,8 +775,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				vmss := getConfiguredVMSS()
 				vmss.Name = to.Ptr(vmssName)
 				vmss.Tags = map[string]*string{
-					AKSNodepoolTagKey:             to.Ptr("testgw"),
-					AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
+					consts.AKSNodepoolTagKey:             to.Ptr("testgw"),
+					consts.AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
 				}
 				ipPrefix := &network.PublicIPPrefix{
 					Name: to.Ptr("prefix"),
@@ -819,7 +820,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				vmConfig.Spec.PublicIpPrefixId = "/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix"
 				vmConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
-				controllerutil.AddFinalizer(vmConfig, VMConfigFinalizerName)
+				controllerutil.AddFinalizer(vmConfig, consts.VMConfigFinalizerName)
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(vmConfig).Build()
 				r = &GatewayVMConfigurationReconciler{Client: cl, Scheme: s, AzureManager: az}
 			})
@@ -836,8 +837,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			It("should report error when reconcileVMSS fails", func() {
 				vmss := getEmptyVMSS()
 				vmss.Tags = map[string]*string{
-					AKSNodepoolTagKey:             to.Ptr("testgw"),
-					AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
+					consts.AKSNodepoolTagKey:             to.Ptr("testgw"),
+					consts.AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
 				}
 				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
@@ -850,8 +851,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			It("should report error when removing managed public ip prefix fails", func() {
 				vmss := getEmptyVMSS()
 				vmss.Tags = map[string]*string{
-					AKSNodepoolTagKey:             to.Ptr("testgw"),
-					AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
+					consts.AKSNodepoolTagKey:             to.Ptr("testgw"),
+					consts.AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
 				}
 				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
@@ -866,8 +867,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			It("should delete vmConfig", func() {
 				vmss := getEmptyVMSS()
 				vmss.Tags = map[string]*string{
-					AKSNodepoolTagKey:             to.Ptr("testgw"),
-					AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
+					consts.AKSNodepoolTagKey:             to.Ptr("testgw"),
+					consts.AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
 				}
 				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)

@@ -23,8 +23,12 @@ func NewVirtualMachineScaleSetsClient(subscriptionID string, credential azcore.T
 }
 
 func (client *VirtualMachineScaleSetsClient) Get(ctx context.Context, resourceGroupName string, vmScaleSetName string, expand string) (*compute.VirtualMachineScaleSet, error) {
-	exp := compute.ExpandTypesForGetVMScaleSets(expand)
-	resp, err := client.VirtualMachineScaleSetsClient.Get(ctx, resourceGroupName, vmScaleSetName, &compute.VirtualMachineScaleSetsClientGetOptions{Expand: &exp})
+	var options *compute.VirtualMachineScaleSetsClientGetOptions
+	if expand != "" {
+		exp := compute.ExpandTypesForGetVMScaleSets(expand)
+		options = &compute.VirtualMachineScaleSetsClientGetOptions{Expand: &exp}
+	}
+	resp, err := client.VirtualMachineScaleSetsClient.Get(ctx, resourceGroupName, vmScaleSetName, options)
 	if err != nil {
 		return nil, err
 	}

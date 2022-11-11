@@ -8,6 +8,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 
+	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/loadbalancerclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/publicipprefixclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssclient"
@@ -26,6 +27,9 @@ type AzureClientsFactory interface {
 
 	// get public ip prefixes client
 	GetPublicIPPrefixesClient() (publicipprefixclient.Interface, error)
+
+	// get interfaces client
+	GetInterfacesClient() (interfaceclient.Interface, error)
 }
 
 type azureClientsFactory struct {
@@ -92,6 +96,14 @@ func (factory *azureClientsFactory) GetVirtualMachineScaleSetVMsClient() (vmssvm
 
 func (factory *azureClientsFactory) GetPublicIPPrefixesClient() (publicipprefixclient.Interface, error) {
 	client, err := publicipprefixclient.NewPublicIPPrefixesClient(factory.subscriptionID, factory.credentials, factory.clientOptions)
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
+}
+
+func (factory *azureClientsFactory) GetInterfacesClient() (interfaceclient.Interface, error) {
+	client, err := interfaceclient.NewInterfacesClient(factory.subscriptionID, factory.credentials, factory.clientOptions)
 	if err != nil {
 		return nil, err
 	}
