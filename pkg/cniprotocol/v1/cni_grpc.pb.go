@@ -2,9 +2,9 @@
 // versions:
 // - protoc-gen-go-grpc v1.2.0
 // - protoc             (unknown)
-// source: cni.proto
+// source: pkg/cniprotocol/v1/cni.proto
 
-package cniprotocol
+package v1
 
 import (
 	context "context"
@@ -38,7 +38,7 @@ func NewNicServiceClient(cc grpc.ClientConnInterface) NicServiceClient {
 
 func (c *nicServiceClient) NicAdd(ctx context.Context, in *NicAddRequest, opts ...grpc.CallOption) (*NicAddResponse, error) {
 	out := new(NicAddResponse)
-	err := c.cc.Invoke(ctx, "/v1.NicService/NicAdd", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/pkg.cniprotocol.v1.NicService/NicAdd", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +47,7 @@ func (c *nicServiceClient) NicAdd(ctx context.Context, in *NicAddRequest, opts .
 
 func (c *nicServiceClient) NicDel(ctx context.Context, in *NicDelRequest, opts ...grpc.CallOption) (*NicDelResponse, error) {
 	out := new(NicDelResponse)
-	err := c.cc.Invoke(ctx, "/v1.NicService/NicDel", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/pkg.cniprotocol.v1.NicService/NicDel", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func _NicService_NicAdd_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/v1.NicService/NicAdd",
+		FullMethod: "/pkg.cniprotocol.v1.NicService/NicAdd",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(NicServiceServer).NicAdd(ctx, req.(*NicAddRequest))
@@ -116,7 +116,7 @@ func _NicService_NicDel_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/v1.NicService/NicDel",
+		FullMethod: "/pkg.cniprotocol.v1.NicService/NicDel",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(NicServiceServer).NicDel(ctx, req.(*NicDelRequest))
@@ -128,7 +128,7 @@ func _NicService_NicDel_Handler(srv interface{}, ctx context.Context, dec func(i
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var NicService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "v1.NicService",
+	ServiceName: "pkg.cniprotocol.v1.NicService",
 	HandlerType: (*NicServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -141,5 +141,5 @@ var NicService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "cni.proto",
+	Metadata: "pkg/cniprotocol/v1/cni.proto",
 }

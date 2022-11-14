@@ -191,7 +191,7 @@ $(PROTOC_GEN_GO): $(LOCALBIN)
 PROTOC_GEN_GO_GRPC ?= $(LOCALBIN)/protoc-gen-go-grpc
 .PHONY: protoc-gen-go-grpc
 protoc-gen-go-grpc: $(PROTOC_GEN_GO_GRPC)  ## Download protoc-gen-go-grpc locally if necessary.
-$(PROTOC_GEN_GO_GRPC): $(LOCALBIN)
+$(PROTOC_GEN_GO_GRPC): $(LOCALBIN) $(PROTOC)
 	test -s $(LOCALBIN)/protoc-gen-go-grpc || GOBIN=$(LOCALBIN) go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
 PROTOC ?= $(LOCALBIN)/protoc
