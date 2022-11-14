@@ -27,7 +27,7 @@ import (
 	"net"
 
 	"github.com/Azure/kube-egress-gateway/pkg/cnimanager/nicservice"
-	"github.com/Azure/kube-egress-gateway/pkg/cniprotocol"
+	cniprotocol "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 
 	"github.com/Azure/kube-egress-gateway/pkg/logger"
