@@ -25,34 +25,47 @@
 syntax = "proto3";
 
 option go_package = "github.com/Azure/kube-egress-gateway/pkg/cniprotocol";
+package pkg.cniprotocol.v1;
+import "google/rpc/status.proto";
 
-package CNI.KubeEgressGateway.Azure;
+message PodConfig{
+  string public_key = 1;
+  string pod_ip = 2;
+}
 
 // CNIAddRequest is the request for cni add function.
-message CNIAddRequest {
-  string message = 1;
+message NicAddRequest {
+  string gateway_name = 1;
+  PodConfig pod_config =2;
+}
+
+message GatewayConfig {
+  string endpoint_ip = 1;
+  string public_key = 2;
 }
 
 // CNIAddResponse is the response for cni add function.
-message CNIAddResponse {
-  string message = 1;
+message NicAddResponse {
+  google.rpc.Status status = 1;
+  optional GatewayConfig gateway_config = 2;
 }
 
 // CNIDeleteRequest is the request for cni del function.
-message CNIDeleteRequest {
-  string message = 1;
+message NicDelRequest {
+  string pod_ip = 1;
 }
 
 // CNIDeleteResponse is the response for cni del function.
-message CNIDeleteResponse {
-  string message = 1;
+message NicDelResponse {
+  google.rpc.Status status = 1;
 }
 
 // NicService is the nic management service.
 service NicService {
-  // NicAdd: allocate new nic for container
-  rpc NicAdd(CNIAddRequest) returns (CNIAddResponse) ;
+  // NicAdd: send pod public key and return gateway public key and endpoint ip
+  rpc NicAdd(NicAddRequest) returns (NicAddResponse) ;
 
-  // NicDel: delete new nic for container
-  rpc NicDel(CNIDeleteRequest) returns (CNIDeleteResponse) ;
+  // NicDel: delete pod endpoint resource
+  rpc NicDel(NicDelRequest) returns (NicDelResponse) ;
 }
+

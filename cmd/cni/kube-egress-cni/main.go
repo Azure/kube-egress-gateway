@@ -46,6 +46,7 @@ func main() {
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
+
 	conn, err := grpc.Dial(
 		"unix://"+consts.CNI_SOCKET_PATH,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -58,7 +59,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer conn.Close()
 	client := cniprotocol.NewNicServiceClient(conn)
-	_, err = client.NicAdd(context.Background(), &cniprotocol.CNIAddRequest{})
+	_, err = client.NicAdd(context.Background(), &cniprotocol.NicAddRequest{})
 	if err != nil {
 		return err
 	}
@@ -81,7 +82,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 	defer conn.Close()
 	client := cniprotocol.NewNicServiceClient(conn)
-	_, err = client.NicDel(context.Background(), &cniprotocol.CNIDeleteRequest{})
+	_, err = client.NicDel(context.Background(), &cniprotocol.NicDelRequest{})
 	if err != nil {
 		return err
 	}
