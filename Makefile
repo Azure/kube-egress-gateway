@@ -49,9 +49,9 @@ generate: generate-apiutils generate-protogo
 generate-apiutils: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
-generate-protogo: protoc protoc-gen-go-grpc protoc-gen-go ## Generate code containing golang protobuf implementation.
-	PATH=$(PATH):$(LOCALBIN) $(LOCALBIN)/protoc --go_out=. --go_opt=paths=source_relative \
-    --go-grpc_out=. --go-grpc_opt=paths=source_relative pkg/cniprotocol/*.proto
+generate-protogo: install-dependencies ## Generate code containing golang protobuf implementation.
+	$(LOCALBIN)/buf generate
+	$(LOCALBIN)/buf lint
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
@@ -134,7 +134,8 @@ undeploy-daemon: ## Undeploy gateway daemon from the K8s cluster specified in ~/
 ##@ Build Dependencies
 
 .PHONY: install-dependencies
-install-dependencies: kustomize controller-gen envtest cobra-cli kubebuilder golangci-lint protoc-gen-go protoc-gen-go-grpc protoc ## Install all build dependencies.
+install-dependencies: kustomize controller-gen envtest cobra-cli kubebuilder golangci-lint protoc-gen-go protoc-gen-go-grpc protoc buf ## Install all build dependencies.
+	export PATH=$$PATH:$(LOCALBIN)
 
 ## Location to install dependencies to
 LOCALBIN ?= $(shell pwd)/bin
@@ -197,4 +198,11 @@ PROTOC ?= $(LOCALBIN)/protoc
 .PHONY: protoc
 protoc: $(PROTOC)  ## Download protoc locally if necessary.
 $(PROTOC): $(LOCALBIN) 
-	test -s $(LOCALBIN)/protoc || { curl -L -o $(LOCALBIN)/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v3.20.2/protoc-3.20.2-linux-x86_64.zip && unzip $(LOCALBIN)/protoc.zip -d $(LOCALBIN) && mv $(LOCALBIN)/bin/protoc $(LOCALBIN) && rm -rf $(LOCALBIN)/protoc.zip $(LOCALBIN)/readme.txt $(LOCALBIN)/bin; }
+	test -s $(LOCALBIN)/protoc || { curl -L -o $(LOCALBIN)/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v3.20.2/protoc-3.20.2-linux-x86_64.zip && unzip $(LOCALBIN)/protoc.zip -d $(LOCALBIN) && mv $(LOCALBIN)/bin/protoc $(LOCALBIN) && rm -rf $(LOCALBIN)/protoc.zip $(LOCALBIN)/readme.txt $(LOCALBIN)/bin $(LOCALBIN)/include; }
+
+BUF ?= $(LOCALBIN)/buf
+.PHONY: buf
+buf: $(BUF)  ## Download buf locally if necessary.
+$(BUF): $(LOCALBIN)
+	test -s $(LOCALBIN)/buf || GOBIN=$(LOCALBIN) go install github.com/bufbuild/buf/cmd/buf@latest
+
