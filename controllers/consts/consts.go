@@ -44,4 +44,10 @@ const (
 
 	// nat table name
 	NatTable = "nat"
+
+	// environment variable name for pod namespace
+	PodNamespaceEnvKey = "MY_POD_NAMESPACE"
+
+	// environment variable name for nodeName
+	NodeNameEnvKey = "MY_NODE_NAME"
 )

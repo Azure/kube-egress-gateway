@@ -42,15 +42,21 @@ spec:
         securityContext:
           privileged: true
         volumeMounts:
-        - mountPath: /proc
-          name: hostpath-proc
-          mountPropagation: Bidirectional
-        - mountPath: /run
+        - mountPath: /run/netns
           name: hostpath-run
           mountPropagation: Bidirectional
-        - mountPath: /var
+        - mountPath: /var/run/netns
           name: hostpath-var
           mountPropagation: Bidirectional
+        env:
+          - name: MY_NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+          - name: MY_POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
         livenessProbe:
           httpGet:
             path: /healthz
@@ -75,12 +81,9 @@ spec:
       serviceAccountName: daemon-manager
       terminationGracePeriodSeconds: 10
       volumes:
-        - name: hostpath-proc
-          hostPath:
-              path: /proc
         - name: hostpath-run
           hostPath:
-              path: /run
+              path: /run/netns
         - name: hostpath-var
           hostPath:
-              path: /var
+              path: /var/run/netns

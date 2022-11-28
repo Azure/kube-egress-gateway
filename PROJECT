@@ -43,4 +43,12 @@ resources:
   kind: GatewayVMConfiguration
   path: github.com/Azure/kube-egress-gateway/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  domain: kubernetes.azure.com
+  group: egressgateway
+  kind: GatewayStatus
+  path: github.com/Azure/kube-egress-gateway/api/v1alpha1
+  version: v1alpha1
 version: "3"

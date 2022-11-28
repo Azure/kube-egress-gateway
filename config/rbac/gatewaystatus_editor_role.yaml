@@ -1,0 +1,31 @@
+# permissions for end users to edit gatewaystatuses.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: gatewaystatus-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: kube-egress-gateway
+    app.kubernetes.io/part-of: kube-egress-gateway
+    app.kubernetes.io/managed-by: kustomize
+  name: gatewaystatus-editor-role
+rules:
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - gatewaystatuses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - gatewaystatuses/status
+  verbs:
+  - get

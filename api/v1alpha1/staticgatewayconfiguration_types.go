@@ -93,9 +93,6 @@ type StaticGatewayConfigurationStatus struct {
 
 	// Gateway side wireguard profile.
 	GatewayWireguardProfile `json:"gatewayWireguardProfile,omitempty"`
-
-	// List of active nodes that have this gateway configuration setup ready.
-	ActiveNodes []string `json:"activeNodes,omitempty"`
 }
 
 //+kubebuilder:object:root=true

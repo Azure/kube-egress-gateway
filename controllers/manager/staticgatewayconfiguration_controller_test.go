@@ -3,7 +3,7 @@ package manager
 import (
 	"context"
 
-	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/controllers/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 	. "github.com/onsi/ginkgo"
@@ -42,8 +42,8 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 			cl            client.Client
 			reconcileErr  error
 			getErr        error
-			gwConfig      *kubeegressgatewayv1alpha1.StaticGatewayConfiguration
-			foundGWConfig = &kubeegressgatewayv1alpha1.StaticGatewayConfiguration{}
+			gwConfig      *egressgatewayv1alpha1.StaticGatewayConfiguration
+			foundGWConfig = &egressgatewayv1alpha1.StaticGatewayConfiguration{}
 		)
 
 		BeforeEach(func() {
@@ -53,14 +53,14 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 					Namespace: testNamespace,
 				},
 			}
-			gwConfig = &kubeegressgatewayv1alpha1.StaticGatewayConfiguration{
+			gwConfig = &egressgatewayv1alpha1.StaticGatewayConfiguration{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      testName,
 					Namespace: testNamespace,
 				},
-				Spec: kubeegressgatewayv1alpha1.StaticGatewayConfigurationSpec{
+				Spec: egressgatewayv1alpha1.StaticGatewayConfigurationSpec{
 					GatewayNodepoolName: "testgw",
-					GatewayVMSSProfile: kubeegressgatewayv1alpha1.GatewayVMSSProfile{
+					GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
 						VMSSResourceGroup:  "vmssRG",
 						VMSSName:           "vmss",
 						PublicIpPrefixSize: 31,
@@ -68,9 +68,9 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 					PublicIpPrefixId: "testPipPrefix",
 				},
 			}
-			s.AddKnownTypes(kubeegressgatewayv1alpha1.GroupVersion, gwConfig,
-				&kubeegressgatewayv1alpha1.GatewayLBConfiguration{},
-				&kubeegressgatewayv1alpha1.GatewayVMConfiguration{})
+			s.AddKnownTypes(egressgatewayv1alpha1.GroupVersion, gwConfig,
+				&egressgatewayv1alpha1.GatewayLBConfiguration{},
+				&egressgatewayv1alpha1.GatewayVMConfiguration{})
 		})
 
 		When("gwConfig is not found", func() {
@@ -145,7 +145,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 			})
 
 			It("should create a new lbConfig", func() {
-				lbConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{}
+				lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{}
 				err := getResource(cl, lbConfig)
 				Expect(err).To(BeNil())
 
@@ -161,7 +161,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 			})
 
 			It("should create a new vmConfig", func() {
-				vmConfig := &kubeegressgatewayv1alpha1.GatewayVMConfiguration{}
+				vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{}
 				err := getResource(cl, vmConfig)
 				Expect(err).To(BeNil())
 
@@ -189,39 +189,39 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 						consts.WireguardSecretKeyName: []byte(privK),
 					},
 				}
-				lbConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{
+				lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      testName,
 						Namespace: testNamespace,
 					},
-					Spec: kubeegressgatewayv1alpha1.GatewayLBConfigurationSpec{
+					Spec: egressgatewayv1alpha1.GatewayLBConfigurationSpec{
 						GatewayNodepoolName: "testgw",
-						GatewayVMSSProfile: kubeegressgatewayv1alpha1.GatewayVMSSProfile{
+						GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
 							VMSSResourceGroup:  "vmssRG",
 							VMSSName:           "vmss",
 							PublicIpPrefixSize: 31,
 						},
 					},
-					Status: kubeegressgatewayv1alpha1.GatewayLBConfigurationStatus{
+					Status: egressgatewayv1alpha1.GatewayLBConfigurationStatus{
 						FrontendIP: "1.1.1.1",
 						ServerPort: 6000,
 					},
 				}
-				vmConfig := &kubeegressgatewayv1alpha1.GatewayVMConfiguration{
+				vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      testName,
 						Namespace: testNamespace,
 					},
-					Spec: kubeegressgatewayv1alpha1.GatewayVMConfigurationSpec{
+					Spec: egressgatewayv1alpha1.GatewayVMConfigurationSpec{
 						GatewayNodepoolName: "testgw",
-						GatewayVMSSProfile: kubeegressgatewayv1alpha1.GatewayVMSSProfile{
+						GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
 							VMSSResourceGroup:  "vmssRG",
 							VMSSName:           "vmss",
 							PublicIpPrefixSize: 31,
 						},
 						PublicIpPrefixId: "testPipPrefix",
 					},
-					Status: kubeegressgatewayv1alpha1.GatewayVMConfigurationStatus{
+					Status: egressgatewayv1alpha1.GatewayVMConfigurationStatus{
 						EgressIpPrefix: "1.2.3.4/31",
 					},
 				}
@@ -257,39 +257,39 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 						consts.WireguardSecretKeyName: []byte(privK),
 					},
 				}
-				lbConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{
+				lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      testName,
 						Namespace: testNamespace,
 					},
-					Spec: kubeegressgatewayv1alpha1.GatewayLBConfigurationSpec{
+					Spec: egressgatewayv1alpha1.GatewayLBConfigurationSpec{
 						GatewayNodepoolName: "testgw1",
-						GatewayVMSSProfile: kubeegressgatewayv1alpha1.GatewayVMSSProfile{
+						GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
 							VMSSResourceGroup:  "vmssRG1",
 							VMSSName:           "vmss1",
 							PublicIpPrefixSize: 30,
 						},
 					},
-					Status: kubeegressgatewayv1alpha1.GatewayLBConfigurationStatus{
+					Status: egressgatewayv1alpha1.GatewayLBConfigurationStatus{
 						FrontendIP: "1.1.1.1",
 						ServerPort: 6000,
 					},
 				}
-				vmConfig := &kubeegressgatewayv1alpha1.GatewayVMConfiguration{
+				vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      testName,
 						Namespace: testNamespace,
 					},
-					Spec: kubeegressgatewayv1alpha1.GatewayVMConfigurationSpec{
+					Spec: egressgatewayv1alpha1.GatewayVMConfigurationSpec{
 						GatewayNodepoolName: "testgw1",
-						GatewayVMSSProfile: kubeegressgatewayv1alpha1.GatewayVMSSProfile{
+						GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
 							VMSSResourceGroup:  "vmssRG1",
 							VMSSName:           "vmss1",
 							PublicIpPrefixSize: 30,
 						},
 						PublicIpPrefixId: "testPipPrefix1",
 					},
-					Status: kubeegressgatewayv1alpha1.GatewayVMConfigurationStatus{
+					Status: egressgatewayv1alpha1.GatewayVMConfigurationStatus{
 						EgressIpPrefix: "1.2.3.4/31",
 					},
 				}
@@ -306,14 +306,14 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 			})
 
 			It("should update lbConfig and vmConfig accordingly", func() {
-				lbConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{}
+				lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{}
 				err := getResource(cl, lbConfig)
 				Expect(err).To(BeNil())
 
 				Expect(lbConfig.Spec.GatewayNodepoolName).To(Equal(gwConfig.Spec.GatewayNodepoolName))
 				Expect(lbConfig.Spec.GatewayVMSSProfile).To(Equal(gwConfig.Spec.GatewayVMSSProfile))
 
-				vmConfig := &kubeegressgatewayv1alpha1.GatewayVMConfiguration{}
+				vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{}
 				err = getResource(cl, vmConfig)
 				Expect(err).To(BeNil())
 
@@ -363,13 +363,13 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 			BeforeEach(func() {
 				gwConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
 				controllerutil.AddFinalizer(gwConfig, consts.SGCFinalizerName)
-				lbConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{
+				lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      testName,
 						Namespace: testNamespace,
 					},
 				}
-				vmConfig := &kubeegressgatewayv1alpha1.GatewayVMConfiguration{
+				vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      testName,
 						Namespace: testNamespace,
@@ -394,11 +394,11 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 			})
 
 			It("should delete subresources", func() {
-				lbConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{}
+				lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{}
 				err := getResource(cl, lbConfig)
 				Expect(err).To(BeNil())
 
-				vmConfig := &kubeegressgatewayv1alpha1.GatewayVMConfiguration{}
+				vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{}
 				err = getResource(cl, vmConfig)
 				Expect(err).To(BeNil())
 

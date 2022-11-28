@@ -28,8 +28,9 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 
-	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/controllers/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper"
 	"github.com/Azure/kube-egress-gateway/pkg/netnswrapper"
@@ -37,10 +38,13 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -61,7 +65,9 @@ type PodWireguardEndpointReconciler struct {
 
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=podwireguardendpoints,verbs=get;list;watch;
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=podwireguardendpoints/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations,verbs=get;list;watch
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaystatuses,verbs=get;list;watch;create;update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -78,11 +84,11 @@ func (r *PodWireguardEndpointReconciler) Reconcile(ctx context.Context, req ctrl
 	// Got an event from cleanup ticker
 	if req.NamespacedName.Namespace == "" && req.NamespacedName.Name == "" {
 		if err := r.cleanUp(ctx); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to clean up all wireguard peers: %w", err)
+			return ctrl.Result{}, fmt.Errorf("failed to clean up orphaned wireguard peers: %w", err)
 		}
 	}
 
-	podEndpoint := &kubeegressgatewayv1alpha1.PodWireguardEndpoint{}
+	podEndpoint := &egressgatewayv1alpha1.PodWireguardEndpoint{}
 	if err := r.Get(ctx, req.NamespacedName, podEndpoint); err != nil {
 		if apierrors.IsNotFound(err) {
 			// Object not found, return.
@@ -97,7 +103,7 @@ func (r *PodWireguardEndpointReconciler) Reconcile(ctx context.Context, req ctrl
 		Name:      podEndpoint.Spec.StaticGatewayConfiguration,
 	}
 	// Fetch the StaticGatewayConfiguration instance.
-	gwConfig := &kubeegressgatewayv1alpha1.StaticGatewayConfiguration{}
+	gwConfig := &egressgatewayv1alpha1.StaticGatewayConfiguration{}
 	if err := r.Get(ctx, gwConfigKey, gwConfig); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to fetch StaticGatewayConfiguration(%s/%s): %w", gwConfigKey.Namespace, gwConfigKey.Name, err)
 	}
@@ -116,7 +122,7 @@ func (r *PodWireguardEndpointReconciler) SetupWithManager(mgr ctrl.Manager) erro
 	r.Netlink = netlinkwrapper.NewNetLink()
 	r.NetNS = netnswrapper.NewNetNS()
 	r.WgCtrl = wgctrlwrapper.NewWgCtrl()
-	controller, err := ctrl.NewControllerManagedBy(mgr).For(&kubeegressgatewayv1alpha1.PodWireguardEndpoint{}).Build(r)
+	controller, err := ctrl.NewControllerManagedBy(mgr).For(&egressgatewayv1alpha1.PodWireguardEndpoint{}).Build(r)
 	if err != nil {
 		return err
 	}
@@ -126,7 +132,7 @@ func (r *PodWireguardEndpointReconciler) SetupWithManager(mgr ctrl.Manager) erro
 func (r *PodWireguardEndpointReconciler) reconcile(
 	ctx context.Context,
 	gwNamespaceName string,
-	podEndpoint *kubeegressgatewayv1alpha1.PodWireguardEndpoint,
+	podEndpoint *egressgatewayv1alpha1.PodWireguardEndpoint,
 ) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 	log.Info("Reconciling PodWireguardEndpoint")
@@ -178,6 +184,17 @@ func (r *PodWireguardEndpointReconciler) reconcile(
 		return ctrl.Result{}, err
 	}
 
+	peerConfigs := []egressgatewayv1alpha1.PeerConfiguration{
+		{
+			PodWireguardEndpoint: fmt.Sprintf("%s/%s", podEndpoint.Namespace, podEndpoint.Name),
+			NetnsName:            gwNamespaceName,
+			PublicKey:            podEndpoint.Spec.PodWireguardPublicKey,
+		},
+	}
+	if err := r.updateGatewayNodeStatus(ctx, peerConfigs, true /* add */); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	log.Info("Pod wireguard endpoint reconciled")
 	return ctrl.Result{}, nil
 }
@@ -186,11 +203,11 @@ func (r *PodWireguardEndpointReconciler) cleanUp(ctx context.Context) error {
 	log := log.FromContext(ctx)
 	log.Info("Cleaning up orphaned wireguard peers")
 
-	podEndpointList := &kubeegressgatewayv1alpha1.PodWireguardEndpointList{}
+	podEndpointList := &egressgatewayv1alpha1.PodWireguardEndpointList{}
 	if err := r.List(ctx, podEndpointList); err != nil {
 		return fmt.Errorf("failed to list podWireguardEndpoints: %w", err)
 	}
-	gwConfigList := &kubeegressgatewayv1alpha1.StaticGatewayConfigurationList{}
+	gwConfigList := &egressgatewayv1alpha1.StaticGatewayConfigurationList{}
 	if err := r.List(ctx, gwConfigList); err != nil {
 		return fmt.Errorf("failed to list staticGatewayConfigurations: %w", err)
 	}
@@ -198,14 +215,14 @@ func (r *PodWireguardEndpointReconciler) cleanUp(ctx context.Context) error {
 	for _, gwConfig := range gwConfigList.Items {
 		gwConfig := gwConfig
 		if applyToNode(&gwConfig) {
-			gwConfigMap[gwConfig.Name] = getGatewayNamespaceName(&gwConfig)
+			gwConfigMap[fmt.Sprintf("%s/%s", gwConfig.Namespace, gwConfig.Name)] = getGatewayNamespaceName(&gwConfig)
 		}
 	}
 
 	// map: gw-namespace-name -> set of peer public keys
 	peerMap := make(map[string]map[string]bool)
 	for _, podEndpoint := range podEndpointList.Items {
-		if nsName, ok := gwConfigMap[podEndpoint.Spec.StaticGatewayConfiguration]; ok {
+		if nsName, ok := gwConfigMap[fmt.Sprintf("%s/%s", podEndpoint.Namespace, podEndpoint.Spec.StaticGatewayConfiguration)]; ok {
 			if _, exists := peerMap[nsName]; !exists {
 				peerMap[nsName] = make(map[string]bool)
 			}
@@ -213,27 +230,40 @@ func (r *PodWireguardEndpointReconciler) cleanUp(ctx context.Context) error {
 		}
 	}
 
+	var peersToDelete []egressgatewayv1alpha1.PeerConfiguration
 	for _, ns := range gwConfigMap {
-		if err := r.cleanUpNetNS(ctx, ns, peerMap); err != nil {
+		peers, err := r.cleanUpNetNS(ctx, ns, peerMap)
+		if err != nil {
 			// do not block cleaning up rest namespaces
-			log.Error(err, fmt.Sprintf("failed to clean up namespace %s", ns))
+			log.Error(err, fmt.Sprintf("failed to clean up peers in namespace %s", ns))
 		}
+		peersToDelete = append(peersToDelete, peers...)
+	}
+
+	if err := r.updateGatewayNodeStatus(ctx, peersToDelete, false /* add */); err != nil {
+		return fmt.Errorf("failed to update gateway node status: %w", err)
 	}
 	log.Info("Wireguard peer cleanup completed")
 	return nil
 }
 
-func (r *PodWireguardEndpointReconciler) cleanUpNetNS(ctx context.Context, nsName string, peerMap map[string]map[string]bool) error {
+func (r *PodWireguardEndpointReconciler) cleanUpNetNS(
+	ctx context.Context,
+	nsName string,
+	peerMap map[string]map[string]bool,
+) ([]egressgatewayv1alpha1.PeerConfiguration, error) {
 	log := log.FromContext(ctx)
+
+	peersToDelete := make([]egressgatewayv1alpha1.PeerConfiguration, 0)
 
 	gwns, err := r.NetNS.GetNS(nsName)
 	if err != nil {
 		// do not return error to continue cleanup
-		return fmt.Errorf("failed to get gateway network namespace %s", nsName)
+		return nil, fmt.Errorf("failed to get gateway network namespace %s", nsName)
 	}
 	defer gwns.Close()
 
-	return gwns.Do(func(nn ns.NetNS) error {
+	if err := gwns.Do(func(nn ns.NetNS) error {
 		wgClient, err := r.WgCtrl.New()
 		if err != nil {
 			return fmt.Errorf("failed to create wgctrl client: %w", err)
@@ -267,13 +297,20 @@ func (r *PodWireguardEndpointReconciler) cleanUpNetNS(ctx context.Context, nsNam
 			if err := wgClient.ConfigureDevice(consts.WireguardLinkName, wgConfig); err != nil {
 				return fmt.Errorf("failed to remove peers from wireguard device: %w", err)
 			}
+
+			for _, peer := range wgConfig.Peers {
+				peersToDelete = append(peersToDelete, egressgatewayv1alpha1.PeerConfiguration{PublicKey: peer.PublicKey.String()})
+			}
 		}
 		return nil
-	})
+	}); err != nil {
+		return nil, err
+	}
+	return peersToDelete, nil
 }
 
 func (r *PodWireguardEndpointReconciler) addWireguardPeerRoutes(
-	podEndpoint *kubeegressgatewayv1alpha1.PodWireguardEndpoint,
+	podEndpoint *egressgatewayv1alpha1.PodWireguardEndpoint,
 ) error {
 	wgLink, err := r.Netlink.LinkByName(consts.WireguardLinkName)
 	if err != nil {
@@ -320,5 +357,87 @@ func (r *PodWireguardEndpointReconciler) deleteWireguardPeerRoutes(
 		}
 	}
 
+	return nil
+}
+
+func (r *PodWireguardEndpointReconciler) updateGatewayNodeStatus(
+	ctx context.Context,
+	peerConfigs []egressgatewayv1alpha1.PeerConfiguration,
+	add bool,
+) error {
+	log := log.FromContext(ctx)
+	gwStatusKey := types.NamespacedName{
+		Namespace: os.Getenv(consts.PodNamespaceEnvKey),
+		Name:      os.Getenv(consts.NodeNameEnvKey),
+	}
+
+	gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
+	if err := r.Get(ctx, gwStatusKey, gwStatus); err != nil {
+		if !apierrors.IsNotFound(err) {
+			log.Error(err, "failed to get existing gateway status object %s/%s", gwStatusKey.Namespace, gwStatusKey.Name)
+			return err
+		} else {
+			if !add {
+				// ignore creating object during cleanup
+				return nil
+			}
+
+			// gwStatus does not exist, create a new one
+			log.Info(fmt.Sprintf("Creating new gateway status(%s/%s)", gwStatusKey.Namespace, gwStatusKey.Name))
+
+			node := &corev1.Node{}
+			if err := r.Get(ctx, types.NamespacedName{Name: os.Getenv(consts.NodeNameEnvKey)}, node); err != nil {
+				return fmt.Errorf("failed to get current node: %w", err)
+			}
+
+			gwStatus := &egressgatewayv1alpha1.GatewayStatus{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      gwStatusKey.Name,
+					Namespace: gwStatusKey.Namespace,
+				},
+				Spec: egressgatewayv1alpha1.GatewayStatusSpec{
+					ReadyPeerConfigurations: peerConfigs,
+				},
+			}
+			if err := controllerutil.SetOwnerReference(node, gwStatus, r.Client.Scheme()); err != nil {
+				return fmt.Errorf("failed to set gwStatus owner reference to node: %w", err)
+			}
+			log.Info("Creating new gateway status object")
+			if err := r.Create(ctx, gwStatus); err != nil {
+				return fmt.Errorf("failed to create gwStatus object: %w", err)
+			}
+		}
+	} else {
+		changed := false
+		peerMap := make(map[string]*egressgatewayv1alpha1.PeerConfiguration)
+		for _, peerConfig := range gwStatus.Spec.ReadyPeerConfigurations {
+			peerConfig := peerConfig
+			peerMap[peerConfig.PublicKey] = &peerConfig
+		}
+		for i, peerConfig := range peerConfigs {
+			if _, ok := peerMap[peerConfig.PublicKey]; ok {
+				if !add {
+					delete(peerMap, peerConfig.PublicKey)
+					changed = true
+				}
+			} else {
+				if add {
+					peerMap[peerConfig.PublicKey] = &peerConfigs[i]
+					changed = true
+				}
+			}
+		}
+		if changed {
+			var peers []egressgatewayv1alpha1.PeerConfiguration
+			for _, peerConfig := range peerMap {
+				peers = append(peers, *peerConfig)
+			}
+			gwStatus.Spec.ReadyPeerConfigurations = peers
+			log.Info("Updating gateway status object")
+			if err := r.Update(ctx, gwStatus); err != nil {
+				return fmt.Errorf("failed to update gwStatus object: %w", err)
+			}
+		}
+	}
 	return nil
 }

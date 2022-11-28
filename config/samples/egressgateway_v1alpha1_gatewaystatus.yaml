@@ -1,0 +1,12 @@
+apiVersion: egressgateway.kubernetes.azure.com/v1alpha1
+kind: GatewayStatus
+metadata:
+  labels:
+    app.kubernetes.io/name: gatewaystatus
+    app.kubernetes.io/instance: gatewaystatus-sample
+    app.kubernetes.io/part-of: kube-egress-gateway
+    app.kuberentes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: kube-egress-gateway
+  name: gatewaystatus-sample
+spec:
+  # TODO(user): Add fields here

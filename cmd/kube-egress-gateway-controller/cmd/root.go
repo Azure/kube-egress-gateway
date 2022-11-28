@@ -28,7 +28,6 @@ import (
 	"fmt"
 	"os"
 
-	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	controllers "github.com/Azure/kube-egress-gateway/controllers/manager"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
@@ -45,6 +44,7 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -111,7 +111,7 @@ func init() {
 	zapOpts.BindFlags(goflag.CommandLine)
 	rootCmd.Flags().AddGoFlagSet(goflag.CommandLine)
 
-	utilruntime.Must(kubeegressgatewayv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(egressgatewayv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -208,7 +208,7 @@ func startControllers(cmd *cobra.Command, args []string) {
 		setupLog.Error(err, "unable to create controller", "controller", "StaticGatewayConfiguration")
 		os.Exit(1)
 	}
-	if err = (&kubeegressgatewayv1alpha1.StaticGatewayConfiguration{}).SetupWebhookWithManager(mgr); err != nil {
+	if err = (&egressgatewayv1alpha1.StaticGatewayConfiguration{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "StaticGatewayConfiguration")
 		os.Exit(1)
 	}

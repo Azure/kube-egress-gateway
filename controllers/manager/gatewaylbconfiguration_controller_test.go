@@ -6,7 +6,7 @@ import (
 
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
-	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/controllers/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
@@ -51,8 +51,8 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			cl            client.Client
 			reconcileErr  error
 			getErr        error
-			lbConfig      *kubeegressgatewayv1alpha1.GatewayLBConfiguration
-			foundLBConfig = &kubeegressgatewayv1alpha1.GatewayLBConfiguration{}
+			lbConfig      *egressgatewayv1alpha1.GatewayLBConfiguration
+			foundLBConfig = &egressgatewayv1alpha1.GatewayLBConfiguration{}
 		)
 
 		BeforeEach(func() {
@@ -62,24 +62,24 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					Namespace: testNamespace,
 				},
 			}
-			lbConfig = &kubeegressgatewayv1alpha1.GatewayLBConfiguration{
+			lbConfig = &egressgatewayv1alpha1.GatewayLBConfiguration{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      testName,
 					Namespace: testNamespace,
 					UID:       testLBConfigUID,
 				},
-				Spec: kubeegressgatewayv1alpha1.GatewayLBConfigurationSpec{
+				Spec: egressgatewayv1alpha1.GatewayLBConfigurationSpec{
 					GatewayNodepoolName: "testgw",
-					GatewayVMSSProfile: kubeegressgatewayv1alpha1.GatewayVMSSProfile{
+					GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
 						VMSSResourceGroup:  "vmssRG",
 						VMSSName:           "vmss",
 						PublicIpPrefixSize: 31,
 					},
 				},
 			}
-			s.AddKnownTypes(kubeegressgatewayv1alpha1.GroupVersion, lbConfig,
-				&kubeegressgatewayv1alpha1.StaticGatewayConfiguration{},
-				&kubeegressgatewayv1alpha1.GatewayVMConfiguration{})
+			s.AddKnownTypes(egressgatewayv1alpha1.GroupVersion, lbConfig,
+				&egressgatewayv1alpha1.StaticGatewayConfiguration{},
+				&egressgatewayv1alpha1.GatewayVMConfiguration{})
 		})
 
 		When("lbConfig is not found", func() {

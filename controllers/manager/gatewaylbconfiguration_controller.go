@@ -39,7 +39,7 @@ import (
 
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
-	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/controllers/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
@@ -77,7 +77,7 @@ func (r *GatewayLBConfigurationReconciler) Reconcile(ctx context.Context, req ct
 	log := log.FromContext(ctx)
 
 	// Fetch the GatewayLBConfiguration instance.
-	lbConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{}
+	lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{}
 	if err := r.Get(ctx, req.NamespacedName, lbConfig); err != nil {
 		if apierrors.IsNotFound(err) {
 			// Object not found, return.
@@ -98,13 +98,13 @@ func (r *GatewayLBConfigurationReconciler) Reconcile(ctx context.Context, req ct
 // SetupWithManager sets up the controller with the Manager.
 func (r *GatewayLBConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&kubeegressgatewayv1alpha1.GatewayLBConfiguration{}).
+		For(&egressgatewayv1alpha1.GatewayLBConfiguration{}).
 		Complete(r)
 }
 
 func (r *GatewayLBConfigurationReconciler) reconcile(
 	ctx context.Context,
-	lbConfig *kubeegressgatewayv1alpha1.GatewayLBConfiguration,
+	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
 ) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 	log.Info(fmt.Sprintf("Reconciling GatewayLBConfiguration %s/%s", lbConfig.Namespace, lbConfig.Name))
@@ -119,7 +119,7 @@ func (r *GatewayLBConfigurationReconciler) reconcile(
 		return ctrl.Result{}, err
 	}
 
-	existing := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{}
+	existing := &egressgatewayv1alpha1.GatewayLBConfiguration{}
 	lbConfig.DeepCopyInto(existing)
 
 	// reconcile LB rule
@@ -144,7 +144,7 @@ func (r *GatewayLBConfigurationReconciler) reconcile(
 
 func (r *GatewayLBConfigurationReconciler) ensureDeleted(
 	ctx context.Context,
-	lbConfig *kubeegressgatewayv1alpha1.GatewayLBConfiguration,
+	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
 ) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 	log.Info(fmt.Sprintf("Reconciling gatewayLBConfiguration deletion %s/%s", lbConfig.Namespace, lbConfig.Name))
@@ -173,7 +173,7 @@ func (r *GatewayLBConfigurationReconciler) ensureDeleted(
 }
 
 func getLBPropertyName(
-	lbConfig *kubeegressgatewayv1alpha1.GatewayLBConfiguration,
+	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
 	vmss *compute.VirtualMachineScaleSet,
 ) (*lbPropertyNames, error) {
 	if vmss.Properties == nil || vmss.Properties.UniqueID == nil {
@@ -189,7 +189,7 @@ func getLBPropertyName(
 }
 
 func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
-	lbConfig *kubeegressgatewayv1alpha1.GatewayLBConfiguration,
+	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
 ) (*compute.VirtualMachineScaleSet, error) {
 	if lbConfig.Spec.GatewayNodepoolName != "" {
 		vmssList, err := r.ListVMSS()
@@ -216,7 +216,7 @@ func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
 
 func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 	ctx context.Context,
-	lbConfig *kubeegressgatewayv1alpha1.GatewayLBConfiguration,
+	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
 	needLB bool,
 ) (string, int32, error) {
 	// assuming gateway VMSS's corresponding frontend and backend setup are done with VMSS provisioning,
@@ -405,7 +405,7 @@ func getExpectedLBRule(lbRuleName, frontendID, backendID, probeID *string) *netw
 
 func getExpectedLBProbe(
 	probeName *string,
-	lbConfig *kubeegressgatewayv1alpha1.GatewayLBConfiguration,
+	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
 ) *network.Probe {
 	probeProp := &network.ProbePropertiesFormat{
 		RequestPath: to.Ptr("/" + lbConfig.Namespace + "/" + lbConfig.Name),
