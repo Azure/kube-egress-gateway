@@ -28,11 +28,12 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
 
-	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/controllers/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/imds"
@@ -48,11 +49,16 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 var _ reconcile.Reconciler = &StaticGatewayConfigurationReconciler{}
@@ -61,15 +67,17 @@ var _ reconcile.Reconciler = &StaticGatewayConfigurationReconciler{}
 type StaticGatewayConfigurationReconciler struct {
 	client.Client
 	*azmanager.AzureManager
-	Netlink  netlinkwrapper.Interface
-	NetNS    netnswrapper.Interface
-	IPTables iptableswrapper.Interface
-	WgCtrl   wgctrlwrapper.Interface
+	TickerEvents chan event.GenericEvent
+	Netlink      netlinkwrapper.Interface
+	NetNS        netnswrapper.Interface
+	IPTables     iptableswrapper.Interface
+	WgCtrl       wgctrlwrapper.Interface
 }
 
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations,verbs=get;list;watch
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaystatuses,verbs=get;list;watch;create;update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -108,8 +116,15 @@ func InitNodeMetadata() error {
 func (r *StaticGatewayConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
+	// Got an event from cleanup ticker
+	if req.NamespacedName.Namespace == "" && req.NamespacedName.Name == "" {
+		if err := r.cleanUp(ctx); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to clean up orphaned network namespaces: %w", err)
+		}
+	}
+
 	// Fetch the StaticGatewayConfiguration instance.
-	gwConfig := &kubeegressgatewayv1alpha1.StaticGatewayConfiguration{}
+	gwConfig := &egressgatewayv1alpha1.StaticGatewayConfiguration{}
 	if err := r.Get(ctx, req.NamespacedName, gwConfig); err != nil {
 		if apierrors.IsNotFound(err) {
 			// Object not found, return.
@@ -130,8 +145,8 @@ func (r *StaticGatewayConfigurationReconciler) Reconcile(ctx context.Context, re
 	}
 
 	if !gwConfig.ObjectMeta.DeletionTimestamp.IsZero() {
-		// Clean up gateway namespace
-		return r.ensureDeleted(ctx, gwConfig)
+		// ignore: network namespace would be removed by regular cleanup
+		return ctrl.Result{}, nil
 	}
 
 	// Reconcile gateway namespace
@@ -144,14 +159,16 @@ func (r *StaticGatewayConfigurationReconciler) SetupWithManager(mgr ctrl.Manager
 	r.NetNS = netnswrapper.NewNetNS()
 	r.IPTables = iptableswrapper.NewIPTables()
 	r.WgCtrl = wgctrlwrapper.NewWgCtrl()
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&kubeegressgatewayv1alpha1.StaticGatewayConfiguration{}).
-		Complete(r)
+	controller, err := ctrl.NewControllerManagedBy(mgr).For(&egressgatewayv1alpha1.StaticGatewayConfiguration{}).Build(r)
+	if err != nil {
+		return err
+	}
+	return controller.Watch(&source.Channel{Source: r.TickerEvents}, &handler.EnqueueRequestForObject{})
 }
 
 func (r *StaticGatewayConfigurationReconciler) reconcile(
 	ctx context.Context,
-	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
 ) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 	log.Info("Reconciling gateway configuration")
@@ -163,7 +180,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 	}
 
 	// add lb ip (if not exists) to eth0
-	if err := r.reconcileIlbIPOnHost(ctx, gwConfig, false /* deleting */); err != nil {
+	if err := r.reconcileIlbIPOnHost(ctx, gwConfig.Status.GatewayWireguardProfile.WireguardServerIP, false /* deleting */); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -181,53 +198,81 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 		return ctrl.Result{}, err
 	}
 
+	// update gateway status
+	gwStatus := egressgatewayv1alpha1.GatewayNamespace{
+		StaticGatewayConfiguration: fmt.Sprintf("%s/%s", gwConfig.Namespace, gwConfig.Name),
+		NetnsName:                  getGatewayNamespaceName(gwConfig),
+	}
+	if err := r.updateGatewayNodeStatus(ctx, gwStatus, true /* add */); err != nil {
+		return ctrl.Result{}, err
+	}
 	log.Info("Gateway configuration reconciled")
 	return ctrl.Result{}, nil
 }
 
-func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
-	ctx context.Context,
-	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
-) (ctrl.Result, error) {
+func (r *StaticGatewayConfigurationReconciler) cleanUp(ctx context.Context) error {
 	log := log.FromContext(ctx)
-	log.Info("Reconciling gateway configuration deletion")
+	log.Info("Cleaning up orphaned network namespaces")
+
+	gwConfigList := &egressgatewayv1alpha1.StaticGatewayConfigurationList{}
+	if err := r.List(ctx, gwConfigList); err != nil {
+		return fmt.Errorf("failed to list staticGatewayConfigurations: %w", err)
+	}
+	existingNS := make(map[string]bool)
+	for _, gwConfig := range gwConfigList.Items {
+		existingNS[getGatewayNamespaceName(&gwConfig)] = true
+	}
+
+	netnsList, err := r.NetNS.ListNS()
+	if err != nil {
+		return fmt.Errorf("failed to list network namespaces: %w", err)
+	}
+	for _, netns := range netnsList {
+		if _, ok := existingNS[netns]; !ok && strings.HasPrefix(netns, "gw-") {
+			if err := r.ensureDeleted(ctx, netns); err != nil {
+				log.Error(err, fmt.Sprintf("failed to remove namespace %s", netns))
+			}
+		}
+	}
+
+	log.Info("Network namespace cleanup completed")
+	return nil
+}
+
+func (r *StaticGatewayConfigurationReconciler) ensureDeleted(ctx context.Context, netns string) error {
+	log := log.FromContext(ctx)
 
 	// remove lb ip (if exists) from eth0
-	if err := r.reconcileIlbIPOnHost(ctx, gwConfig, true /* deleting */); err != nil {
-		return ctrl.Result{}, err
+	ilbIP := strings.Replace(netns[strings.LastIndex(netns, "-")+1:], "_", ".", -1)
+	if err := r.reconcileIlbIPOnHost(ctx, ilbIP, true /* deleting */); err != nil {
+		return err
 	}
 
 	// delete gateway namespace
-	gwNamespaceName := getGatewayNamespaceName(gwConfig)
-	gwns, err := r.NetNS.GetNS(gwNamespaceName)
+	gwns, err := r.NetNS.GetNS(netns)
 	if err == nil {
 		gwns.Close()
-		log.Info("Deleting network namespace", "namespace", gwNamespaceName)
-		if err := r.NetNS.UnmountNS(gwNamespaceName); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to delete network namespace %s: %w", gwNamespaceName, err)
+		log.Info("Deleting network namespace", "namespace", netns)
+		if err := r.NetNS.UnmountNS(netns); err != nil {
+			return fmt.Errorf("failed to delete network namespace %s: %w", netns, err)
 		}
 	} else if _, ok := err.(ns.NSPathNotExistErr); !ok {
-		return ctrl.Result{}, fmt.Errorf("failed to get network namespace %s: %w", gwNamespaceName, err)
+		return fmt.Errorf("failed to get network namespace %s: %w", netns, err)
 	}
 
-	// delete link in host namespace in case it still exists
-	orphanedLink, err := r.Netlink.LinkByName(getVethHostLinkName(gwConfig))
-	if err == nil {
-		log.Info("Deleting orphaned veth interface in host namespace")
-		if err := r.Netlink.LinkDel(orphanedLink); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to delete orphaned veth link: %w", err)
-		}
-	} else if _, ok := err.(netlink.LinkNotFoundError); !ok {
-		return ctrl.Result{}, fmt.Errorf("failed to get orphaned veth interface in host namespace: %w", err)
+	// update gateway status
+	gwStatus := egressgatewayv1alpha1.GatewayNamespace{
+		NetnsName: netns,
 	}
-
-	log.Info("Gateway configuration deletion reconciled")
-	return ctrl.Result{}, nil
+	if err := r.updateGatewayNodeStatus(ctx, gwStatus, false /* add */); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r *StaticGatewayConfigurationReconciler) getWireguardPrivateKey(
 	ctx context.Context,
-	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
 ) (*wgtypes.Key, error) {
 	secretKey := &types.NamespacedName{
 		Namespace: gwConfig.Namespace,
@@ -251,7 +296,7 @@ func (r *StaticGatewayConfigurationReconciler) getWireguardPrivateKey(
 
 func (r *StaticGatewayConfigurationReconciler) getVMIP(
 	ctx context.Context,
-	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
 ) (string, string, error) {
 	log := log.FromContext(ctx)
 	matches := vmssInstanceRE.FindStringSubmatch(nodeMeta.Compute.ResourceID)
@@ -314,14 +359,14 @@ func (r *StaticGatewayConfigurationReconciler) getVMIP(
 	return primaryIP, ipConfigIP, nil
 }
 
-func isReady(gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration) bool {
+func isReady(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) bool {
 	wgProfile := gwConfig.Status.GatewayWireguardProfile
 	return gwConfig.Status.PublicIpPrefix != "" && wgProfile.WireguardServerIP != "" &&
 		wgProfile.WireguardServerPort != 0 && wgProfile.WireguardPublicKey != "" &&
 		wgProfile.WireguardPrivateKeySecretRef != nil
 }
 
-func applyToNode(gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration) bool {
+func applyToNode(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) bool {
 	if gwConfig.Spec.GatewayNodepoolName != "" {
 		name, ok := nodeTags[consts.AKSNodepoolTagKey]
 		return ok && strings.EqualFold(name, gwConfig.Spec.GatewayNodepoolName)
@@ -344,18 +389,12 @@ func parseNodeTags() map[string]string {
 	return tags
 }
 
-func (r *StaticGatewayConfigurationReconciler) reconcileIlbIPOnHost(
-	ctx context.Context,
-	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
-	deleting bool,
-) error {
+func (r *StaticGatewayConfigurationReconciler) reconcileIlbIPOnHost(ctx context.Context, ilbIP string, deleting bool) error {
 	log := log.FromContext(ctx)
 	eth0, err := r.Netlink.LinkByName("eth0")
 	if err != nil {
 		return fmt.Errorf("failed to retrieve link eth0: %w", err)
 	}
-
-	wgProfile := gwConfig.Status.GatewayWireguardProfile
 
 	if len(nodeMeta.Network.Interface) == 0 || len(nodeMeta.Network.Interface[0].IPv4.Subnet) == 0 {
 		return fmt.Errorf("imds does not provide subnet information about the node")
@@ -365,7 +404,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcileIlbIPOnHost(
 		return fmt.Errorf("failed to retrieve and parse prefix: %w", err)
 	}
 
-	ilbIpCidr := fmt.Sprintf("%s/%d", wgProfile.WireguardServerIP, prefix)
+	ilbIpCidr := fmt.Sprintf("%s/%d", ilbIP, prefix)
 	ilbIpNet, err := netlink.ParseIPNet(ilbIpCidr)
 	if err != nil {
 		return fmt.Errorf("failed to parse ILB IP address: %s", ilbIpCidr)
@@ -429,7 +468,7 @@ func (r *StaticGatewayConfigurationReconciler) removeSecondaryIpFromHost(ctx con
 
 func (r *StaticGatewayConfigurationReconciler) configureGatewayNamespace(
 	ctx context.Context,
-	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
 	privateKey *wgtypes.Key,
 	vmPrimaryIP string,
 	vmSecondaryIP string,
@@ -450,7 +489,6 @@ func (r *StaticGatewayConfigurationReconciler) configureGatewayNamespace(
 		}
 	}
 	defer gwns.Close()
-	log.Info(fmt.Sprintf("Setting namespace to %s", gwNamespaceName))
 
 	if err := r.reconcileWireguardLink(ctx, gwns, gwConfig, privateKey); err != nil {
 		return err
@@ -479,7 +517,7 @@ func (r *StaticGatewayConfigurationReconciler) configureGatewayNamespace(
 func (r *StaticGatewayConfigurationReconciler) reconcileWireguardLink(
 	ctx context.Context,
 	gwns ns.NetNS,
-	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
 	privateKey *wgtypes.Key,
 ) error {
 	log := log.FromContext(ctx)
@@ -601,7 +639,7 @@ func (r *StaticGatewayConfigurationReconciler) createWireguardLink(gwns ns.NetNS
 func (r *StaticGatewayConfigurationReconciler) reconcileVethPair(
 	ctx context.Context,
 	gwns ns.NetNS,
-	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
 	vmPrimaryIP string,
 	vmSecondaryIP string,
 ) error {
@@ -679,7 +717,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcileVethPair(
 func (r *StaticGatewayConfigurationReconciler) reconcileVethPairInHost(
 	ctx context.Context,
 	gwns ns.NetNS,
-	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
 	snatIP string,
 ) error {
 	log := log.FromContext(ctx)
@@ -789,11 +827,93 @@ func (r *StaticGatewayConfigurationReconciler) reconcileIPTablesRule(ctx context
 	return nil
 }
 
-func getGatewayNamespaceName(gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration) string {
-	return fmt.Sprintf("gw-%s", string(gwConfig.GetUID()))
+func (r *StaticGatewayConfigurationReconciler) updateGatewayNodeStatus(
+	ctx context.Context,
+	gwNamespace egressgatewayv1alpha1.GatewayNamespace,
+	add bool,
+) error {
+	log := log.FromContext(ctx)
+	gwStatusKey := types.NamespacedName{
+		Namespace: os.Getenv(consts.PodNamespaceEnvKey),
+		Name:      os.Getenv(consts.NodeNameEnvKey),
+	}
+
+	gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
+	if err := r.Get(ctx, gwStatusKey, gwStatus); err != nil {
+		if !apierrors.IsNotFound(err) {
+			log.Error(err, "failed to get existing gateway status object %s/%s", gwStatusKey.Namespace, gwStatusKey.Name)
+			return err
+		} else {
+			if !add {
+				// ignore creating object during cleanup
+				return nil
+			}
+
+			// gwStatus does not exist, create a new one
+			log.Info(fmt.Sprintf("Creating new gateway status(%s/%s)", gwStatusKey.Namespace, gwStatusKey.Name))
+
+			node := &corev1.Node{}
+			if err := r.Get(ctx, types.NamespacedName{Name: os.Getenv(consts.NodeNameEnvKey)}, node); err != nil {
+				return fmt.Errorf("failed to get current node: %w", err)
+			}
+
+			gwStatus := &egressgatewayv1alpha1.GatewayStatus{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      gwStatusKey.Name,
+					Namespace: gwStatusKey.Namespace,
+				},
+				Spec: egressgatewayv1alpha1.GatewayStatusSpec{
+					ReadyGatewayNamespaces: []egressgatewayv1alpha1.GatewayNamespace{gwNamespace},
+				},
+			}
+			if err := controllerutil.SetOwnerReference(node, gwStatus, r.Client.Scheme()); err != nil {
+				return fmt.Errorf("failed to set gwStatus owner reference to node: %w", err)
+			}
+			log.Info("Creating new gateway status object")
+			if err := r.Create(ctx, gwStatus); err != nil {
+				return fmt.Errorf("failed to create gwStatus object: %w", err)
+			}
+		}
+	} else {
+		changed := false
+		found := false
+		for i, gwns := range gwStatus.Spec.ReadyGatewayNamespaces {
+			if gwns.NetnsName == gwNamespace.NetnsName {
+				if !add {
+					changed = true
+					gwStatus.Spec.ReadyGatewayNamespaces = append(gwStatus.Spec.ReadyGatewayNamespaces[:i], gwStatus.Spec.ReadyGatewayNamespaces[i+1:]...)
+				}
+				found = true
+				break
+			}
+		}
+		if add && !found {
+			gwStatus.Spec.ReadyGatewayNamespaces = append(gwStatus.Spec.ReadyGatewayNamespaces, gwNamespace)
+			changed = true
+		}
+		if !add {
+			for i := len(gwStatus.Spec.ReadyPeerConfigurations) - 1; i >= 0; i = i - 1 {
+				if gwStatus.Spec.ReadyPeerConfigurations[i].NetnsName == gwNamespace.NetnsName {
+					changed = true
+					gwStatus.Spec.ReadyPeerConfigurations = append(gwStatus.Spec.ReadyPeerConfigurations[:i], gwStatus.Spec.ReadyPeerConfigurations[i+1:]...)
+				}
+			}
+		}
+		if changed {
+			log.Info("Updating gateway status object")
+			if err := r.Update(ctx, gwStatus); err != nil {
+				return fmt.Errorf("failed to update gwStatus object: %w", err)
+			}
+		}
+	}
+	return nil
 }
 
-func getVethHostLinkName(gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration) string {
+func getGatewayNamespaceName(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) string {
+	return fmt.Sprintf("gw-%s-%s", string(gwConfig.GetUID()), strings.Replace(gwConfig.Status.GatewayWireguardProfile.WireguardServerIP, ".", "_", -1))
+}
+
+func getVethHostLinkName(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) string {
 	nsName := getGatewayNamespaceName(gwConfig)
 	return nsName[:11]
 }

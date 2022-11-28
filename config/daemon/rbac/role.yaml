@@ -8,10 +8,29 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - secrets
   verbs:
   - get
   - list
+  - watch
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - gatewaystatuses
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - egressgateway.kubernetes.azure.com

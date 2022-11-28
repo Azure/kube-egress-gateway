@@ -21,10 +21,12 @@ const (
 type Interface interface {
 	// NewNS creates a new named network namespace
 	NewNS(nsName string) (ns.NetNS, error)
-	// GetNS
+	// GetNS gets a named network namespace
 	GetNS(nsName string) (ns.NetNS, error)
 	// UnmountNS deletes a named network namespace
 	UnmountNS(nsName string) error
+	// ListNS lists all network namespaces
+	ListNS() ([]string, error)
 }
 
 type netns struct{}
@@ -118,6 +120,24 @@ func (*netns) UnmountNS(nsName string) error {
 	}
 
 	return nil
+}
+
+func (*netns) ListNS() ([]string, error) {
+	dir, err := os.Open(nsBaseDir)
+	if err != nil {
+		return nil, err
+	}
+	files, err := dir.Readdir(0)
+	if err != nil {
+		return nil, err
+	}
+	var nsList []string
+	for _, f := range files {
+		if !f.IsDir() {
+			nsList = append(nsList, f.Name())
+		}
+	}
+	return nsList, nil
 }
 
 // getCurrentThreadNetNSPath copied from pkg/ns

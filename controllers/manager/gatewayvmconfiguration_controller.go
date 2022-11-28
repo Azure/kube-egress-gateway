@@ -45,7 +45,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
-	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/controllers/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
@@ -79,7 +79,7 @@ var (
 func (r *GatewayVMConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	vmConfig := &kubeegressgatewayv1alpha1.GatewayVMConfiguration{}
+	vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{}
 	if err := r.Get(ctx, req.NamespacedName, vmConfig); err != nil {
 		if apierrors.IsNotFound(err) {
 			// Object not found, return.
@@ -100,13 +100,13 @@ func (r *GatewayVMConfigurationReconciler) Reconcile(ctx context.Context, req ct
 // SetupWithManager sets up the controller with the Manager.
 func (r *GatewayVMConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&kubeegressgatewayv1alpha1.GatewayVMConfiguration{}).
+		For(&egressgatewayv1alpha1.GatewayVMConfiguration{}).
 		Complete(r)
 }
 
 func (r *GatewayVMConfigurationReconciler) reconcile(
 	ctx context.Context,
-	vmConfig *kubeegressgatewayv1alpha1.GatewayVMConfiguration,
+	vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
 ) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 	if !controllerutil.ContainsFinalizer(vmConfig, consts.VMConfigFinalizerName) {
@@ -119,7 +119,7 @@ func (r *GatewayVMConfigurationReconciler) reconcile(
 		return ctrl.Result{}, err
 	}
 
-	existing := &kubeegressgatewayv1alpha1.GatewayVMConfiguration{}
+	existing := &egressgatewayv1alpha1.GatewayVMConfiguration{}
 	vmConfig.DeepCopyInto(existing)
 
 	vmss, ipPrefixLength, err := r.getGatewayVMSS(vmConfig)
@@ -161,7 +161,7 @@ func (r *GatewayVMConfigurationReconciler) reconcile(
 
 func (r *GatewayVMConfigurationReconciler) ensureDeleted(
 	ctx context.Context,
-	vmConfig *kubeegressgatewayv1alpha1.GatewayVMConfiguration,
+	vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
 ) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 	log.Info(fmt.Sprintf("Reconciling gatewayVMConfiguration deletion %s/%s", vmConfig.Namespace, vmConfig.Name))
@@ -199,7 +199,7 @@ func (r *GatewayVMConfigurationReconciler) ensureDeleted(
 }
 
 func (r *GatewayVMConfigurationReconciler) getGatewayVMSS(
-	vmConfig *kubeegressgatewayv1alpha1.GatewayVMConfiguration,
+	vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
 ) (*compute.VirtualMachineScaleSet, int32, error) {
 	if vmConfig.Spec.GatewayNodepoolName != "" {
 		vmssList, err := r.ListVMSS()
@@ -232,7 +232,7 @@ func (r *GatewayVMConfigurationReconciler) getGatewayVMSS(
 	return nil, 0, fmt.Errorf("gateway VMSS not found")
 }
 
-func managedSubresourceName(vmConfig *kubeegressgatewayv1alpha1.GatewayVMConfiguration) string {
+func managedSubresourceName(vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration) string {
 	return vmConfig.GetNamespace() + "_" + vmConfig.GetName()
 }
 
@@ -244,7 +244,7 @@ func isErrorNotFound(err error) bool {
 func (r *GatewayVMConfigurationReconciler) ensurePublicIPPrefix(
 	ctx context.Context,
 	ipPrefixLength int32,
-	vmConfig *kubeegressgatewayv1alpha1.GatewayVMConfiguration,
+	vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
 ) (string, string, bool, error) {
 	log := log.FromContext(ctx)
 	if vmConfig.Spec.PublicIpPrefixId != "" {
@@ -309,7 +309,7 @@ func (r *GatewayVMConfigurationReconciler) ensurePublicIPPrefix(
 
 func (r *GatewayVMConfigurationReconciler) ensurePublicIPPrefixDeleted(
 	ctx context.Context,
-	vmConfig *kubeegressgatewayv1alpha1.GatewayVMConfiguration,
+	vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
 ) error {
 	log := log.FromContext(ctx)
 	// only ensure managed public prefix ip is deleted
@@ -333,7 +333,7 @@ func (r *GatewayVMConfigurationReconciler) ensurePublicIPPrefixDeleted(
 
 func (r *GatewayVMConfigurationReconciler) reconcileVMSS(
 	ctx context.Context,
-	vmConfig *kubeegressgatewayv1alpha1.GatewayVMConfiguration,
+	vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
 	vmss *compute.VirtualMachineScaleSet,
 	ipPrefixID string,
 	wantIPConfig bool,
@@ -383,7 +383,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSS(
 
 func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 	ctx context.Context,
-	vmConfig *kubeegressgatewayv1alpha1.GatewayVMConfiguration,
+	vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
 	vmssName string,
 	vm *compute.VirtualMachineScaleSetVM,
 	ipPrefixID string,

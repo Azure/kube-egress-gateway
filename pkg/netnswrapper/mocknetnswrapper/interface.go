@@ -49,6 +49,21 @@ func (mr *MockInterfaceMockRecorder) GetNS(nsName interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNS", reflect.TypeOf((*MockInterface)(nil).GetNS), nsName)
 }
 
+// ListNS mocks base method.
+func (m *MockInterface) ListNS() ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListNS")
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListNS indicates an expected call of ListNS.
+func (mr *MockInterfaceMockRecorder) ListNS() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListNS", reflect.TypeOf((*MockInterface)(nil).ListNS))
+}
+
 // NewNS mocks base method.
 func (m *MockInterface) NewNS(nsName string) (ns.NetNS, error) {
 	m.ctrl.T.Helper()

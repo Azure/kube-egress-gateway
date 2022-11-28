@@ -1,0 +1,27 @@
+# permissions for end users to view gatewaystatuses.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: gatewaystatus-viewer-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: kube-egress-gateway
+    app.kubernetes.io/part-of: kube-egress-gateway
+    app.kubernetes.io/managed-by: kustomize
+  name: gatewaystatus-viewer-role
+rules:
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - gatewaystatuses
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - gatewaystatuses/status
+  verbs:
+  - get

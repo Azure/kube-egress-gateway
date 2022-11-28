@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
+	"sort"
 
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
@@ -20,7 +22,7 @@ import (
 	"github.com/vishvananda/netlink/nl"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
-	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/controllers/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
@@ -44,13 +46,16 @@ const (
 	testName         = "test"
 	testNamespace    = "testns"
 	testNodepoolName = "testgw"
+	testPodNamespace = "testns2"
+	testNodeName     = "testNode"
 	testUID          = "1234567890"
 	vmssRG           = "vmssRG"
 	vmssName         = "vmssName"
 	privK            = "GHuMwljFfqd2a7cs6BaUOmHflK23zME8VNvC5B37S3k="
 	pubK             = "aPxGwq8zERHQ3Q1cOZFdJ+cvJX5Ka4mLN38AyYKYF10="
+	ilbIP            = "10.0.0.4"
 	ilbIPCidr        = "10.0.0.4/31"
-	nsName           = "gw-1234567890"
+	nsName           = "gw-1234567890-10_0_0_4"
 )
 
 var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func() {
@@ -59,9 +64,10 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 		req          reconcile.Request
 		res          reconcile.Result
 		reconcileErr error
-		gwConfig     *kubeegressgatewayv1alpha1.StaticGatewayConfiguration
+		gwConfig     *egressgatewayv1alpha1.StaticGatewayConfiguration
 		mclient      *mockwgctrlwrapper.MockClient
 		mtable       *mockiptableswrapper.MockIpTables
+		node         = &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: testNodeName}}
 	)
 
 	getTestReconciler := func(objects ...runtime.Object) {
@@ -77,7 +83,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 		mtable = mockiptableswrapper.NewMockIpTables(mctrl)
 	}
 
-	Context("Reconcile", func() {
+	Context("Test ignore reconcile", func() {
 		BeforeEach(func() {
 			req = reconcile.Request{
 				NamespacedName: types.NamespacedName{
@@ -85,13 +91,13 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 					Namespace: testNamespace,
 				},
 			}
-			gwConfig = &kubeegressgatewayv1alpha1.StaticGatewayConfiguration{
+			gwConfig = &egressgatewayv1alpha1.StaticGatewayConfiguration{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      testName,
 					Namespace: testNamespace,
 					UID:       testUID,
 				},
-				Spec: kubeegressgatewayv1alpha1.StaticGatewayConfigurationSpec{
+				Spec: egressgatewayv1alpha1.StaticGatewayConfigurationSpec{
 					GatewayNodepoolName: testNodepoolName,
 				},
 			}
@@ -126,8 +132,22 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 				Expect(reconcileErr).To(BeNil())
 				Expect(res).To(Equal(ctrl.Result{}))
 			})
+		})
 
-			It("should report error if secret is not found", func() {
+		When("gwConfig is being deleted", func() {
+			It("should not do anything", func() {
+				gwConfig.Status = getTestGwConfigStatus()
+				gwConfig.DeletionTimestamp = to.Ptr(metav1.Now())
+				getTestReconciler(gwConfig)
+				res, reconcileErr = r.Reconcile(context.TODO(), req)
+
+				Expect(reconcileErr).To(BeNil())
+				Expect(res).To(Equal(ctrl.Result{}))
+			})
+		})
+
+		When("secret is not found", func() {
+			It("should report error", func() {
 				gwConfig.Status = getTestGwConfigStatus()
 				getTestReconciler(gwConfig)
 				nodeTags = map[string]string{consts.AKSNodepoolTagKey: testNodepoolName}
@@ -146,14 +166,14 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 					Namespace: testNamespace,
 				},
 			}
-			gwConfig = &kubeegressgatewayv1alpha1.StaticGatewayConfiguration{
+			gwConfig = &egressgatewayv1alpha1.StaticGatewayConfiguration{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      testName,
 					Namespace: testNamespace,
 					UID:       testUID,
 				},
-				Spec: kubeegressgatewayv1alpha1.StaticGatewayConfigurationSpec{
-					GatewayVMSSProfile: kubeegressgatewayv1alpha1.GatewayVMSSProfile{
+				Spec: egressgatewayv1alpha1.StaticGatewayConfigurationSpec{
+					GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
 						VMSSResourceGroup:  vmssRG,
 						VMSSName:           vmssName,
 						PublicIpPrefixSize: 31,
@@ -202,7 +222,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			mnl.EXPECT().LinkByName("eth0").Return(eth0, nil)
 			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{}, nil)
 			mnl.EXPECT().AddrAdd(eth0, &netlink.Addr{IPNet: getIPNet(ilbIPCidr)}).Return(nil)
-			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig, false)
+			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig.Status.GatewayWireguardProfile.WireguardServerIP, false)
 			Expect(err).To(BeNil())
 		})
 
@@ -211,7 +231,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
 			mnl.EXPECT().LinkByName("eth0").Return(eth0, nil)
 			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNet(ilbIPCidr)}}, nil)
-			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig, false)
+			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig.Status.GatewayWireguardProfile.WireguardServerIP, false)
 			Expect(err).To(BeNil())
 		})
 
@@ -221,7 +241,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			mnl.EXPECT().LinkByName("eth0").Return(eth0, nil)
 			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNet(ilbIPCidr)}}, nil)
 			mnl.EXPECT().AddrDel(eth0, &netlink.Addr{IPNet: getIPNet(ilbIPCidr)}).Return(nil)
-			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig, true)
+			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig.Status.GatewayWireguardProfile.WireguardServerIP, true)
 			Expect(err).To(BeNil())
 		})
 
@@ -230,7 +250,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
 			mnl.EXPECT().LinkByName("eth0").Return(eth0, nil)
 			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{}, nil)
-			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig, true)
+			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig.Status.GatewayWireguardProfile.WireguardServerIP, true)
 			Expect(err).To(BeNil())
 		})
 
@@ -475,31 +495,151 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			err := r.configureGatewayNamespace(context.TODO(), gwConfig, &pk, "10.0.0.5", "10.0.0.6")
 			Expect(errors.Unwrap(errors.Unwrap(err))).To(Equal(fmt.Errorf("failed")))
 		})
+
+		Context("Test updating gateway node status", func() {
+			BeforeEach(func() {
+				os.Setenv(consts.PodNamespaceEnvKey, testPodNamespace)
+				os.Setenv(consts.NodeNameEnvKey, testNodeName)
+			})
+
+			AfterEach(func() {
+				os.Setenv(consts.PodNamespaceEnvKey, "")
+				os.Setenv(consts.NodeNameEnvKey, "")
+			})
+
+			gwNamespace := egressgatewayv1alpha1.GatewayNamespace{
+				NetnsName: "ns",
+			}
+
+			It("should create new gateway status object if not exist", func() {
+				getTestReconciler(node)
+				err := r.updateGatewayNodeStatus(context.TODO(), gwNamespace, true)
+				Expect(err).To(BeNil())
+				gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
+				err = getGatewayStatus(r.Client, gwStatus)
+				Expect(err).To(BeNil())
+				Expect(len(gwStatus.Spec.ReadyGatewayNamespaces)).To(Equal(1))
+				Expect(gwStatus.Spec.ReadyGatewayNamespaces[0]).To(Equal(gwNamespace))
+			})
+
+			It("should add to existing gateway status object", func() {
+				existing := &egressgatewayv1alpha1.GatewayStatus{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      testNodeName,
+						Namespace: testPodNamespace,
+					},
+					Spec: egressgatewayv1alpha1.GatewayStatusSpec{
+						ReadyGatewayNamespaces: []egressgatewayv1alpha1.GatewayNamespace{
+							{
+								NetnsName: "ns1",
+							},
+						},
+					},
+				}
+				getTestReconciler(node, existing)
+				err := r.updateGatewayNodeStatus(context.TODO(), gwNamespace, true)
+				Expect(err).To(BeNil())
+				gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
+				err = getGatewayStatus(r.Client, gwStatus)
+				Expect(err).To(BeNil())
+				var namespaces []string
+				for _, peer := range gwStatus.Spec.ReadyGatewayNamespaces {
+					namespaces = append(namespaces, peer.NetnsName)
+				}
+				sort.Strings(namespaces)
+				Expect(namespaces).To(Equal([]string{"ns", "ns1"}))
+			})
+
+			It("should remove from existing gateway status object", func() {
+				existing := &egressgatewayv1alpha1.GatewayStatus{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      testNodeName,
+						Namespace: testPodNamespace,
+					},
+					Spec: egressgatewayv1alpha1.GatewayStatusSpec{
+						ReadyGatewayNamespaces: []egressgatewayv1alpha1.GatewayNamespace{
+							{
+								NetnsName: "ns",
+							},
+							{
+								NetnsName: "ns1",
+							},
+						},
+						ReadyPeerConfigurations: []egressgatewayv1alpha1.PeerConfiguration{
+							{
+								NetnsName: "ns",
+								PublicKey: "pubk1",
+							},
+							{
+								NetnsName: "ns1",
+								PublicKey: "pubk2",
+							},
+							{
+								NetnsName: "ns",
+								PublicKey: "pubk3",
+							},
+						},
+					},
+				}
+				getTestReconciler(node, existing)
+				err := r.updateGatewayNodeStatus(context.TODO(), gwNamespace, false)
+				Expect(err).To(BeNil())
+				gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
+				err = getGatewayStatus(r.Client, gwStatus)
+				Expect(err).To(BeNil())
+				Expect(len(gwStatus.Spec.ReadyGatewayNamespaces)).To(Equal(1))
+				Expect(len(gwStatus.Spec.ReadyPeerConfigurations)).To(Equal(1))
+				Expect(gwStatus.Spec.ReadyGatewayNamespaces[0].NetnsName).To(Equal("ns1"))
+				Expect(gwStatus.Spec.ReadyPeerConfigurations[0].NetnsName).To(Equal("ns1"))
+			})
+		})
 	})
 
 	Context("Test reconcile deletion", func() {
 		BeforeEach(func() {
 			req = reconcile.Request{
 				NamespacedName: types.NamespacedName{
-					Name:      testName,
-					Namespace: testNamespace,
+					Name:      "",
+					Namespace: "",
 				},
 			}
-			gwConfig = &kubeegressgatewayv1alpha1.StaticGatewayConfiguration{
+			gwConfig = &egressgatewayv1alpha1.StaticGatewayConfiguration{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:              testName,
-					Namespace:         testNamespace,
-					UID:               testUID,
-					DeletionTimestamp: to.Ptr(metav1.Now()),
+					Name:      testName,
+					Namespace: testNamespace,
+					UID:       testUID,
 				},
-				Spec: kubeegressgatewayv1alpha1.StaticGatewayConfigurationSpec{
-					GatewayVMSSProfile: kubeegressgatewayv1alpha1.GatewayVMSSProfile{
+				Spec: egressgatewayv1alpha1.StaticGatewayConfigurationSpec{
+					GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
 						VMSSResourceGroup:  vmssRG,
 						VMSSName:           vmssName,
 						PublicIpPrefixSize: 31,
 					},
 				},
 				Status: getTestGwConfigStatus(),
+			}
+			gwStatus := &egressgatewayv1alpha1.GatewayStatus{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testNodeName,
+					Namespace: testPodNamespace,
+				},
+				Spec: egressgatewayv1alpha1.GatewayStatusSpec{
+					ReadyGatewayNamespaces: []egressgatewayv1alpha1.GatewayNamespace{
+						{
+							NetnsName: "gw-ns-10_0_0_6",
+						},
+					},
+					ReadyPeerConfigurations: []egressgatewayv1alpha1.PeerConfiguration{
+						{
+							NetnsName: "gw-ns-10_0_0_6",
+							PublicKey: "pubk1",
+						},
+						{
+							NetnsName: "gw-ns-10_0_0_6",
+							PublicKey: "pubk2",
+						},
+					},
+				},
 			}
 			nodeMeta = &imds.InstanceMetadata{
 				Compute: &imds.ComputeMetadata{
@@ -512,51 +652,53 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 					},
 				},
 			}
-			getTestReconciler(gwConfig)
+			os.Setenv(consts.PodNamespaceEnvKey, testPodNamespace)
+			os.Setenv(consts.NodeNameEnvKey, testNodeName)
+			getTestReconciler(node, gwConfig, gwStatus)
 		})
 
-		It("should delete ilb ip from eth0, delete gateway namespace and veth link", func() {
+		AfterEach(func() {
+			os.Setenv(consts.PodNamespaceEnvKey, "")
+			os.Setenv(consts.NodeNameEnvKey, "")
+		})
+
+		It("should delete ilb ip from eth0 and gateway namespace and update gwStatus", func() {
 			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
 			mns := r.NetNS.(*mocknetnswrapper.MockInterface)
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
-			veth := &netlink.Veth{PeerName: "host0"}
-			gwns := &mocknetnswrapper.MockNetNS{Name: nsName}
+			nsToDel := "gw-ns-10_0_0_6"
+			gwns := &mocknetnswrapper.MockNetNS{Name: nsToDel}
 			gomock.InOrder(
+				mns.EXPECT().ListNS().Return([]string{nsName, nsToDel}, nil),
 				mnl.EXPECT().LinkByName("eth0").Return(eth0, nil),
-				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNet(ilbIPCidr)}}, nil),
-				mnl.EXPECT().AddrDel(eth0, &netlink.Addr{IPNet: getIPNet(ilbIPCidr)}).Return(nil),
-				mns.EXPECT().GetNS(nsName).Return(gwns, nil),
-				mns.EXPECT().UnmountNS(nsName).Return(nil),
-				mnl.EXPECT().LinkByName("gw-12345678").Return(veth, nil),
-				mnl.EXPECT().LinkDel(veth).Return(nil),
+				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNet("10.0.0.6/31")}}, nil),
+				mnl.EXPECT().AddrDel(eth0, &netlink.Addr{IPNet: getIPNet("10.0.0.6/31")}).Return(nil),
+				mns.EXPECT().GetNS(nsToDel).Return(gwns, nil),
+				mns.EXPECT().UnmountNS(nsToDel).Return(nil),
 			)
 			res, reconcileErr = r.Reconcile(context.TODO(), req)
 			Expect(reconcileErr).To(BeNil())
 			Expect(res).To(Equal(ctrl.Result{}))
+			gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
+			err := getGatewayStatus(r.Client, gwStatus)
+			Expect(err).To(BeNil())
+			Expect(gwStatus.Spec.ReadyGatewayNamespaces).To(BeEmpty())
+			Expect(gwStatus.Spec.ReadyPeerConfigurations).To(BeEmpty())
 		})
 
-		It("should not do anything if it's already been cleaned", func() {
-			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
+		It("should not do anything if all namespaces are cleaned", func() {
 			mns := r.NetNS.(*mocknetnswrapper.MockInterface)
-			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
-			veth := &netlink.Veth{PeerName: "host0"}
-			gomock.InOrder(
-				mnl.EXPECT().LinkByName("eth0").Return(eth0, nil),
-				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{}, nil),
-				mns.EXPECT().GetNS(nsName).Return(nil, ns.NSPathNotExistErr{}),
-				mnl.EXPECT().LinkByName("gw-12345678").Return(veth, netlink.LinkNotFoundError{}),
-			)
+			mns.EXPECT().ListNS().Return([]string{nsName}, nil)
 			res, reconcileErr = r.Reconcile(context.TODO(), req)
 			Expect(reconcileErr).To(BeNil())
 			Expect(res).To(Equal(ctrl.Result{}))
 		})
 
 		It("should report any error", func() {
-			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
-			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
-			mnl.EXPECT().LinkByName("eth0").Return(eth0, fmt.Errorf("failed"))
+			mns := r.NetNS.(*mocknetnswrapper.MockInterface)
+			mns.EXPECT().ListNS().Return(nil, fmt.Errorf("failed"))
 			res, reconcileErr = r.Reconcile(context.TODO(), req)
-			Expect(errors.Unwrap(reconcileErr)).To(Equal(fmt.Errorf("failed")))
+			Expect(errors.Unwrap(errors.Unwrap(reconcileErr))).To(Equal(fmt.Errorf("failed")))
 			Expect(res).To(Equal(ctrl.Result{}))
 		})
 	})
@@ -575,11 +717,11 @@ func getMockAzureManager(ctrl *gomock.Controller) *azmanager.AzureManager {
 	return az
 }
 
-func getTestGwConfigStatus() kubeegressgatewayv1alpha1.StaticGatewayConfigurationStatus {
-	return kubeegressgatewayv1alpha1.StaticGatewayConfigurationStatus{
+func getTestGwConfigStatus() egressgatewayv1alpha1.StaticGatewayConfigurationStatus {
+	return egressgatewayv1alpha1.StaticGatewayConfigurationStatus{
 		PublicIpPrefix: "1.2.3.4/31",
-		GatewayWireguardProfile: kubeegressgatewayv1alpha1.GatewayWireguardProfile{
-			WireguardServerIP:   "10.0.0.4",
+		GatewayWireguardProfile: egressgatewayv1alpha1.GatewayWireguardProfile{
+			WireguardServerIP:   ilbIP,
 			WireguardServerPort: 6000,
 			WireguardPublicKey:  pubK,
 			WireguardPrivateKeySecretRef: &corev1.ObjectReference{

@@ -41,7 +41,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/controllers/consts"
 )
 
@@ -75,7 +75,7 @@ func (r *StaticGatewayConfigurationReconciler) Reconcile(ctx context.Context, re
 	log := log.FromContext(ctx)
 
 	// Fetch the StaticGatewayConfiguration instance.
-	gwConfig := &kubeegressgatewayv1alpha1.StaticGatewayConfiguration{}
+	gwConfig := &egressgatewayv1alpha1.StaticGatewayConfiguration{}
 	if err := r.Get(ctx, req.NamespacedName, gwConfig); err != nil {
 		if apierrors.IsNotFound(err) {
 			// Object not found, return.
@@ -96,16 +96,16 @@ func (r *StaticGatewayConfigurationReconciler) Reconcile(ctx context.Context, re
 // SetupWithManager sets up the controller with the Manager.
 func (r *StaticGatewayConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&kubeegressgatewayv1alpha1.StaticGatewayConfiguration{}).
+		For(&egressgatewayv1alpha1.StaticGatewayConfiguration{}).
 		Owns(&corev1.Secret{}).
-		Owns(&kubeegressgatewayv1alpha1.GatewayLBConfiguration{}).
-		Owns(&kubeegressgatewayv1alpha1.GatewayVMConfiguration{}).
+		Owns(&egressgatewayv1alpha1.GatewayLBConfiguration{}).
+		Owns(&egressgatewayv1alpha1.GatewayVMConfiguration{}).
 		Complete(r)
 }
 
 func (r *StaticGatewayConfigurationReconciler) reconcile(
 	ctx context.Context,
-	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
 ) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 	log.Info(fmt.Sprintf("Reconciling staticGatewayConfiguration %s/%s", gwConfig.Namespace, gwConfig.Name))
@@ -121,7 +121,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 	}
 
 	// Make a copy of the original gwConfig to check update
-	existing := &kubeegressgatewayv1alpha1.StaticGatewayConfiguration{}
+	existing := &egressgatewayv1alpha1.StaticGatewayConfiguration{}
 	gwConfig.DeepCopyInto(existing)
 
 	// reconcile wireguard keypair
@@ -155,7 +155,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 
 func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 	ctx context.Context,
-	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
 ) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 	log.Info(fmt.Sprintf("Reconciling staticGatewayConfiguration deletion %s/%s", gwConfig.Namespace, gwConfig.Name))
@@ -167,7 +167,7 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 
 	lbConfigDeleted, vmConfigDeleted := false, false
 	subresourceKey := getSubresourceKey(gwConfig)
-	lbConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{}
+	lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{}
 	if err := r.Get(ctx, *subresourceKey, lbConfig); err != nil {
 		if !apierrors.IsNotFound(err) {
 			log.Error(err, "failed to get existing gateway LB configuration")
@@ -185,7 +185,7 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 			}
 		}
 	}
-	vmConfig := &kubeegressgatewayv1alpha1.GatewayVMConfiguration{}
+	vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{}
 	if err := r.Get(ctx, *subresourceKey, vmConfig); err != nil {
 		if !apierrors.IsNotFound(err) {
 			log.Error(err, "failed to get existing gateway VM configuration")
@@ -219,7 +219,7 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 
 func (r *StaticGatewayConfigurationReconciler) reconcileWireguardKey(
 	ctx context.Context,
-	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
 ) error {
 	log := log.FromContext(ctx)
 
@@ -267,7 +267,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcileWireguardKey(
 }
 
 func getSubresourceKey(
-	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
 ) *types.NamespacedName {
 	return &types.NamespacedName{
 		Namespace: gwConfig.Namespace,
@@ -278,7 +278,7 @@ func getSubresourceKey(
 func (r *StaticGatewayConfigurationReconciler) createWireguardSecret(
 	ctx context.Context,
 	secretKey *types.NamespacedName,
-	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
 ) (*corev1.Secret, error) {
 	// create new private key
 	wgPrivateKey, err := wgtypes.GeneratePrivateKey()
@@ -309,13 +309,13 @@ func (r *StaticGatewayConfigurationReconciler) createWireguardSecret(
 
 func (r *StaticGatewayConfigurationReconciler) reconcileGatewayLBConfig(
 	ctx context.Context,
-	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
 ) error {
 	log := log.FromContext(ctx)
 
 	// check existence of the gatewayLBConfig
 	lbConfigKey := getSubresourceKey(gwConfig)
-	lbConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{}
+	lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{}
 	if err := r.Get(ctx, *lbConfigKey, lbConfig); err != nil {
 		if !apierrors.IsNotFound(err) {
 			log.Error(err, "failed to get existing gateway LB configuration %s/%s", lbConfigKey.Namespace, lbConfigKey.Name)
@@ -360,15 +360,15 @@ func (r *StaticGatewayConfigurationReconciler) reconcileGatewayLBConfig(
 func (r *StaticGatewayConfigurationReconciler) createGatewayLBConfig(
 	ctx context.Context,
 	lbConfigKey *types.NamespacedName,
-	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
-) (*kubeegressgatewayv1alpha1.GatewayLBConfiguration, error) {
+	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
+) (*egressgatewayv1alpha1.GatewayLBConfiguration, error) {
 	log := log.FromContext(ctx)
-	lbConfig := &kubeegressgatewayv1alpha1.GatewayLBConfiguration{
+	lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      lbConfigKey.Name,
 			Namespace: lbConfigKey.Namespace,
 		},
-		Spec: kubeegressgatewayv1alpha1.GatewayLBConfigurationSpec{
+		Spec: egressgatewayv1alpha1.GatewayLBConfigurationSpec{
 			GatewayNodepoolName: gwConfig.Spec.GatewayNodepoolName,
 			GatewayVMSSProfile:  gwConfig.Spec.GatewayVMSSProfile,
 		},
@@ -388,13 +388,13 @@ func (r *StaticGatewayConfigurationReconciler) createGatewayLBConfig(
 
 func (r *StaticGatewayConfigurationReconciler) reconcileGatewayVMConfig(
 	ctx context.Context,
-	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
+	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
 ) error {
 	log := log.FromContext(ctx)
 
 	// check existence of the gatewayVMConfig
 	vmConfigKey := getSubresourceKey(gwConfig)
-	vmConfig := &kubeegressgatewayv1alpha1.GatewayVMConfiguration{}
+	vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{}
 	if err := r.Get(ctx, *vmConfigKey, vmConfig); err != nil {
 		if !apierrors.IsNotFound(err) {
 			log.Error(err, "failed to get existing gateway VM configuration %s/%s", vmConfigKey.Namespace, vmConfigKey.Name)
@@ -438,15 +438,15 @@ func (r *StaticGatewayConfigurationReconciler) reconcileGatewayVMConfig(
 func (r *StaticGatewayConfigurationReconciler) createGatewayVMConfig(
 	ctx context.Context,
 	vmConfigKey *types.NamespacedName,
-	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
-) (*kubeegressgatewayv1alpha1.GatewayVMConfiguration, error) {
+	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
+) (*egressgatewayv1alpha1.GatewayVMConfiguration, error) {
 	log := log.FromContext(ctx)
-	vmConfig := &kubeegressgatewayv1alpha1.GatewayVMConfiguration{
+	vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      vmConfigKey.Name,
 			Namespace: vmConfigKey.Namespace,
 		},
-		Spec: kubeegressgatewayv1alpha1.GatewayVMConfigurationSpec{
+		Spec: egressgatewayv1alpha1.GatewayVMConfigurationSpec{
 			GatewayNodepoolName: gwConfig.Spec.GatewayNodepoolName,
 			GatewayVMSSProfile:  gwConfig.Spec.GatewayVMSSProfile,
 			PublicIpPrefixId:    gwConfig.Spec.PublicIpPrefixId,

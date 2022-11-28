@@ -9,7 +9,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
-	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/controllers/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/publicipprefixclient/mockpublicipprefixclient"
@@ -50,8 +50,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			cl            client.Client
 			reconcileErr  error
 			getErr        error
-			vmConfig      *kubeegressgatewayv1alpha1.GatewayVMConfiguration
-			foundVMConfig = &kubeegressgatewayv1alpha1.GatewayVMConfiguration{}
+			vmConfig      *egressgatewayv1alpha1.GatewayVMConfiguration
+			foundVMConfig = &egressgatewayv1alpha1.GatewayVMConfiguration{}
 		)
 
 		BeforeEach(func() {
@@ -61,23 +61,23 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					Namespace: testNamespace,
 				},
 			}
-			vmConfig = &kubeegressgatewayv1alpha1.GatewayVMConfiguration{
+			vmConfig = &egressgatewayv1alpha1.GatewayVMConfiguration{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      testName,
 					Namespace: testNamespace,
 				},
-				Spec: kubeegressgatewayv1alpha1.GatewayVMConfigurationSpec{
+				Spec: egressgatewayv1alpha1.GatewayVMConfigurationSpec{
 					GatewayNodepoolName: "testgw",
-					GatewayVMSSProfile: kubeegressgatewayv1alpha1.GatewayVMSSProfile{
+					GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
 						VMSSResourceGroup:  vmssRG,
 						VMSSName:           vmssName,
 						PublicIpPrefixSize: 31,
 					},
 				},
 			}
-			s.AddKnownTypes(kubeegressgatewayv1alpha1.GroupVersion, vmConfig,
-				&kubeegressgatewayv1alpha1.StaticGatewayConfiguration{},
-				&kubeegressgatewayv1alpha1.GatewayLBConfiguration{})
+			s.AddKnownTypes(egressgatewayv1alpha1.GroupVersion, vmConfig,
+				&egressgatewayv1alpha1.StaticGatewayConfiguration{},
+				&egressgatewayv1alpha1.GatewayLBConfiguration{})
 		})
 
 		When("vmConfig is not found", func() {

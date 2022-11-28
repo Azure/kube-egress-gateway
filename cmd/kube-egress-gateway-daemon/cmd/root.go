@@ -30,7 +30,7 @@ import (
 	"os"
 	"time"
 
-	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	controllers "github.com/Azure/kube-egress-gateway/controllers/daemon"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
@@ -38,6 +38,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -101,7 +102,7 @@ func init() {
 	zapOpts.BindFlags(goflag.CommandLine)
 	rootCmd.Flags().AddGoFlagSet(goflag.CommandLine)
 
-	utilruntime.Must(kubeegressgatewayv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(egressgatewayv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -176,18 +177,20 @@ func startControllers(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	netnsCleanupEvents := make(chan event.GenericEvent)
 	if err = (&controllers.StaticGatewayConfigurationReconciler{
 		Client:       mgr.GetClient(),
 		AzureManager: az,
+		TickerEvents: netnsCleanupEvents,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "StaticGatewayConfiguration")
 		os.Exit(1)
 	}
 
-	tickerEvents := make(chan event.GenericEvent)
+	peerCleanupEvents := make(chan event.GenericEvent)
 	if err = (&controllers.PodWireguardEndpointReconciler{
 		Client:       mgr.GetClient(),
-		TickerEvents: tickerEvents,
+		TickerEvents: peerCleanupEvents,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PodWireguardEndpoint")
 		os.Exit(1)
@@ -205,26 +208,29 @@ func startControllers(cmd *cobra.Command, args []string) {
 
 	setupLog.Info("starting manager")
 	ctx := ctrl.SetupSignalHandler()
-	startCleanupTicker(ctx, tickerEvents)
+	startCleanupTicker(ctx, netnsCleanupEvents, 1*time.Minute) // clean up gwConfig network namespace every 1 min
+	startCleanupTicker(ctx, peerCleanupEvents, 1*time.Minute)  // clean up wireguard peer configurations every 1 min
 	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
 }
 
-func startCleanupTicker(ctx context.Context, tickerEvents chan<- event.GenericEvent) {
-	setupLog.Info("starting background cleaning routine")
+func startCleanupTicker(ctx context.Context, tickerEvents chan<- event.GenericEvent, period time.Duration) {
+	setupLog.Info("starting background cleanup ticker")
 	log := log.FromContext(ctx)
-	ticker := time.NewTicker(1 * time.Minute) // clean up every 1 min
+	ticker := time.NewTicker(period)
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Info("stopping background cleaning routine")
+				log.Info("stopping background cleanup ticker")
 				return
 			case <-ticker.C:
 				event := event.GenericEvent{
-					Object: &kubeegressgatewayv1alpha1.PodWireguardEndpoint{},
+					Object: &metav1.PartialObjectMetadata{
+						ObjectMeta: metav1.ObjectMeta{Name: "", Namespace: ""},
+					},
 				}
 				tickerEvents <- event
 			}
