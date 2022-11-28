@@ -26,13 +26,26 @@ package daemon
 
 import (
 	"context"
+	"fmt"
+	"net"
 
 	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
-	"k8s.io/apimachinery/pkg/runtime"
+	"github.com/Azure/kube-egress-gateway/controllers/consts"
+	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper"
+	"github.com/Azure/kube-egress-gateway/pkg/netnswrapper"
+	"github.com/Azure/kube-egress-gateway/pkg/wgctrlwrapper"
+	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/vishvananda/netlink"
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 var _ reconcile.Reconciler = &PodWireguardEndpointReconciler{}
@@ -40,11 +53,15 @@ var _ reconcile.Reconciler = &PodWireguardEndpointReconciler{}
 // PodWireguardEndpointReconciler reconciles gateway node network according to a PodWireguardEndpoint object
 type PodWireguardEndpointReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	TickerEvents chan event.GenericEvent
+	Netlink      netlinkwrapper.Interface
+	NetNS        netnswrapper.Interface
+	WgCtrl       wgctrlwrapper.Interface
 }
 
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=podwireguardendpoints,verbs=get;list;watch;
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=podwireguardendpoints/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -58,13 +75,250 @@ type PodWireguardEndpointReconciler struct {
 func (r *PodWireguardEndpointReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	log.Info("get one PodWireguardEndpoint")
-	return ctrl.Result{}, nil
+	// Got an event from cleanup ticker
+	if req.NamespacedName.Namespace == "" && req.NamespacedName.Name == "" {
+		if err := r.cleanUp(ctx); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to clean up all wireguard peers: %w", err)
+		}
+	}
+
+	podEndpoint := &kubeegressgatewayv1alpha1.PodWireguardEndpoint{}
+	if err := r.Get(ctx, req.NamespacedName, podEndpoint); err != nil {
+		if apierrors.IsNotFound(err) {
+			// Object not found, return.
+			return ctrl.Result{}, nil
+		}
+		log.Error(err, "unable to fetch PodWireguardEndpoint instance")
+		return ctrl.Result{}, err
+	}
+
+	gwConfigKey := types.NamespacedName{
+		Namespace: podEndpoint.Namespace,
+		Name:      podEndpoint.Spec.StaticGatewayConfiguration,
+	}
+	// Fetch the StaticGatewayConfiguration instance.
+	gwConfig := &kubeegressgatewayv1alpha1.StaticGatewayConfiguration{}
+	if err := r.Get(ctx, gwConfigKey, gwConfig); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to fetch StaticGatewayConfiguration(%s/%s): %w", gwConfigKey.Namespace, gwConfigKey.Name, err)
+	}
+
+	if !applyToNode(gwConfig) {
+		// gwConfig does not apply to this node
+		return ctrl.Result{}, nil
+	}
+
+	// Reconcile wireguard peer
+	return r.reconcile(ctx, getGatewayNamespaceName(gwConfig), podEndpoint)
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *PodWireguardEndpointReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&kubeegressgatewayv1alpha1.PodWireguardEndpoint{}).
-		Complete(r)
+	r.Netlink = netlinkwrapper.NewNetLink()
+	r.NetNS = netnswrapper.NewNetNS()
+	r.WgCtrl = wgctrlwrapper.NewWgCtrl()
+	controller, err := ctrl.NewControllerManagedBy(mgr).For(&kubeegressgatewayv1alpha1.PodWireguardEndpoint{}).Build(r)
+	if err != nil {
+		return err
+	}
+	return controller.Watch(&source.Channel{Source: r.TickerEvents}, &handler.EnqueueRequestForObject{})
+}
+
+func (r *PodWireguardEndpointReconciler) reconcile(
+	ctx context.Context,
+	gwNamespaceName string,
+	podEndpoint *kubeegressgatewayv1alpha1.PodWireguardEndpoint,
+) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+	log.Info("Reconciling PodWireguardEndpoint")
+
+	gwns, err := r.NetNS.GetNS(gwNamespaceName)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get gateway network namespace %s: %w", gwNamespaceName, err)
+	}
+	defer gwns.Close()
+
+	if err := gwns.Do(func(nn ns.NetNS) error {
+		wgClient, err := r.WgCtrl.New()
+		if err != nil {
+			return fmt.Errorf("failed to create wgctrl client: %w", err)
+		}
+		defer func() { _ = wgClient.Close() }()
+
+		podWireguardPublicKey, err := wgtypes.ParseKey(podEndpoint.Spec.PodWireguardPublicKey)
+		if err != nil {
+			return fmt.Errorf("failed to parse pod wireguard public key: %w", err)
+		}
+
+		podIP, err := netlink.ParseIPNet(fmt.Sprintf("%s/32", podEndpoint.Spec.PodIpAddress))
+		if err != nil {
+			return fmt.Errorf("failed to parse pod IPv4 address: %w", err)
+		}
+
+		wgConfig := wgtypes.Config{
+			Peers: []wgtypes.PeerConfig{
+				{
+					PublicKey:         podWireguardPublicKey,
+					ReplaceAllowedIPs: true,
+					AllowedIPs: []net.IPNet{
+						*podIP,
+					},
+				},
+			},
+		}
+
+		if err := wgClient.ConfigureDevice(consts.WireguardLinkName, wgConfig); err != nil {
+			return fmt.Errorf("failed to add peer to wireguard device: %w", err)
+		}
+
+		if err := r.addWireguardPeerRoutes(podEndpoint); err != nil {
+			return fmt.Errorf("failed to add pod route: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	log.Info("Pod wireguard endpoint reconciled")
+	return ctrl.Result{}, nil
+}
+
+func (r *PodWireguardEndpointReconciler) cleanUp(ctx context.Context) error {
+	log := log.FromContext(ctx)
+	log.Info("Cleaning up orphaned wireguard peers")
+
+	podEndpointList := &kubeegressgatewayv1alpha1.PodWireguardEndpointList{}
+	if err := r.List(ctx, podEndpointList); err != nil {
+		return fmt.Errorf("failed to list podWireguardEndpoints: %w", err)
+	}
+	gwConfigList := &kubeegressgatewayv1alpha1.StaticGatewayConfigurationList{}
+	if err := r.List(ctx, gwConfigList); err != nil {
+		return fmt.Errorf("failed to list staticGatewayConfigurations: %w", err)
+	}
+	gwConfigMap := make(map[string]string)
+	for _, gwConfig := range gwConfigList.Items {
+		gwConfig := gwConfig
+		if applyToNode(&gwConfig) {
+			gwConfigMap[gwConfig.Name] = getGatewayNamespaceName(&gwConfig)
+		}
+	}
+
+	// map: gw-namespace-name -> set of peer public keys
+	peerMap := make(map[string]map[string]bool)
+	for _, podEndpoint := range podEndpointList.Items {
+		if nsName, ok := gwConfigMap[podEndpoint.Spec.StaticGatewayConfiguration]; ok {
+			if _, exists := peerMap[nsName]; !exists {
+				peerMap[nsName] = make(map[string]bool)
+			}
+			peerMap[nsName][podEndpoint.Spec.PodWireguardPublicKey] = true
+		}
+	}
+
+	for _, ns := range gwConfigMap {
+		if err := r.cleanUpNetNS(ctx, ns, peerMap); err != nil {
+			// do not block cleaning up rest namespaces
+			log.Error(err, fmt.Sprintf("failed to clean up namespace %s", ns))
+		}
+	}
+	log.Info("Wireguard peer cleanup completed")
+	return nil
+}
+
+func (r *PodWireguardEndpointReconciler) cleanUpNetNS(ctx context.Context, nsName string, peerMap map[string]map[string]bool) error {
+	log := log.FromContext(ctx)
+
+	gwns, err := r.NetNS.GetNS(nsName)
+	if err != nil {
+		// do not return error to continue cleanup
+		return fmt.Errorf("failed to get gateway network namespace %s", nsName)
+	}
+	defer gwns.Close()
+
+	return gwns.Do(func(nn ns.NetNS) error {
+		wgClient, err := r.WgCtrl.New()
+		if err != nil {
+			return fmt.Errorf("failed to create wgctrl client: %w", err)
+		}
+		defer func() { _ = wgClient.Close() }()
+
+		device, err := wgClient.Device(consts.WireguardLinkName)
+		if err != nil {
+			return fmt.Errorf("failed to get wireguard link configuration: %w", err)
+		}
+
+		wgConfig := wgtypes.Config{}
+		podIPToDel := make(map[string]bool)
+		for i := range device.Peers {
+			if _, ok := peerMap[nsName][device.Peers[i].PublicKey.String()]; !ok {
+				wgConfig.Peers = append(wgConfig.Peers, wgtypes.PeerConfig{
+					PublicKey: device.Peers[i].PublicKey,
+					Remove:    true,
+				})
+				for _, ipNet := range device.Peers[i].AllowedIPs {
+					podIPToDel[ipNet.IP.String()] = true
+				}
+				log.Info(fmt.Sprintf("Removing peer %s from gw namespace %s", device.Peers[i].PublicKey.String(), nsName))
+			}
+		}
+		if len(wgConfig.Peers) > 0 {
+			if err := r.deleteWireguardPeerRoutes(podIPToDel); err != nil {
+				return fmt.Errorf("failed to delete pod route: %w", err)
+			}
+
+			if err := wgClient.ConfigureDevice(consts.WireguardLinkName, wgConfig); err != nil {
+				return fmt.Errorf("failed to remove peers from wireguard device: %w", err)
+			}
+		}
+		return nil
+	})
+}
+
+func (r *PodWireguardEndpointReconciler) addWireguardPeerRoutes(
+	podEndpoint *kubeegressgatewayv1alpha1.PodWireguardEndpoint,
+) error {
+	wgLink, err := r.Netlink.LinkByName(consts.WireguardLinkName)
+	if err != nil {
+		return fmt.Errorf("failed to retrive wireguard device: %w", err)
+	}
+
+	dstCidr := fmt.Sprintf("%s/32", podEndpoint.Spec.PodIpAddress)
+	dst, err := netlink.ParseIPNet(dstCidr)
+	if err != nil {
+		return fmt.Errorf("failed to parse pod ip %s: %w", dstCidr, err)
+	}
+
+	route := &netlink.Route{
+		LinkIndex: wgLink.Attrs().Index,
+		Scope:     netlink.SCOPE_LINK,
+		Dst:       dst,
+	}
+	if err := r.Netlink.RouteReplace(route); err != nil {
+		return fmt.Errorf("failed to add route %s: %w", route, err)
+	}
+
+	return nil
+}
+
+func (r *PodWireguardEndpointReconciler) deleteWireguardPeerRoutes(
+	podIPToDel map[string]bool,
+) error {
+	wgLink, err := r.Netlink.LinkByName(consts.WireguardLinkName)
+	if err != nil {
+		return fmt.Errorf("failed to retrive wireguard device wg0: %w", err)
+	}
+
+	routes, err := r.Netlink.RouteList(wgLink, netlink.FAMILY_ALL)
+	if err != nil {
+		return fmt.Errorf("failed to list routes: %w", err)
+	}
+
+	for _, route := range routes {
+		route := route
+		if _, ok := podIPToDel[route.Dst.IP.String()]; ok {
+			if err := r.Netlink.RouteDel(&route); err != nil {
+				return fmt.Errorf("failed to delete route %s: %w", route, err)
+			}
+		}
+	}
+
+	return nil
 }
