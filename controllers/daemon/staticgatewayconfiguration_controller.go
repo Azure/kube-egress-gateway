@@ -28,9 +28,7 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 
@@ -43,14 +41,13 @@ import (
 	"github.com/Azure/kube-egress-gateway/pkg/netnswrapper"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 	"github.com/Azure/kube-egress-gateway/pkg/wgctrlwrapper"
+	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netlink/nl"
-	"github.com/vishvananda/netns"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -63,7 +60,6 @@ var _ reconcile.Reconciler = &StaticGatewayConfigurationReconciler{}
 // StaticGatewayConfigurationReconciler reconciles gateway node network according to a StaticGatewayConfiguration object
 type StaticGatewayConfigurationReconciler struct {
 	client.Client
-	Scheme *k8sruntime.Scheme
 	*azmanager.AzureManager
 	Netlink  netlinkwrapper.Interface
 	NetNS    netnswrapper.Interface
@@ -86,13 +82,28 @@ type StaticGatewayConfigurationReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.0/pkg/reconcile
 
 var (
-	nodeMeta           *imds.InstanceMetadata
-	lbMeta             *imds.LoadBalancerMetadata
-	nodeTags           map[string]string
-	vmssInstanceRE     = regexp.MustCompile(`.*/subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(.+)`)
-	gwNamespaceName    string
-	gwVethHostLinkName string
+	nodeMeta       *imds.InstanceMetadata
+	lbMeta         *imds.LoadBalancerMetadata
+	nodeTags       map[string]string
+	vmssInstanceRE = regexp.MustCompile(`.*/subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(.+)`)
 )
+
+func InitNodeMetadata() error {
+	var err error
+	nodeMeta, err = imds.GetInstanceMetadata()
+	if err != nil {
+		return err
+	}
+	lbMeta, err = imds.GetLoadBalancerMetadata()
+	if err != nil {
+		return err
+	}
+	if nodeMeta == nil || lbMeta == nil {
+		return fmt.Errorf("failed to setup controller: nodeMeta or lbMeta is nil")
+	}
+	nodeTags = parseNodeTags()
+	return nil
+}
 
 func (r *StaticGatewayConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
@@ -118,9 +129,6 @@ func (r *StaticGatewayConfigurationReconciler) Reconcile(ctx context.Context, re
 		return ctrl.Result{}, nil
 	}
 
-	gwNamespaceName = fmt.Sprintf("gw-%s", string(gwConfig.GetUID()))
-	gwVethHostLinkName = gwNamespaceName[:11]
-
 	if !gwConfig.ObjectMeta.DeletionTimestamp.IsZero() {
 		// Clean up gateway namespace
 		return r.ensureDeleted(ctx, gwConfig)
@@ -132,19 +140,6 @@ func (r *StaticGatewayConfigurationReconciler) Reconcile(ctx context.Context, re
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *StaticGatewayConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	var err error
-	nodeMeta, err = imds.GetInstanceMetadata()
-	if err != nil {
-		return err
-	}
-	lbMeta, err = imds.GetLoadBalancerMetadata()
-	if err != nil {
-		return err
-	}
-	if nodeMeta == nil || lbMeta == nil {
-		return fmt.Errorf("failed to setup controller: nodeMeta or lbMeta is nil")
-	}
-	nodeTags = parseNodeTags()
 	r.Netlink = netlinkwrapper.NewNetLink()
 	r.NetNS = netnswrapper.NewNetNS()
 	r.IPTables = iptableswrapper.NewIPTables()
@@ -203,21 +198,20 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 	}
 
 	// delete gateway namespace
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	gwns, err := r.NetNS.GetFromName(gwNamespaceName)
+	gwNamespaceName := getGatewayNamespaceName(gwConfig)
+	gwns, err := r.NetNS.GetNS(gwNamespaceName)
 	if err == nil {
 		gwns.Close()
 		log.Info("Deleting network namespace", "namespace", gwNamespaceName)
-		if err := r.NetNS.DeleteNamed(gwNamespaceName); err != nil {
+		if err := r.NetNS.UnmountNS(gwNamespaceName); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to delete network namespace %s: %w", gwNamespaceName, err)
 		}
-	} else if !os.IsNotExist(err) {
+	} else if _, ok := err.(ns.NSPathNotExistErr); !ok {
 		return ctrl.Result{}, fmt.Errorf("failed to get network namespace %s: %w", gwNamespaceName, err)
 	}
 
 	// delete link in host namespace in case it still exists
-	orphanedLink, err := r.Netlink.LinkByName(gwVethHostLinkName)
+	orphanedLink, err := r.Netlink.LinkByName(getVethHostLinkName(gwConfig))
 	if err == nil {
 		log.Info("Deleting orphaned veth interface in host namespace")
 		if err := r.Netlink.LinkDel(orphanedLink); err != nil {
@@ -441,17 +435,13 @@ func (r *StaticGatewayConfigurationReconciler) configureGatewayNamespace(
 	vmSecondaryIP string,
 ) error {
 	log := log.FromContext(ctx)
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
 
-	origns, _ := r.NetNS.Get()
-	defer func() { _ = r.NetNS.Set(origns); origns.Close() }()
-
-	gwns, err := r.NetNS.GetFromName(gwNamespaceName)
+	gwNamespaceName := getGatewayNamespaceName(gwConfig)
+	gwns, err := r.NetNS.GetNS(gwNamespaceName)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if _, ok := err.(ns.NSPathNotExistErr); ok {
 			log.Info("Creating new network namespace", "nsName", gwNamespaceName)
-			gwns, err = r.NetNS.NewNamed(gwNamespaceName)
+			gwns, err = r.NetNS.NewNS(gwNamespaceName)
 			if err != nil {
 				return fmt.Errorf("failed to create network namespace %s: %w", gwNamespaceName, err)
 			}
@@ -460,122 +450,134 @@ func (r *StaticGatewayConfigurationReconciler) configureGatewayNamespace(
 		}
 	}
 	defer gwns.Close()
-	_ = r.NetNS.Set(gwns)
 	log.Info(fmt.Sprintf("Setting namespace to %s", gwNamespaceName))
 
-	// we are in gw namespace now
-	if err := r.reconcileWireguardLink(ctx, &origns, &gwns, gwConfig, privateKey); err != nil {
+	if err := r.reconcileWireguardLink(ctx, gwns, gwConfig, privateKey); err != nil {
 		return err
 	}
 
-	if err := r.reconcileVethPair(ctx, &origns, &gwns, gwConfig, vmPrimaryIP, vmSecondaryIP); err != nil {
+	if err := r.reconcileVethPair(ctx, gwns, gwConfig, vmPrimaryIP, vmSecondaryIP); err != nil {
 		return err
 	}
 
-	looplink, err := r.Netlink.LinkByName("lo")
-	if err != nil {
-		return fmt.Errorf("failed to retrieve link lo: %w", err)
-	}
-	if err := r.Netlink.LinkSetUp(looplink); err != nil {
-		return fmt.Errorf("failed to set lo up: %w", err)
-	}
+	return gwns.Do(func(nn ns.NetNS) error {
+		looplink, err := r.Netlink.LinkByName("lo")
+		if err != nil {
+			return fmt.Errorf("failed to retrieve link lo: %w", err)
+		}
+		if err := r.Netlink.LinkSetUp(looplink); err != nil {
+			return fmt.Errorf("failed to set lo up: %w", err)
+		}
 
-	if err := r.reconcileIPTablesRule(ctx); err != nil {
-		return err
-	}
-	return nil
+		if err := r.reconcileIPTablesRule(ctx); err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
-// this function is called in gwNamespace
 func (r *StaticGatewayConfigurationReconciler) reconcileWireguardLink(
 	ctx context.Context,
-	origns, gwns *netns.NsHandle,
+	gwns ns.NetNS,
 	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
 	privateKey *wgtypes.Key,
 ) error {
 	log := log.FromContext(ctx)
-	wgLink, err := r.Netlink.LinkByName(consts.WireguardLinkName)
-	if _, ok := err.(netlink.LinkNotFoundError); ok {
-		log.Info("Creating wireguard link")
-		wgLink, err = r.createWireguardLink(origns, gwns)
+	var wgLink netlink.Link
+	var err error
+	if err = gwns.Do(func(nn ns.NetNS) error {
+		wgLink, err = r.Netlink.LinkByName(consts.WireguardLinkName)
 		if err != nil {
+			if _, ok := err.(netlink.LinkNotFoundError); !ok {
+				return fmt.Errorf("failed to get wireguard link in gateway namespace: %w", err)
+			}
+			wgLink = nil
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	if wgLink == nil {
+		log.Info("Creating wireguard link")
+		if err := r.createWireguardLink(gwns); err != nil {
 			return fmt.Errorf("failed to create wireguard link: %w", err)
 		}
-	} else if err != nil {
-		return fmt.Errorf("failed to get wireguard link in gateway namespace: %w", err)
 	}
 
-	gwIP, _ := netlink.ParseIPNet(consts.GatewayIP)
-	gwLinkAddr := netlink.Addr{
-		IPNet: gwIP,
-	}
-
-	wgLinkAddrs, err := r.Netlink.AddrList(wgLink, nl.FAMILY_ALL)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve address list from wireguard link: %w", err)
-	}
-
-	foundLink := false
-	for _, addr := range wgLinkAddrs {
-		if addr.Equal(gwLinkAddr) {
-			log.Info("Found wireguard link address")
-			foundLink = true
-			break
-		}
-	}
-
-	if !foundLink {
-		log.Info("Adding wireguard link address")
-		err = r.Netlink.AddrAdd(wgLink, &gwLinkAddr)
+	return gwns.Do(func(nn ns.NetNS) error {
+		wgLink, err := r.Netlink.LinkByName(consts.WireguardLinkName)
 		if err != nil {
-			return fmt.Errorf("failed to add wireguard link address: %w", err)
+			return fmt.Errorf("failed to get wireguard link in gateway namespace after creation: %w", err)
 		}
-	}
+		gwIP, _ := netlink.ParseIPNet(consts.GatewayIP)
+		gwLinkAddr := netlink.Addr{
+			IPNet: gwIP,
+		}
 
-	err = r.Netlink.LinkSetUp(wgLink)
-	if err != nil {
-		return fmt.Errorf("failed to set wireguard link up: %w", err)
-	}
-
-	wgClient, err := r.WgCtrl.New()
-	if err != nil {
-		return fmt.Errorf("failed to create wgctrl client: %w", err)
-	}
-
-	wgConfig := wgtypes.Config{
-		ListenPort: to.Ptr(int(gwConfig.Status.WireguardServerPort)),
-		PrivateKey: privateKey,
-	}
-
-	device, err := wgClient.Device(consts.WireguardLinkName)
-	if err != nil {
-		return fmt.Errorf("failed to get wireguard link configuration: %w", err)
-	}
-
-	if device.PrivateKey.String() != wgConfig.PrivateKey.String() || device.ListenPort != to.Val(wgConfig.ListenPort) {
-		log.Info("Updating wireguard link config", "orig port", device.ListenPort, "cur port", to.Val(wgConfig.ListenPort),
-			"private key difference", device.PrivateKey.String() != wgConfig.PrivateKey.String())
-		err = wgClient.ConfigureDevice(consts.WireguardLinkName, wgConfig)
+		wgLinkAddrs, err := r.Netlink.AddrList(wgLink, nl.FAMILY_ALL)
 		if err != nil {
-			return fmt.Errorf("failed to add peer to wireguard link: %w", err)
+			return fmt.Errorf("failed to retrieve address list from wireguard link: %w", err)
 		}
-	}
 
-	return nil
+		foundLink := false
+		for _, addr := range wgLinkAddrs {
+			if addr.Equal(gwLinkAddr) {
+				log.Info("Found wireguard link address")
+				foundLink = true
+				break
+			}
+		}
+
+		if !foundLink {
+			log.Info("Adding wireguard link address")
+			err = r.Netlink.AddrAdd(wgLink, &gwLinkAddr)
+			if err != nil {
+				return fmt.Errorf("failed to add wireguard link address: %w", err)
+			}
+		}
+
+		err = r.Netlink.LinkSetUp(wgLink)
+		if err != nil {
+			return fmt.Errorf("failed to set wireguard link up: %w", err)
+		}
+
+		wgClient, err := r.WgCtrl.New()
+		if err != nil {
+			return fmt.Errorf("failed to create wgctrl client: %w", err)
+		}
+		defer func() { _ = wgClient.Close() }()
+
+		wgConfig := wgtypes.Config{
+			ListenPort: to.Ptr(int(gwConfig.Status.WireguardServerPort)),
+			PrivateKey: privateKey,
+		}
+
+		device, err := wgClient.Device(consts.WireguardLinkName)
+		if err != nil {
+			return fmt.Errorf("failed to get wireguard link configuration: %w", err)
+		}
+
+		if device.PrivateKey.String() != wgConfig.PrivateKey.String() || device.ListenPort != to.Val(wgConfig.ListenPort) {
+			log.Info("Updating wireguard link config", "orig port", device.ListenPort, "cur port", to.Val(wgConfig.ListenPort),
+				"private key difference", device.PrivateKey.String() != wgConfig.PrivateKey.String())
+			err = wgClient.ConfigureDevice(consts.WireguardLinkName, wgConfig)
+			if err != nil {
+				return fmt.Errorf("failed to add peer to wireguard link: %w", err)
+			}
+		}
+		return nil
+	})
 }
 
-func (r *StaticGatewayConfigurationReconciler) createWireguardLink(origns, gwns *netns.NsHandle) (netlink.Link, error) {
-	curns, _ := r.NetNS.Get()
-	defer func() { _ = r.NetNS.Set(curns); curns.Close() }()
-	// create wg link in host namespace first
-	_ = r.NetNS.Set(*origns)
+func (r *StaticGatewayConfigurationReconciler) createWireguardLink(gwns ns.NetNS) error {
 	succeed := false
 	attr := netlink.NewLinkAttrs()
 	attr.Name = consts.WireguardLinkName
 	wg := &netlink.Wireguard{LinkAttrs: attr}
 	err := r.Netlink.LinkAdd(wg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create wireguard link: %w", err)
+		return fmt.Errorf("failed to create wireguard link: %w", err)
 	}
 	defer func() {
 		if !succeed {
@@ -585,110 +587,106 @@ func (r *StaticGatewayConfigurationReconciler) createWireguardLink(origns, gwns 
 
 	wgLink, err := r.Netlink.LinkByName(consts.WireguardLinkName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get wireguard link in host namespace: %w", err)
+		return fmt.Errorf("failed to get wireguard link in host namespace: %w", err)
 	}
 
-	if err := r.Netlink.LinkSetNsFd(wgLink, int(*gwns)); err != nil {
-		return nil, fmt.Errorf("failed to move wireguard link to gateway namespace: %w", err)
+	if err := r.Netlink.LinkSetNsFd(wgLink, int(gwns.Fd())); err != nil {
+		return fmt.Errorf("failed to move wireguard link to gateway namespace: %w", err)
 	}
 
 	succeed = true
-	return wgLink, nil
+	return nil
 }
 
-// this function is called in gateway namespace
 func (r *StaticGatewayConfigurationReconciler) reconcileVethPair(
 	ctx context.Context,
-	origns, gwns *netns.NsHandle,
+	gwns ns.NetNS,
 	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
 	vmPrimaryIP string,
 	vmSecondaryIP string,
 ) error {
 	log := log.FromContext(ctx)
-	if err := r.reconcileVethPairInHost(ctx, origns, gwns, gwConfig, vmSecondaryIP); err != nil {
+	if err := r.reconcileVethPairInHost(ctx, gwns, gwConfig, vmSecondaryIP); err != nil {
 		return fmt.Errorf("failed to reconcile veth pair in host namespace: %w", err)
 	}
 
-	hostLink, err := r.Netlink.LinkByName(consts.HostLinkName)
-	if err != nil {
-		return fmt.Errorf("failed to get host link in gateway namespace: %w", err)
-	}
-
-	snatIPNet, err := netlink.ParseIPNet(vmSecondaryIP + "/32")
-	if err != nil {
-		return fmt.Errorf("failed to parse SNAT IP(%s) for host interface: %w", vmSecondaryIP+"/32", err)
-	}
-	hostLinkAddr := netlink.Addr{IPNet: snatIPNet}
-
-	hostLinkAddrs, err := r.Netlink.AddrList(hostLink, nl.FAMILY_ALL)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve address list from wireguard link: %w", err)
-	}
-
-	foundLink := false
-	for _, addr := range hostLinkAddrs {
-		if addr.Equal(hostLinkAddr) {
-			log.Info("Found host link address in gateway namespace")
-			foundLink = true
-			break
-		}
-	}
-
-	if !foundLink {
-		log.Info("Adding host link address in gateway namespace")
-		err = r.Netlink.AddrReplace(hostLink, &hostLinkAddr)
+	return gwns.Do(func(nn ns.NetNS) error {
+		hostLink, err := r.Netlink.LinkByName(consts.HostLinkName)
 		if err != nil {
-			return fmt.Errorf("failed to add host link address in gateway namespace: %w", err)
+			return fmt.Errorf("failed to get host link in gateway namespace: %w", err)
 		}
-	}
 
-	err = r.Netlink.LinkSetUp(hostLink)
-	if err != nil {
-		return fmt.Errorf("failed to set host link up: %w", err)
-	}
+		snatIPNet, err := netlink.ParseIPNet(vmSecondaryIP + "/32")
+		if err != nil {
+			return fmt.Errorf("failed to parse SNAT IP(%s) for host interface: %w", vmSecondaryIP+"/32", err)
+		}
+		hostLinkAddr := netlink.Addr{IPNet: snatIPNet}
 
-	vmSnatCidr, err := netlink.ParseIPNet(vmPrimaryIP + "/32")
-	if err != nil {
-		return fmt.Errorf("failed to parse CIDR %s/32: %w", vmPrimaryIP+"/32", err)
-	}
+		hostLinkAddrs, err := r.Netlink.AddrList(hostLink, nl.FAMILY_ALL)
+		if err != nil {
+			return fmt.Errorf("failed to retrieve address list from wireguard link: %w", err)
+		}
 
-	err = r.addOrReplaceRoute(ctx, &netlink.Route{
-		LinkIndex: hostLink.Attrs().Index,
-		Scope:     netlink.SCOPE_LINK,
-		Dst:       vmSnatCidr,
+		foundLink := false
+		for _, addr := range hostLinkAddrs {
+			if addr.Equal(hostLinkAddr) {
+				log.Info("Found host link address in gateway namespace")
+				foundLink = true
+				break
+			}
+		}
+
+		if !foundLink {
+			log.Info("Adding host link address in gateway namespace")
+			err = r.Netlink.AddrReplace(hostLink, &hostLinkAddr)
+			if err != nil {
+				return fmt.Errorf("failed to add host link address in gateway namespace: %w", err)
+			}
+		}
+
+		err = r.Netlink.LinkSetUp(hostLink)
+		if err != nil {
+			return fmt.Errorf("failed to set host link up: %w", err)
+		}
+
+		vmSnatCidr, err := netlink.ParseIPNet(vmPrimaryIP + "/32")
+		if err != nil {
+			return fmt.Errorf("failed to parse CIDR %s/32: %w", vmPrimaryIP+"/32", err)
+		}
+
+		err = r.addOrReplaceRoute(ctx, &netlink.Route{
+			LinkIndex: hostLink.Attrs().Index,
+			Scope:     netlink.SCOPE_LINK,
+			Dst:       vmSnatCidr,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create route to VM primary IP %s via gateway interface: %w", vmPrimaryIP, err)
+		}
+
+		err = r.addOrReplaceRoute(ctx, &netlink.Route{
+			LinkIndex: hostLink.Attrs().Index,
+			Scope:     netlink.SCOPE_UNIVERSE,
+			Dst:       nil,
+			Gw:        net.ParseIP(vmPrimaryIP),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create default route via %s: %w", vmPrimaryIP, err)
+		}
+		return nil
 	})
-	if err != nil {
-		return fmt.Errorf("failed to create route to VM primary IP %s via gateway interface: %w", vmPrimaryIP, err)
-	}
-
-	err = r.addOrReplaceRoute(ctx, &netlink.Route{
-		LinkIndex: hostLink.Attrs().Index,
-		Scope:     netlink.SCOPE_UNIVERSE,
-		Dst:       nil,
-		Gw:        net.ParseIP(vmPrimaryIP),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create default route via %s: %w", vmPrimaryIP, err)
-	}
-
-	return nil
 }
 
 func (r *StaticGatewayConfigurationReconciler) reconcileVethPairInHost(
 	ctx context.Context,
-	origns, gwns *netns.NsHandle,
+	gwns ns.NetNS,
 	gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration,
 	snatIP string,
 ) error {
 	log := log.FromContext(ctx)
-	curns, _ := r.NetNS.Get()
-	defer func() { _ = r.NetNS.Set(curns); curns.Close() }()
-	_ = r.NetNS.Set(*origns)
-
 	succeed := false
 
 	la := netlink.NewLinkAttrs()
-	la.Name = gwVethHostLinkName
+	la.Name = getVethHostLinkName(gwConfig)
 
 	mainLink, err := r.Netlink.LinkByName(la.Name)
 	if _, ok := err.(netlink.LinkNotFoundError); ok {
@@ -739,7 +737,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcileVethPairInHost(
 
 	hostLink, err := r.Netlink.LinkByName(consts.HostLinkName)
 	if err == nil {
-		if err := r.Netlink.LinkSetNsFd(hostLink, int(*gwns)); err != nil {
+		if err := r.Netlink.LinkSetNsFd(hostLink, int(gwns.Fd())); err != nil {
 			return fmt.Errorf("failed to move veth peer link to gateway namespace: %w", err)
 		}
 	} else if _, ok := err.(netlink.LinkNotFoundError); !ok {
@@ -789,4 +787,13 @@ func (r *StaticGatewayConfigurationReconciler) reconcileIPTablesRule(ctx context
 		return fmt.Errorf("failed to check or create nat rule in POSTROUTING chain: %w", err)
 	}
 	return nil
+}
+
+func getGatewayNamespaceName(gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration) string {
+	return fmt.Sprintf("gw-%s", string(gwConfig.GetUID()))
+}
+
+func getVethHostLinkName(gwConfig *kubeegressgatewayv1alpha1.StaticGatewayConfiguration) string {
+	nsName := getGatewayNamespaceName(gwConfig)
+	return nsName[:11]
 }

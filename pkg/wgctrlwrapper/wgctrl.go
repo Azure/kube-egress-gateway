@@ -10,6 +10,8 @@ type Client interface {
 	Device(name string) (*wgtypes.Device, error)
 	// ConfigureDevice configures a WireGuard device by its interface name
 	ConfigureDevice(name string, cfg wgtypes.Config) error
+	// Close releases resources used by a Client
+	Close() error
 }
 
 type Interface interface {

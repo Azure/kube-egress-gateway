@@ -24,9 +24,11 @@ SOFTWARE
 package cmd
 
 import (
+	"context"
 	goflag "flag"
 	"fmt"
 	"os"
+	"time"
 
 	kubeegressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	controllers "github.com/Azure/kube-egress-gateway/controllers/daemon"
@@ -41,7 +43,9 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
@@ -167,18 +171,23 @@ func startControllers(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	if err := controllers.InitNodeMetadata(); err != nil {
+		setupLog.Error(err, "unable to retrieve node metadata")
+		os.Exit(1)
+	}
+
 	if err = (&controllers.StaticGatewayConfigurationReconciler{
 		Client:       mgr.GetClient(),
-		Scheme:       mgr.GetScheme(),
 		AzureManager: az,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "StaticGatewayConfiguration")
 		os.Exit(1)
 	}
 
+	tickerEvents := make(chan event.GenericEvent)
 	if err = (&controllers.PodWireguardEndpointReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:       mgr.GetClient(),
+		TickerEvents: tickerEvents,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PodWireguardEndpoint")
 		os.Exit(1)
@@ -195,8 +204,30 @@ func startControllers(cmd *cobra.Command, args []string) {
 	}
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	ctx := ctrl.SetupSignalHandler()
+	startCleanupTicker(ctx, tickerEvents)
+	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+func startCleanupTicker(ctx context.Context, tickerEvents chan<- event.GenericEvent) {
+	setupLog.Info("starting background cleaning routine")
+	log := log.FromContext(ctx)
+	ticker := time.NewTicker(1 * time.Minute) // clean up every 1 min
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				log.Info("stopping background cleaning routine")
+				return
+			case <-ticker.C:
+				event := event.GenericEvent{
+					Object: &kubeegressgatewayv1alpha1.PodWireguardEndpoint{},
+				}
+				tickerEvents <- event
+			}
+		}
+	}()
 }
