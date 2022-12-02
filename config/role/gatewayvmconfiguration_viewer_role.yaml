@@ -12,7 +12,7 @@ metadata:
   name: gatewayvmconfiguration-viewer-role
 rules:
 - apiGroups:
-  - kube-egress-gateway.microsoft.com
+  - egressgateway.kubernetes.azure.com
   resources:
   - gatewayvmconfigurations
   verbs:
@@ -20,7 +20,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - kube-egress-gateway.microsoft.com
+  - egressgateway.kubernetes.azure.com
   resources:
   - gatewayvmconfigurations/status
   verbs:

@@ -1,4 +1,4 @@
-domain: microsoft.com
+domain: kubernetes.azure.com
 layout:
 - go.kubebuilder.io/v3
 projectName: kube-egress-gateway
@@ -8,8 +8,8 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: microsoft.com
-  group: kube-egress-gateway
+  domain: kubernetes.azure.com
+  group: egressgateway
   kind: StaticGatewayConfiguration
   path: github.com/Azure/kube-egress-gateway/api/v1alpha1
   version: v1alpha1
@@ -20,8 +20,8 @@ resources:
 - api:
     crdVersion: v1
     namespaced: true
-  domain: microsoft.com
-  group: kube-egress-gateway
+  domain: kubernetes.azure.com
+  group: egressgateway
   kind: PodWireguardEndpoint
   path: github.com/Azure/kube-egress-gateway/api/v1alpha1
   version: v1alpha1
@@ -29,8 +29,8 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: microsoft.com
-  group: kube-egress-gateway
+  domain: kubernetes.azure.com
+  group: egressgateway
   kind: GatewayLBConfiguration
   path: github.com/Azure/kube-egress-gateway/api/v1alpha1
   version: v1alpha1
@@ -38,8 +38,8 @@ resources:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: microsoft.com
-  group: kube-egress-gateway
+  domain: kubernetes.azure.com
+  group: egressgateway
   kind: GatewayVMConfiguration
   path: github.com/Azure/kube-egress-gateway/api/v1alpha1
   version: v1alpha1

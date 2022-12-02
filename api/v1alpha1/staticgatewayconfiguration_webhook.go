@@ -42,7 +42,7 @@ func (r *StaticGatewayConfiguration) SetupWebhookWithManager(mgr ctrl.Manager) e
 
 // TODO(user): EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 
-//+kubebuilder:webhook:path=/mutate-kube-egress-gateway-microsoft-com-v1alpha1-staticgatewayconfiguration,mutating=true,failurePolicy=fail,sideEffects=None,groups=kube-egress-gateway.microsoft.com,resources=staticgatewayconfigurations,verbs=create;update,versions=v1alpha1,name=mstaticgatewayconfiguration.kb.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/mutate-kube-egress-gateway-microsoft-com-v1alpha1-staticgatewayconfiguration,mutating=true,failurePolicy=fail,sideEffects=None,groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations,verbs=create;update,versions=v1alpha1,name=mstaticgatewayconfiguration.kb.io,admissionReviewVersions=v1
 
 var _ webhook.Defaulter = &StaticGatewayConfiguration{}
 
@@ -54,7 +54,7 @@ func (r *StaticGatewayConfiguration) Default() {
 }
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
-//+kubebuilder:webhook:path=/validate-kube-egress-gateway-microsoft-com-v1alpha1-staticgatewayconfiguration,mutating=false,failurePolicy=fail,sideEffects=None,groups=kube-egress-gateway.microsoft.com,resources=staticgatewayconfigurations,verbs=create;update,versions=v1alpha1,name=vstaticgatewayconfiguration.kb.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/validate-kube-egress-gateway-microsoft-com-v1alpha1-staticgatewayconfiguration,mutating=false,failurePolicy=fail,sideEffects=None,groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations,verbs=create;update,versions=v1alpha1,name=vstaticgatewayconfiguration.kb.io,admissionReviewVersions=v1
 
 var _ webhook.Validator = &StaticGatewayConfiguration{}
 

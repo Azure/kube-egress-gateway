@@ -16,7 +16,7 @@ webhooks:
   name: mstaticgatewayconfiguration.kb.io
   rules:
   - apiGroups:
-    - kube-egress-gateway.microsoft.com
+    - egressgateway.kubernetes.azure.com
     apiVersions:
     - v1alpha1
     operations:
@@ -43,7 +43,7 @@ webhooks:
   name: vstaticgatewayconfiguration.kb.io
   rules:
   - apiGroups:
-    - kube-egress-gateway.microsoft.com
+    - egressgateway.kubernetes.azure.com
     apiVersions:
     - v1alpha1
     operations:

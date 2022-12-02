@@ -54,13 +54,13 @@ type StaticGatewayConfigurationReconciler struct {
 }
 
 //+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=staticgatewayconfigurations,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=staticgatewayconfigurations/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=staticgatewayconfigurations/finalizers,verbs=update
-//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=gatewaylbconfigurations,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=gatewaylbconfigurations/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=gatewayvmconfigurations,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=gatewayvmconfigurations/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations/finalizers,verbs=update
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get;update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.

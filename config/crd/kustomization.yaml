@@ -2,10 +2,10 @@
 # since it depends on service name and namespace that are out of this kustomize package.
 # It should be run by config/default
 resources:
-- bases/kube-egress-gateway.microsoft.com_staticgatewayconfigurations.yaml
-- bases/kube-egress-gateway.microsoft.com_podwireguardendpoints.yaml
-- bases/kube-egress-gateway.microsoft.com_gatewaylbconfigurations.yaml
-- bases/kube-egress-gateway.microsoft.com_gatewayvmconfigurations.yaml
+- bases/egressgateway.kubernetes.azure.com_staticgatewayconfigurations.yaml
+- bases/egressgateway.kubernetes.azure.com_podwireguardendpoints.yaml
+- bases/egressgateway.kubernetes.azure.com_gatewaylbconfigurations.yaml
+- bases/egressgateway.kubernetes.azure.com_gatewayvmconfigurations.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:

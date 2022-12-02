@@ -4,4 +4,4 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: $(CERTIFICATE_NAMESPACE)/$(CERTIFICATE_NAME)
-  name: gatewaylbconfigurations.kube-egress-gateway.microsoft.com
+  name: gatewaylbconfigurations.egressgateway.kubernetes.azure.com

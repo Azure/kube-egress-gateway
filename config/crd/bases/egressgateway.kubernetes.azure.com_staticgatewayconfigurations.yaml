@@ -5,9 +5,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.9.2
   creationTimestamp: null
-  name: staticgatewayconfigurations.kube-egress-gateway.microsoft.com
+  name: staticgatewayconfigurations.egressgateway.kubernetes.azure.com
 spec:
-  group: kube-egress-gateway.microsoft.com
+  group: egressgateway.kubernetes.azure.com
   names:
     kind: StaticGatewayConfiguration
     listKind: StaticGatewayConfigurationList
