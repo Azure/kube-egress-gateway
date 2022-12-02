@@ -63,9 +63,9 @@ var (
 	publicIPPrefixRE = regexp.MustCompile(`.*/subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Network/publicIPPrefixes/(.+)`)
 )
 
-//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=gatewayvmconfigurations,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=gatewayvmconfigurations/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=gatewayvmconfigurations/finalizers,verbs=update
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.

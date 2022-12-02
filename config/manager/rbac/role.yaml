@@ -18,7 +18,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - kube-egress-gateway.microsoft.com
+  - egressgateway.kubernetes.azure.com
   resources:
   - gatewaylbconfigurations
   verbs:
@@ -30,13 +30,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - kube-egress-gateway.microsoft.com
+  - egressgateway.kubernetes.azure.com
   resources:
   - gatewaylbconfigurations/finalizers
   verbs:
   - update
 - apiGroups:
-  - kube-egress-gateway.microsoft.com
+  - egressgateway.kubernetes.azure.com
   resources:
   - gatewaylbconfigurations/status
   verbs:
@@ -44,7 +44,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - kube-egress-gateway.microsoft.com
+  - egressgateway.kubernetes.azure.com
   resources:
   - gatewayvmconfigurations
   verbs:
@@ -56,13 +56,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - kube-egress-gateway.microsoft.com
+  - egressgateway.kubernetes.azure.com
   resources:
   - gatewayvmconfigurations/finalizers
   verbs:
   - update
 - apiGroups:
-  - kube-egress-gateway.microsoft.com
+  - egressgateway.kubernetes.azure.com
   resources:
   - gatewayvmconfigurations/status
   verbs:
@@ -70,7 +70,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - kube-egress-gateway.microsoft.com
+  - egressgateway.kubernetes.azure.com
   resources:
   - staticgatewayconfigurations
   verbs:
@@ -82,13 +82,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - kube-egress-gateway.microsoft.com
+  - egressgateway.kubernetes.azure.com
   resources:
   - staticgatewayconfigurations/finalizers
   verbs:
   - update
 - apiGroups:
-  - kube-egress-gateway.microsoft.com
+  - egressgateway.kubernetes.azure.com
   resources:
   - staticgatewayconfigurations/status
   verbs:

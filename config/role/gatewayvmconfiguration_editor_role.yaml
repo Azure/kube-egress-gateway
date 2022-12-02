@@ -12,7 +12,7 @@ metadata:
   name: gatewayvmconfiguration-editor-role
 rules:
 - apiGroups:
-  - kube-egress-gateway.microsoft.com
+  - egressgateway.kubernetes.azure.com
   resources:
   - gatewayvmconfigurations
   verbs:
@@ -24,7 +24,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - kube-egress-gateway.microsoft.com
+  - egressgateway.kubernetes.azure.com
   resources:
   - gatewayvmconfigurations/status
   verbs:

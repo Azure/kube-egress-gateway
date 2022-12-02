@@ -24,7 +24,7 @@
 
 // Package v1alpha1 contains API Schema definitions for the kube-egress-gateway v1alpha1 API group
 // +kubebuilder:object:generate=true
-// +groupName=kube-egress-gateway.microsoft.com
+// +groupName=egressgateway.kubernetes.azure.com
 package v1alpha1
 
 import (
@@ -34,7 +34,7 @@ import (
 
 var (
 	// GroupVersion is group version used to register these objects
-	GroupVersion = schema.GroupVersion{Group: "kube-egress-gateway.microsoft.com", Version: "v1alpha1"}
+	GroupVersion = schema.GroupVersion{Group: "egressgateway.kubernetes.azure.com", Version: "v1alpha1"}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
 	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion}

@@ -60,9 +60,9 @@ type lbPropertyNames struct {
 	probeName    string
 }
 
-//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=gatewaylbconfigurations,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=gatewaylbconfigurations/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=gatewaylbconfigurations/finalizers,verbs=update
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.

@@ -43,8 +43,8 @@ type PodWireguardEndpointReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=podwireguardendpoints,verbs=get;list;watch;
-//+kubebuilder:rbac:groups=kube-egress-gateway.microsoft.com,resources=podwireguardendpoints/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=podwireguardendpoints,verbs=get;list;watch;
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=podwireguardendpoints/status,verbs=get;update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.

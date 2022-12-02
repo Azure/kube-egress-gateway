@@ -12,7 +12,7 @@ metadata:
   name: gatewaylbconfiguration-viewer-role
 rules:
 - apiGroups:
-  - kube-egress-gateway.microsoft.com
+  - egressgateway.kubernetes.azure.com
   resources:
   - gatewaylbconfigurations
   verbs:
@@ -20,7 +20,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - kube-egress-gateway.microsoft.com
+  - egressgateway.kubernetes.azure.com
   resources:
   - gatewaylbconfigurations/status
   verbs:

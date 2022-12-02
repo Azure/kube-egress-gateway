@@ -1,4 +1,4 @@
-apiVersion: kube-egress-gateway.microsoft.com/v1alpha1
+apiVersion: egressgateway.kubernetes.azure.com/v1alpha1
 kind: StaticGatewayConfiguration
 metadata:
   name: staticgatewayconfiguration-sample

@@ -14,7 +14,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - kube-egress-gateway.microsoft.com
+  - egressgateway.kubernetes.azure.com
   resources:
   - podwireguardendpoints
   verbs:
@@ -22,7 +22,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - kube-egress-gateway.microsoft.com
+  - egressgateway.kubernetes.azure.com
   resources:
   - podwireguardendpoints/status
   verbs:
@@ -30,7 +30,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - kube-egress-gateway.microsoft.com
+  - egressgateway.kubernetes.azure.com
   resources:
   - staticgatewayconfigurations
   verbs:
@@ -38,7 +38,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - kube-egress-gateway.microsoft.com
+  - egressgateway.kubernetes.azure.com
   resources:
   - staticgatewayconfigurations/status
   verbs:
