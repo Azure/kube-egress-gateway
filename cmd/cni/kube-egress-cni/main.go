@@ -30,24 +30,24 @@ import (
 	"net"
 
 	"github.com/Azure/kube-egress-gateway/pkg/cni/conf"
+	"github.com/Azure/kube-egress-gateway/pkg/cni/ipam"
 	"github.com/Azure/kube-egress-gateway/pkg/cni/wireguard"
-	"github.com/vishvananda/netlink"
-	"golang.zx2c4.com/wireguard/wgctrl"
-	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
-
+	cniprotocol "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
+	v1 "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
+	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	type100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-
-	"github.com/Azure/kube-egress-gateway/pkg/cni/ipam"
-	cniprotocol "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
-	v1 "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
-	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/containernetworking/plugins/pkg/ns"
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
+	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/vishvananda/netlink"
+	"golang.zx2c4.com/wireguard/wgctrl"
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 func main() {
@@ -69,9 +69,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	// exchange public key with daemon
-	conn, err := grpc.Dial(
+	conn, err := grpc.DialContext(context.Background(),
 		consts.CNI_SOCKET_PATH,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithStreamInterceptor(grpc_retry.StreamClientInterceptor()),
+		grpc.WithUnaryInterceptor(grpc_retry.UnaryClientInterceptor()),
+		grpc.WithUnaryInterceptor(grpc_prometheus.UnaryClientInterceptor),
+		grpc.WithStreamInterceptor(grpc_prometheus.StreamClientInterceptor),
 		grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
 			d := net.Dialer{}
 			return d.DialContext(ctx, "unix", addr)
@@ -185,9 +189,13 @@ func cmdDel(args *skel.CmdArgs) error {
 	if err != nil {
 		return err
 	}
-	conn, err := grpc.Dial(
+	conn, err := grpc.DialContext(context.Background(),
 		consts.CNI_SOCKET_PATH,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithStreamInterceptor(grpc_retry.StreamClientInterceptor()),
+		grpc.WithUnaryInterceptor(grpc_retry.UnaryClientInterceptor()),
+		grpc.WithUnaryInterceptor(grpc_prometheus.UnaryClientInterceptor),
+		grpc.WithStreamInterceptor(grpc_prometheus.StreamClientInterceptor),
 		grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
 			d := net.Dialer{}
 			return d.DialContext(ctx, "unix", addr)
