@@ -22,9 +22,20 @@ target "controller" {
   }
 }
 
-target "cnimanager" {
-  inherits = ["base","cnimanager-tags"]
+target "cnimanager-compile" {
+  inherits = ["base"]
   args = {
     MAIN_ENTRY = "kube-egress-gateway-cnimanager",
+  }
+}
+
+target "cnimanager" {
+  inherits = ["cnimanager-tags"]
+  dockerfile = "cnimanager.Dockerfile"
+  contexts = {
+    baseimg = "target:cnimanager-compile"
+  }
+  args = {
+    GRPC_HEALTH_PROBE_VERSION = "v0.4.14"
   }
 }

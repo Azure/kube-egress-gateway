@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 ARG BASE_IMAGE=gcr.io/distroless/static
 # Build the manager binary
 FROM --platform=$BUILDPLATFORM golang:1.19 as builder 
