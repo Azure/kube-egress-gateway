@@ -1,7 +1,3 @@
-
-
-
-
 # Project kube-egress-gateway
 
 ## Table of Contents

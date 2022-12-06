@@ -42,12 +42,14 @@ help: ## Display this help.
 ##@ Development
 
 .PHONY: manifests
-manifests: controller-gen daemon-rbac-manifests manager-rbac-manifests## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
+manifests: controller-gen daemon-rbac-manifests manager-rbac-manifests cnimanager-rbac-manifests ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases output:webhook:artifacts:config=config/manager/webhook
 daemon-rbac-manifests: controller-gen ## Generate RBAC manifests for daemon.
 	$(CONTROLLER_GEN) rbac:roleName=manager-role paths="./controllers/manager/..." output:rbac:artifacts:config=config/manager/rbac
 manager-rbac-manifests: controller-gen ## Generate RBAC manifests for manager.
 	$(CONTROLLER_GEN) rbac:roleName=daemon-manager-role paths="./controllers/daemon/..." output:rbac:artifacts:config=config/daemon/rbac
+cnimanager-rbac-manifests: controller-gen
+	$(CONTROLLER_GEN) rbac:roleName=cni-manager-role paths="./controllers/cnimanager/..." output:rbac:artifacts:config=config/cnimanager/rbac
 
 .PHONY: generate
 generate: generate-apiutils generate-protogo
@@ -80,7 +82,7 @@ IMAGE_TAG ?= $(shell git rev-parse --short=7 HEAD)
 build: generate fmt vet ## Build manager binary.
 	CGO_ENABLED=0 go build -o bin/manager ./cmd/kube-egress-gateway-controller/main.go
 	CGO_ENABLED=0 go build -o bin/daemon ./cmd/kube-egress-gateway-daemon/main.go
-	CGO_ENABLED=0 go build -o bin/cni ./cmd/cni/kube-egress-cni/main.go
+	CGO_ENABLED=0 go build -o bin/cni ./cmd/kube-egress-cni/main.go
 	CGO_ENABLED=0 go build -o bin/cnimanager ./cmd/kube-egress-gateway-cnimanager/main.go
 
 AZURE_CONFIG_FILE ?= ./tests/deploy/azure.json

@@ -116,19 +116,21 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return err
 		}
 
-		var allowedIPs []string
-		for _, item := range ipamResult.IPs {
-			allowedIPs = append(allowedIPs, item.Address.String())
+		var allowedIPs string
+		if len(ipamResult.IPs) != 1 {
+			return errors.New("ipam result is more than 1")
 		}
+		allowedIPs = ipamResult.IPs[0].Address.String()
 		result = ipamResult
 		resp, err := client.NicAdd(context.Background(), &v1.NicAddRequest{
 			PodConfig: &v1.PodInfo{
 				PodName:      string(k8sInfo.K8S_POD_NAME),
 				PodNamespace: string(k8sInfo.K8S_POD_NAMESPACE),
 			},
-			PublicKey:  privateKey.PublicKey().String(),
-			ListenPort: int32(wgDevice.ListenPort),
-			AllowedIp:  allowedIPs,
+			PublicKey:   privateKey.PublicKey().String(),
+			ListenPort:  int32(wgDevice.ListenPort),
+			AllowedIp:   allowedIPs,
+			GatewayName: config.GatewayName,
 		})
 		if err != nil {
 			return err

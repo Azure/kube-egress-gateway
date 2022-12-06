@@ -26,8 +26,10 @@ package cmd
 import (
 	"fmt"
 	"net"
+	"os"
 
-	"github.com/Azure/kube-egress-gateway/pkg/cnimanager/nicservice"
+	current "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	"github.com/Azure/kube-egress-gateway/controllers/cnimanager"
 	cniprotocol "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/logger"
@@ -43,6 +45,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
+	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
 
 const (
@@ -73,12 +80,33 @@ func init() {
 }
 
 func ServiceLauncher(cmd *cobra.Command, args []string) {
+	ctx := signals.SetupSignalHandler()
 	zapLog, err := zap.NewProduction()
 	if err != nil {
 		panic(fmt.Sprintf("who watches the watchmen (%v)?", err))
 	}
 	logger.SetDefaultLogger(zapr.NewLogger(zapLog))
 	logger := logger.GetLogger()
+	apischeme := runtime.NewScheme()
+	utilruntime.Must(current.AddToScheme(apischeme))
+	k8sCluster, err := cluster.New(config.GetConfigOrDie(), func(options *cluster.Options) {
+		options.Scheme = apischeme
+		options.Logger = logger
+	})
+	if err != nil {
+		logger.Error(err, "failed to create k8s cluster object")
+		os.Exit(1)
+	}
+	go func() {
+		if err := k8sCluster.Start(ctx); err != nil {
+			logger.Error(err, "failed to start k8s client cache")
+			os.Exit(1)
+		}
+	}()
+
+	k8sClient := k8sCluster.GetClient()
+	nicSvc := cnimanager.NewNicService(k8sClient)
+
 	server := grpc.NewServer(
 		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
 			grpc_ctxtags.StreamServerInterceptor(),
@@ -100,13 +128,22 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 	healthServer.SetServingStatus("", healthgrpc.HealthCheckResponse_SERVING)
 	healthgrpc.RegisterHealthServer(server, healthServer)
 
-	cniprotocol.RegisterNicServiceServer(server, &nicservice.NicService{})
-	listener, err := net.Listen(protocol, sockAddr)
+	cniprotocol.RegisterNicServiceServer(server, nicSvc)
+	var listener net.Listener
+	listener, err = net.Listen(protocol, sockAddr)
 	if err != nil {
 		logger.Error(err, "failed to listen")
+		os.Exit(1)
 	}
+
+	go func() {
+		<-ctx.Done()
+		logger.Error(ctx.Err(), "os signal received, shutting down")
+		server.GracefulStop()
+	}()
 	err = server.Serve(listener)
 	if err != nil {
 		logger.Error(err, "failed to serve")
 	}
+	logger.Info("server shutdown")
 }

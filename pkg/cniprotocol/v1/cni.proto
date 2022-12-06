@@ -26,7 +26,6 @@ syntax = "proto3";
 
 option go_package = "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1";
 package pkg.cniprotocol.v1;
-import "google/rpc/status.proto";
 
 message PodInfo{
   string pod_name = 1;
@@ -37,16 +36,16 @@ message PodInfo{
 message NicAddRequest {
   PodInfo pod_config = 1;
   int32  listen_port = 2;
-  repeated string allowed_ip = 3;
+  string allowed_ip = 3;
   string public_key = 4;
+  string gateway_name = 5;
 }
 
 // CNIAddResponse is the response for cni add function.
 message NicAddResponse {
-  google.rpc.Status status = 1;
-  string endpoint_ip = 2;
-  int32  listen_port = 3;
-  string public_key = 4;
+  string endpoint_ip = 1;
+  int32  listen_port = 2;
+  string public_key = 3;
 }
 
 // CNIDeleteRequest is the request for cni del function.
@@ -56,7 +55,6 @@ message NicDelRequest {
 
 // CNIDeleteResponse is the response for cni del function.
 message NicDelResponse {
-  google.rpc.Status status = 1;
 }
 
 // NicService is the nic management service.

@@ -1,6 +1,6 @@
 
 group "default" {
-  targets = ["daemon", "controller", "cnimanager" ,"cni"]
+  targets = ["daemon", "controller", "cnimanager", "cni"]
 }
 
 target "base" {
@@ -14,7 +14,6 @@ target "daemon-compile" {
     BASE_IMAGE = "mcr.microsoft.com/aks/devinfra/base-os-runtime-nettools:master.221105.1",
   }
 }
-
 target "daemon" {
   inherits = ["daemon-tags"]
   dockerfile = "root.Dockerfile"
