@@ -12,7 +12,7 @@ spec:
   template:
     metadata:
       annotations:
-        kubectl.kubernetes.io/default-container: daemon
+        kubectl.kubernetes.io/default-container: cni-manager
       labels:
         control-plane: cni-manager
     spec:
@@ -22,11 +22,17 @@ spec:
           volumeMounts:
             - mountPath: /opt/cni/bin
               name: cni-bin
+          securityContext:
+            privileged: true
       containers:
         - command:
             - /kube-egress-gateway-cnimanager
+          args:
+            - serve
           image: cnimanager:latest
           name: cnimanager
+          securityContext:
+            privileged: true
           volumeMounts:
             - mountPath: /proc
               name: hostpath-proc
@@ -42,14 +48,14 @@ spec:
               command:
                 - /usr/local/bin/grpc_health_probe
                 - -addr=unix:///var/run/egressgateway.sock
-            initialDelaySeconds: 5
+            initialDelaySeconds: 20
             periodSeconds: 5
           readinessProbe:
             exec:
               command:
                 - /usr/local/bin/grpc_health_probe
                 - -addr=unix:///var/run/egressgateway.sock
-            initialDelaySeconds: 5
+            initialDelaySeconds: 20
             periodSeconds: 5
           # TODO(user): Configure the resources accordingly based on the project requirements.
           # More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
@@ -60,6 +66,7 @@ spec:
             requests:
               cpu: 10m
               memory: 64Mi
+      serviceAccountName: cni-manager
       terminationGracePeriodSeconds: 10
       volumes:
         - name: hostpath-proc

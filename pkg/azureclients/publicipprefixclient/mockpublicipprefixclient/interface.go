@@ -53,7 +53,7 @@ func (mr *MockInterfaceMockRecorder) CreateOrUpdate(ctx, resourceGroupName, publ
 // Delete mocks base method.
 func (m *MockInterface) Delete(ctx context.Context, resourceGroupName, publicIPPrefixName string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Delete", ctx, resourceGroupName, publicIPPrefixName)
+	ret := m.ctrl.Call(m, "MarkForDelete", ctx, resourceGroupName, publicIPPrefixName)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -61,7 +61,7 @@ func (m *MockInterface) Delete(ctx context.Context, resourceGroupName, publicIPP
 // Delete indicates an expected call of Delete.
 func (mr *MockInterfaceMockRecorder) Delete(ctx, resourceGroupName, publicIPPrefixName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockInterface)(nil).Delete), ctx, resourceGroupName, publicIPPrefixName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarkForDelete", reflect.TypeOf((*MockInterface)(nil).Delete), ctx, resourceGroupName, publicIPPrefixName)
 }
 
 // Get mocks base method.

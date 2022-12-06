@@ -21,16 +21,17 @@ resources:
 - ../azureconfig
 - ../manager
 - ../daemon
+- ../cnimanager
 images:
 - name: cni
   newName: shafanreg.azurecr.io/kubeegress/kube-egress-gateway-cni
-  newTag: b9dc632
+  newTag: 433102c
 - name: cnimanager
   newName: shafanreg.azurecr.io/kubeegress/kube-egress-gateway-cnimanager
-  newTag: b9dc632
+  newTag: 433102c
 - name: controller
   newName: shafanreg.azurecr.io/kubeegress/kube-egress-gateway-controller
-  newTag: b9dc632
+  newTag: 433102c
 - name: daemon
   newName: shafanreg.azurecr.io/kubeegress/kube-egress-gateway-daemon
-  newTag: b9dc632
+  newTag: 433102c
