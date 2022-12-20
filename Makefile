@@ -40,8 +40,12 @@ help: ## Display this help.
 ##@ Development
 
 .PHONY: manifests
-manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+manifests: controller-gen daemon-rbac-manifests manager-rbac-manifests## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
+	$(CONTROLLER_GEN) crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases output:webhook:artifacts:config=config/manager/webhook
+daemon-rbac-manifests: controller-gen ## Generate RBAC manifests for daemon.
+	$(CONTROLLER_GEN) rbac:roleName=manager-role paths="./controllers/manager/..." output:rbac:artifacts:config=config/manager/rbac
+manager-rbac-manifests: controller-gen ## Generate RBAC manifests for manager.
+	$(CONTROLLER_GEN) rbac:roleName=daemon-manager-role paths="./controllers/daemon/..." output:rbac:artifacts:config=config/daemon/rbac
 
 .PHONY: generate
 generate: generate-apiutils generate-protogo
@@ -98,11 +102,11 @@ endif
 
 .PHONY: install
 install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build config/crd | kubectl apply -f -
+	$(KUSTOMIZE) build config/default | kubectl apply -f -
 
 .PHONY: uninstall
 uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	$(KUSTOMIZE) build config/crd | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
+	$(KUSTOMIZE) build config/default | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
 
 .PHONY: deploy
 deploy: deploy-controller deploy-daemon
@@ -142,7 +146,6 @@ LOCALBIN ?= $(shell pwd)/bin
 $(LOCALBIN):
 	mkdir -p $(LOCALBIN)
 
-CONTROLLER_TOOLS_VERSION ?= v0.9.2
 
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 KUSTOMIZE_VERSION ?= v4.5.7
@@ -156,7 +159,7 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 .PHONY: controller-gen
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
 $(CONTROLLER_GEN): $(LOCALBIN)
-	test -s $(LOCALBIN)/controller-gen || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
+	test -s $(LOCALBIN)/controller-gen || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
 
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 .PHONY: envtest
