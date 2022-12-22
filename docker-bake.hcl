@@ -7,11 +7,19 @@ target "base" {
   dockerfile = "base.Dockerfile"
 }
 
-target "daemon" {
-  inherits = ["base","daemon-tags"]
+target "daemon-compile" {
+  inherits = ["base"]
   args = {
     MAIN_ENTRY = "kube-egress-gateway-daemon",
     BASE_IMAGE = "mcr.microsoft.com/aks/devinfra/base-os-runtime-nettools:master.221105.1",
+  }
+}
+
+target "daemon" {
+  inherits = ["daemon-tags"]
+  dockerfile = "root.Dockerfile"
+  contexts = {
+    baseimg = "target:daemon-compile"
   }
 }
 
