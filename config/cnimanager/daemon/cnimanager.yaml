@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: cni-manager
+  namespace: system
+  labels:
+    control-plane: cni-manager
+spec:
+  selector:
+    matchLabels:
+      control-plane: cni-manager
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: daemon
+      labels:
+        control-plane: cni-manager
+    spec:
+      initContainers:
+        - name: cni-install
+          image: cni:latest
+          volumeMounts:
+            - mountPath: /opt/cni/bin
+              name: cni-bin
+      containers:
+        - command:
+            - /kube-egress-gateway-cnimanager
+          image: cnimanager:latest
+          name: cnimanager
+          volumeMounts:
+            - mountPath: /proc
+              name: hostpath-proc
+              mountPropagation: Bidirectional
+            - mountPath: /run
+              name: hostpath-run
+              mountPropagation: Bidirectional
+            - mountPath: /var
+              name: hostpath-var
+              mountPropagation: Bidirectional
+          livenessProbe:
+            exec:
+              command:
+                - /usr/local/bin/grpc_health_probe
+                - -addr=unix:///var/run/egressgateway.sock
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - /usr/local/bin/grpc_health_probe
+                - -addr=unix:///var/run/egressgateway.sock
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          # TODO(user): Configure the resources accordingly based on the project requirements.
+          # More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+          resources:
+            limits:
+              cpu: 500m
+              memory: 128Mi
+            requests:
+              cpu: 10m
+              memory: 64Mi
+      terminationGracePeriodSeconds: 10
+      volumes:
+        - name: hostpath-proc
+          hostPath:
+            path: /proc
+        - name: hostpath-run
+          hostPath:
+            path: /run
+        - name: hostpath-var
+          hostPath:
+            path: /var
+        - name: cni-bin
+          hostPath:
+            path: /opt/cni/bin/

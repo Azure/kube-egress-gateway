@@ -1,0 +1,5 @@
+configMapGenerator:
+  - files:
+      - azure.json
+    name: azure-cloud-config
+

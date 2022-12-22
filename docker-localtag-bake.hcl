@@ -17,3 +17,7 @@ target "controller-tags" {
 target "cnimanager-tags" {
     tags = ["${IMAGE_REGISTRY}/kube-egress-gateway-cnimanager:${TAG}"]
 }
+
+target "cni-tags" {
+    tags = ["${IMAGE_REGISTRY}/kube-egress-gateway-cni:${TAG}"]
+}

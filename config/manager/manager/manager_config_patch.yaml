@@ -10,11 +10,17 @@ spec:
       - name: manager
         args:
           - "--config=controller_manager_config.yaml"
+          - "--cloud-config=/etc/config/azure.json"
         volumeMounts:
         - name: manager-config
           mountPath: /controller_manager_config.yaml
           subPath: controller_manager_config.yaml
+        - name: manager-config-volume
+          mountPath: /etc/config
       volumes:
       - name: manager-config
         configMap:
           name: manager-config
+      - name: manager-config-volume
+        configMap:
+          name: azure-cloud-config

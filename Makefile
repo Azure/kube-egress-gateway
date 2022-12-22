@@ -1,7 +1,9 @@
 
 # Image URL to use all building/pushing image targets
-CONTROLLER_IMG ?= kube-egress-gateway-controller:latest
-DAEMON_IMG ?= kube-egress-gateway-daemon:latest
+CONTROLLER_IMG ?= kube-egress-gateway-controller
+DAEMON_IMG ?= kube-egress-gateway-daemon
+CNIMANAGER_IMG ?= kube-egress-gateway-cnimanager
+CNI_IMG ?= kube-egress-gateway-cni
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.25.0
 
@@ -101,39 +103,17 @@ ifndef ignore-not-found
 endif
 
 .PHONY: install
-install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
+install: manifests kustomize docker-build ## Install CRDs into the K8s cluster specified in ~/.kube/config.
+	cd config/default && \
+	$(KUSTOMIZE) edit set image controller=$(IMAGE_REGISTRY)/$(CONTROLLER_IMG):$(IMAGE_TAG) && \
+	$(KUSTOMIZE) edit set image daemon=$(IMAGE_REGISTRY)/${DAEMON_IMG}:$(IMAGE_TAG) && \
+	$(KUSTOMIZE) edit set image cnimanager=$(IMAGE_REGISTRY)/${CNIMANAGER_IMG}:$(IMAGE_TAG) && \
+	$(KUSTOMIZE) edit set image cni=$(IMAGE_REGISTRY)/${CNI_IMG}:$(IMAGE_TAG)
 	$(KUSTOMIZE) build config/default | kubectl apply -f -
 
 .PHONY: uninstall
 uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/default | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
-
-.PHONY: deploy
-deploy: deploy-controller deploy-daemon
-
-.PHONY: deploy-controller
-deploy-controller: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager/manager && $(KUSTOMIZE) edit set image controller=${CONTROLLER_IMG}
-	$(KUSTOMIZE) build config/manager | kubectl apply -f -
-
-.PHONY: deploy-daemon
-deploy-daemon: manifests kustomize ## Deploy gateway daemon to the K8s cluster specified in ~/.kube/config.
-	cd config/daemon/manager && $(KUSTOMIZE) edit set image daemon=${DAEMON_IMG}
-	$(KUSTOMIZE) build config/daemon | kubectl apply -f -
-
-.PHONY: undeploy
-undeploy:
-	$(KUSTOMIZE) build config/manager | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
-	$(KUSTOMIZE) build config/daemon | kubectl delete --ignore-not-found=true -f -
-
-.PHONY: undeploy-controller
-undeploy-controller: ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	$(KUSTOMIZE) build config/manager | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
-
-.PHONY: undeploy-daemon 
-undeploy-daemon: ## Undeploy gateway daemon from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	$(KUSTOMIZE) build config/daemon | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
-
 
 ##@ Build Dependencies
 
