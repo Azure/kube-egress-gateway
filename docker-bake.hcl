@@ -1,6 +1,6 @@
 
 group "default" {
-  targets = ["daemon", "controller", "cnimanager"]
+  targets = ["daemon", "controller", "cnimanager" ,"cni"]
 }
 
 target "base" {
@@ -45,5 +45,18 @@ target "cnimanager" {
   }
   args = {
     GRPC_HEALTH_PROBE_VERSION = "v0.4.14"
+  }
+}
+target "cni-compile" {
+  inherits = ["base"]
+  args = {
+    MAIN_ENTRY = "kube-egress-cni",
+  }
+}
+target "cni" {
+  inherits = ["cni-tags"]
+  dockerfile = "cni.Dockerfile"
+  contexts = {
+    baseimg = "target:cni-compile"
   }
 }

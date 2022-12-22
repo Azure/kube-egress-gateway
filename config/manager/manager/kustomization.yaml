@@ -9,10 +9,7 @@ configMapGenerator:
   name: manager-config
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-images:
-- name: controller
-  newName: jwtty0919/kube-egress-gateway-controller
-  newTag: b33340b
+
 
 patchesStrategicMerge:
   # Mount the controller config file for loading manager configurations

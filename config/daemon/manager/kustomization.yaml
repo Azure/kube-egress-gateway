@@ -1,10 +1,5 @@
 resources:
 - manager.yaml
 
-configMapGenerator:
-- files:
-  - azure.json
-  name: daemon-cloud-config
-
 patchesStrategicMerge:
-- cloud_config_patch.yaml
+  - cloud_config_patch.yaml

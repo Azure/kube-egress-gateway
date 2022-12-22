@@ -16,4 +16,4 @@ spec:
       volumes:
       - name: daemon-config-volume
         configMap:
-          name: daemon-cloud-config
+          name: azure-cloud-config

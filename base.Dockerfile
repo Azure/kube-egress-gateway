@@ -9,17 +9,16 @@ COPY go.sum go.sum
 # cache deps before building and copying source so that we don't need to re-download as much
 # and so that source changes don't invalidate our downloaded layer
 RUN go mod download
-
-ARG MAIN_ENTRY=kube-egress-gateway-controller
-ARG TARGETARCH
-FROM builder as base
-WORKDIR /workspace
 # Copy the go source
 COPY cmd/ cmd/
 COPY api/ api/
 COPY controllers/ controllers/
 COPY pkg/ pkg/
 
+ARG MAIN_ENTRY=kube-egress-gateway-controller
+ARG TARGETARCH
+FROM builder as base
+WORKDIR /workspace
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -a -o ${MAIN_ENTRY}  ./cmd/${MAIN_ENTRY}/main.go
 
@@ -29,7 +28,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -a -o ${MAIN_ENTRY}  ./
 FROM $BASE_IMAGE
 WORKDIR /
 COPY --from=base /workspace/${MAIN_ENTRY} .
-
+USER 65535:65535
 ENTRYPOINT [${MAIN_ENTRY}]
 
 
