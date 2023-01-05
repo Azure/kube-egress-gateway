@@ -27,22 +27,17 @@ package manager
 import (
 	"context"
 	"fmt"
-
+	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	"github.com/Azure/kube-egress-gateway/controllers/consts"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
-	"github.com/Azure/kube-egress-gateway/controllers/consts"
 )
 
 var _ reconcile.Reconciler = &StaticGatewayConfigurationReconciler{}
@@ -50,13 +45,11 @@ var _ reconcile.Reconciler = &StaticGatewayConfigurationReconciler{}
 // StaticGatewayConfigurationReconciler reconciles gateway loadBalancer according to a StaticGatewayConfiguration object
 type StaticGatewayConfigurationReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
 }
 
 //+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations/finalizers,verbs=update
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch;create;update;patch;delete
@@ -64,13 +57,6 @@ type StaticGatewayConfigurationReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the StaticGatewayConfiguration object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.0/pkg/reconcile
 func (r *StaticGatewayConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
@@ -87,10 +73,10 @@ func (r *StaticGatewayConfigurationReconciler) Reconcile(ctx context.Context, re
 
 	if !gwConfig.ObjectMeta.DeletionTimestamp.IsZero() {
 		// Clean up staticGatewayConfiguration
-		return r.ensureDeleted(ctx, gwConfig)
+		return ctrl.Result{}, r.ensureDeleted(ctx, gwConfig)
 	}
 
-	return r.reconcile(ctx, gwConfig)
+	return ctrl.Result{}, r.reconcile(ctx, gwConfig)
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -106,115 +92,85 @@ func (r *StaticGatewayConfigurationReconciler) SetupWithManager(mgr ctrl.Manager
 func (r *StaticGatewayConfigurationReconciler) reconcile(
 	ctx context.Context,
 	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
-) (ctrl.Result, error) {
+) error {
 	log := log.FromContext(ctx)
 	log.Info(fmt.Sprintf("Reconciling staticGatewayConfiguration %s/%s", gwConfig.Namespace, gwConfig.Name))
 
-	if !controllerutil.ContainsFinalizer(gwConfig, consts.SGCFinalizerName) {
-		log.Info("Adding finalizer")
-		controllerutil.AddFinalizer(gwConfig, consts.SGCFinalizerName)
-		err := r.Update(ctx, gwConfig)
-		if err != nil {
-			log.Error(err, "failed to add finalizer")
+	_, err := controllerutil.CreateOrPatch(ctx, r, gwConfig, func() error {
+		// reconcile wireguard keypair
+		if err := r.reconcileWireguardKey(ctx, gwConfig); err != nil {
+			log.Error(err, "failed to reconcile wireguard key")
+			return err
 		}
-		return ctrl.Result{}, err
-	}
 
-	// Make a copy of the original gwConfig to check update
-	existing := &egressgatewayv1alpha1.StaticGatewayConfiguration{}
-	gwConfig.DeepCopyInto(existing)
-
-	// reconcile wireguard keypair
-	if err := r.reconcileWireguardKey(ctx, gwConfig); err != nil {
-		log.Error(err, "failed to reconcile wireguard key")
-		return ctrl.Result{}, err
-	}
-
-	// reconcile lbconfig
-	if err := r.reconcileGatewayLBConfig(ctx, gwConfig); err != nil {
-		log.Error(err, "failed to reconcile gateway LB configuration")
-		return ctrl.Result{}, err
-	}
-
-	// reconcile vmconfig
-	if err := r.reconcileGatewayVMConfig(ctx, gwConfig); err != nil {
-		log.Error(err, "failed to reconcile gateway VM configuration")
-		return ctrl.Result{}, err
-	}
-
-	if !equality.Semantic.DeepEqual(existing, gwConfig) {
-		log.Info(fmt.Sprintf("Updating staticGatewayConfiguration %s/%s", gwConfig.Namespace, gwConfig.Name))
-		if err := r.Status().Update(ctx, gwConfig); err != nil {
-			log.Error(err, "failed to update static gateway configuration")
+		// reconcile lbconfig
+		if err := r.reconcileGatewayLBConfig(ctx, gwConfig); err != nil {
+			log.Error(err, "failed to reconcile gateway LB configuration")
+			return err
 		}
-	}
+
+		// reconcile vmconfig
+		if err := r.reconcileGatewayVMConfig(ctx, gwConfig); err != nil {
+			log.Error(err, "failed to reconcile gateway VM configuration")
+			return err
+		}
+		return nil
+	})
 
 	log.Info("staticGatewayConfiguration reconciled")
-	return ctrl.Result{}, nil
+	return err
 }
 
 func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 	ctx context.Context,
 	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
-) (ctrl.Result, error) {
+) error {
 	log := log.FromContext(ctx)
 	log.Info(fmt.Sprintf("Reconciling staticGatewayConfiguration deletion %s/%s", gwConfig.Namespace, gwConfig.Name))
 
-	if !controllerutil.ContainsFinalizer(gwConfig, consts.SGCFinalizerName) {
-		log.Info("gwConfig does not have finalizer, no additional cleanup needed")
-		return ctrl.Result{}, nil
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      gwConfig.Name,
+			Namespace: gwConfig.Namespace,
+		},
 	}
-
-	lbConfigDeleted, vmConfigDeleted := false, false
-	subresourceKey := getSubresourceKey(gwConfig)
-	lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{}
-	if err := r.Get(ctx, *subresourceKey, lbConfig); err != nil {
+	if err := r.Delete(ctx, secret); err != nil {
 		if !apierrors.IsNotFound(err) {
-			log.Error(err, "failed to get existing gateway LB configuration")
-			return ctrl.Result{}, err
-		}
-		// lbConfig does not exist, no additional action needed
-		log.Info("LBConfig is already deleted")
-		lbConfigDeleted = true
-	} else {
-		if lbConfig.GetDeletionTimestamp().IsZero() {
-			log.Info("Deleting LBConfig")
-			if err := r.Delete(ctx, lbConfig); err != nil {
-				log.Error(err, "failed to delete existing gateway LB configuration")
-				return ctrl.Result{}, err
-			}
-		}
-	}
-	vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{}
-	if err := r.Get(ctx, *subresourceKey, vmConfig); err != nil {
-		if !apierrors.IsNotFound(err) {
-			log.Error(err, "failed to get existing gateway VM configuration")
-			return ctrl.Result{}, err
-		}
-		// vmConfig does not exist, no additional action needed
-		log.Info("VMConfig is already deleted")
-		vmConfigDeleted = true
-	} else {
-		if vmConfig.GetDeletionTimestamp().IsZero() {
-			log.Info("Deleting VMConfig")
-			if err := r.Delete(ctx, vmConfig); err != nil {
-				log.Error(err, "failed to delete existing gateway VM configuration")
-				return ctrl.Result{}, err
-			}
+			log.Error(err, "failed to delete existing gateway LB configuration")
+			return err
 		}
 	}
 
-	if lbConfigDeleted && vmConfigDeleted && controllerutil.ContainsFinalizer(gwConfig, consts.SGCFinalizerName) {
-		log.Info("Removing finalizer")
-		controllerutil.RemoveFinalizer(gwConfig, consts.SGCFinalizerName)
-		if err := r.Update(ctx, gwConfig); err != nil {
-			log.Error(err, "failed to remove finalizer")
-			return ctrl.Result{}, err
+	log.Info("Deleting gateway LB configuration")
+	lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      gwConfig.Name,
+			Namespace: gwConfig.Namespace,
+		},
+	}
+	if err := r.Delete(ctx, lbConfig); err != nil {
+		if !apierrors.IsNotFound(err) {
+			log.Error(err, "failed to delete existing gateway LB configuration")
+			return err
+		}
+	}
+
+	log.Info("Deleting VMConfig")
+	vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      gwConfig.Name,
+			Namespace: gwConfig.Namespace,
+		},
+	}
+	if err := r.Delete(ctx, vmConfig); err != nil {
+		if !apierrors.IsNotFound(err) {
+			log.Error(err, "failed to delete existing gateway VM configuration")
+			return err
 		}
 	}
 
 	log.Info("staticGatewayConfiguration deletion reconciled")
-	return ctrl.Result{}, nil
+	return nil
 }
 
 func (r *StaticGatewayConfigurationReconciler) reconcileWireguardKey(
@@ -223,88 +179,48 @@ func (r *StaticGatewayConfigurationReconciler) reconcileWireguardKey(
 ) error {
 	log := log.FromContext(ctx)
 
-	// check existence of the wireguard secret key
-	secretKey := getSubresourceKey(gwConfig)
-	secret := &corev1.Secret{}
-	if err := r.Get(ctx, *secretKey, secret); err != nil {
-		if !apierrors.IsNotFound(err) {
-			log.Error(err, "failed to get existing secret %s/%s", secretKey.Namespace, secretKey.Name)
-			return err
-		} else {
-			// secret does not exist, create a new one
-			log.Info(fmt.Sprintf("Creating new wireguard key pair for %s/%s", gwConfig.Namespace, gwConfig.Name))
-
-			// create secret
-			secret, err = r.createWireguardSecret(ctx, secretKey, gwConfig)
-			if err != nil {
-				log.Error(err, "failed to create wireguard secret")
-				return err
-			}
-		}
-	}
-
-	// Update secret reference
-	gwConfig.Status.WireguardPrivateKeySecretRef = &corev1.ObjectReference{
-		APIVersion: "v1",
-		Kind:       "Secret",
-		Name:       secret.Name,
-	}
-
-	// Update public key
-	wgPrivateKeyByte, ok := secret.Data[consts.WireguardSecretKeyName]
-	if !ok {
-		return fmt.Errorf("failed to retrieve private key from secret %s/%s", secretKey.Namespace, secretKey.Name)
-	}
-	wgPrivateKey, err := wgtypes.ParseKey(string(wgPrivateKeyByte))
-	if err != nil {
-		log.Error(err, "failed to parse private key")
-		return err
-	}
-	wgPublicKey := wgPrivateKey.PublicKey().String()
-	gwConfig.Status.WireguardPublicKey = wgPublicKey
-
-	return nil
-}
-
-func getSubresourceKey(
-	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
-) *types.NamespacedName {
-	return &types.NamespacedName{
-		Namespace: gwConfig.Namespace,
-		Name:      gwConfig.Name,
-	}
-}
-
-func (r *StaticGatewayConfigurationReconciler) createWireguardSecret(
-	ctx context.Context,
-	secretKey *types.NamespacedName,
-	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
-) (*corev1.Secret, error) {
-	// create new private key
-	wgPrivateKey, err := wgtypes.GeneratePrivateKey()
-	if err != nil {
-		return nil, err
-	}
-
-	data := map[string][]byte{
-		consts.WireguardSecretKeyName: []byte(wgPrivateKey.String()),
-	}
 	secret := &corev1.Secret{
-		Data: data,
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretKey.Name,
-			Namespace: secretKey.Namespace,
+			Name:      gwConfig.Name,
+			Namespace: gwConfig.Namespace,
 		},
 	}
-	if err := controllerutil.SetControllerReference(gwConfig, secret, r.Client.Scheme()); err != nil {
-		return nil, err
+	if _, err := controllerutil.CreateOrUpdate(ctx, r, secret, func() error {
+		// new secret
+		if secret.Data == nil {
+			secret.Data = make(map[string][]byte)
+		}
+		if _, ok := secret.Data[consts.WireguardSecretKeyName]; !ok {
+			// create new private key
+			wgPrivateKey, err := wgtypes.GeneratePrivateKey()
+			if err != nil {
+				log.Error(err, "failed to generate wireguard private key")
+				return err
+			}
+
+			secret.Data[consts.WireguardSecretKeyName] = []byte(wgPrivateKey.String())
+			secret.Data[consts.WireguardPublicKeyName] = []byte(wgPrivateKey.PublicKey().String())
+		}
+
+		//update ownerReference
+		return controllerutil.SetControllerReference(gwConfig, secret, r.Client.Scheme())
+	}); err != nil {
+		log.Error(err, "failed to reconcile wireguard keypair secret")
+		return err
+	}
+	if secret.DeletionTimestamp.IsZero() {
+		// Update secret reference
+		gwConfig.Status.WireguardPrivateKeySecretRef = &corev1.ObjectReference{
+			APIVersion: "v1",
+			Kind:       "Secret",
+			Name:       secret.Name,
+		}
+
+		// Update public key
+		gwConfig.Status.WireguardPublicKey = string(secret.Data[consts.WireguardPublicKeyName])
 	}
 
-	if err := r.Create(ctx, secret); err != nil {
-		return nil, err
-	}
-
-	return secret, nil
+	return nil
 }
 
 func (r *StaticGatewayConfigurationReconciler) reconcileGatewayLBConfig(
@@ -314,76 +230,26 @@ func (r *StaticGatewayConfigurationReconciler) reconcileGatewayLBConfig(
 	log := log.FromContext(ctx)
 
 	// check existence of the gatewayLBConfig
-	lbConfigKey := getSubresourceKey(gwConfig)
-	lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{}
-	if err := r.Get(ctx, *lbConfigKey, lbConfig); err != nil {
-		if !apierrors.IsNotFound(err) {
-			log.Error(err, "failed to get existing gateway LB configuration %s/%s", lbConfigKey.Namespace, lbConfigKey.Name)
-			return err
-		} else {
-			// lbConfig does not exist, create a new one
-			log.Info(fmt.Sprintf("Creating new gateway LB configuration for %s/%s", gwConfig.Namespace, gwConfig.Name))
-
-			// create lbConfig
-			lbConfig, err = r.createGatewayLBConfig(ctx, lbConfigKey, gwConfig)
-			if err != nil {
-				log.Error(err, "failed to create gateway LB configuration")
-				return err
-			}
-		}
+	lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      gwConfig.Name,
+			Namespace: gwConfig.Namespace,
+		},
 	}
-
-	// Update lbConfig if needed
-	if gwConfig.Spec.GatewayNodepoolName != lbConfig.Spec.GatewayNodepoolName ||
-		gwConfig.Spec.GatewayVMSSProfile != lbConfig.Spec.GatewayVMSSProfile {
-		log.Info("Updating gateway lb configuration")
+	if _, err := controllerutil.CreateOrPatch(ctx, r, lbConfig, func() error {
 		lbConfig.Spec.GatewayNodepoolName = gwConfig.Spec.GatewayNodepoolName
 		lbConfig.Spec.GatewayVMSSProfile = gwConfig.Spec.GatewayVMSSProfile
-		if err := r.Update(ctx, lbConfig); err != nil {
-			log.Error(err, "failed to update gateway lb configuration")
-			return err
-		}
-		return nil
+		return controllerutil.SetControllerReference(gwConfig, lbConfig, r.Client.Scheme())
+	}); err != nil {
+		log.Error(err, "failed to reconcile gateway lb configuration")
+		return err
 	}
-
-	// Collect status from lbConfig to staticGatewayConfiguration
-	if lbConfig.Status.FrontendIP != "" {
+	if lbConfig.DeletionTimestamp.IsZero() && lbConfig.Status != nil {
 		gwConfig.Status.WireguardServerIP = lbConfig.Status.FrontendIP
-	}
-	if lbConfig.Status.ServerPort >= consts.WireguardPortStart && lbConfig.Status.ServerPort < consts.WireguardPortEnd {
 		gwConfig.Status.WireguardServerPort = lbConfig.Status.ServerPort
 	}
 
 	return nil
-}
-
-func (r *StaticGatewayConfigurationReconciler) createGatewayLBConfig(
-	ctx context.Context,
-	lbConfigKey *types.NamespacedName,
-	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
-) (*egressgatewayv1alpha1.GatewayLBConfiguration, error) {
-	log := log.FromContext(ctx)
-	lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      lbConfigKey.Name,
-			Namespace: lbConfigKey.Namespace,
-		},
-		Spec: egressgatewayv1alpha1.GatewayLBConfigurationSpec{
-			GatewayNodepoolName: gwConfig.Spec.GatewayNodepoolName,
-			GatewayVMSSProfile:  gwConfig.Spec.GatewayVMSSProfile,
-		},
-	}
-
-	if err := controllerutil.SetControllerReference(gwConfig, lbConfig, r.Client.Scheme()); err != nil {
-		return nil, err
-	}
-
-	log.Info("Creating new gateway lb configuration")
-	if err := r.Create(ctx, lbConfig); err != nil {
-		return nil, err
-	}
-
-	return lbConfig, nil
 }
 
 func (r *StaticGatewayConfigurationReconciler) reconcileGatewayVMConfig(
@@ -393,74 +259,26 @@ func (r *StaticGatewayConfigurationReconciler) reconcileGatewayVMConfig(
 	log := log.FromContext(ctx)
 
 	// check existence of the gatewayVMConfig
-	vmConfigKey := getSubresourceKey(gwConfig)
-	vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{}
-	if err := r.Get(ctx, *vmConfigKey, vmConfig); err != nil {
-		if !apierrors.IsNotFound(err) {
-			log.Error(err, "failed to get existing gateway VM configuration %s/%s", vmConfigKey.Namespace, vmConfigKey.Name)
-			return err
-		} else {
-			// vmConfig does not exist, create a new one
-			log.Info(fmt.Sprintf("Creating new gateway VM configuration for %s/%s", gwConfig.Namespace, gwConfig.Name))
-
-			// create vmConfig
-			vmConfig, err = r.createGatewayVMConfig(ctx, vmConfigKey, gwConfig)
-			if err != nil {
-				log.Error(err, "failed to create gateway VM configuration")
-				return err
-			}
-		}
+	vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      gwConfig.Name,
+			Namespace: gwConfig.Namespace,
+		},
 	}
-
-	// Update vmConfig if needed
-	if gwConfig.Spec.GatewayNodepoolName != vmConfig.Spec.GatewayNodepoolName ||
-		gwConfig.Spec.GatewayVMSSProfile != vmConfig.Spec.GatewayVMSSProfile ||
-		gwConfig.Spec.PublicIpPrefixId != vmConfig.Spec.PublicIpPrefixId {
+	if _, err := controllerutil.CreateOrPatch(ctx, r, vmConfig, func() error {
 		vmConfig.Spec.GatewayNodepoolName = gwConfig.Spec.GatewayNodepoolName
 		vmConfig.Spec.GatewayVMSSProfile = gwConfig.Spec.GatewayVMSSProfile
 		vmConfig.Spec.PublicIpPrefixId = gwConfig.Spec.PublicIpPrefixId
-		log.Info("Updating gateway vm configuration")
-		if err := r.Update(ctx, vmConfig); err != nil {
-			log.Error(err, "failed to update gateway vm configuration")
-			return err
-		}
-		return nil
+		return controllerutil.SetControllerReference(gwConfig, vmConfig, r.Client.Scheme())
+	}); err != nil {
+		log.Error(err, "failed to reconcile gateway vm configuration")
+		return err
 	}
 
 	// Collect status from vmConfig to staticGatewayConfiguration
-	if vmConfig.Status.EgressIpPrefix != "" {
+	if vmConfig.DeletionTimestamp.IsZero() && vmConfig.Status != nil {
 		gwConfig.Status.PublicIpPrefix = vmConfig.Status.EgressIpPrefix
 	}
 
 	return nil
-}
-
-func (r *StaticGatewayConfigurationReconciler) createGatewayVMConfig(
-	ctx context.Context,
-	vmConfigKey *types.NamespacedName,
-	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
-) (*egressgatewayv1alpha1.GatewayVMConfiguration, error) {
-	log := log.FromContext(ctx)
-	vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      vmConfigKey.Name,
-			Namespace: vmConfigKey.Namespace,
-		},
-		Spec: egressgatewayv1alpha1.GatewayVMConfigurationSpec{
-			GatewayNodepoolName: gwConfig.Spec.GatewayNodepoolName,
-			GatewayVMSSProfile:  gwConfig.Spec.GatewayVMSSProfile,
-			PublicIpPrefixId:    gwConfig.Spec.PublicIpPrefixId,
-		},
-	}
-
-	if err := controllerutil.SetControllerReference(gwConfig, vmConfig, r.Client.Scheme()); err != nil {
-		return nil, err
-	}
-
-	log.Info("Creating new gateway vm configuration")
-	if err := r.Create(ctx, vmConfig); err != nil {
-		return nil, err
-	}
-
-	return vmConfig, nil
 }

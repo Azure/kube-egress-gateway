@@ -84,12 +84,6 @@ rules:
 - apiGroups:
   - egressgateway.kubernetes.azure.com
   resources:
-  - staticgatewayconfigurations/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - egressgateway.kubernetes.azure.com
-  resources:
   - staticgatewayconfigurations/status
   verbs:
   - get

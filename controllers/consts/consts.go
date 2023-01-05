@@ -24,9 +24,6 @@ SOFTWARE
 package consts
 
 const (
-	// StaticGatewayConfiguration finalizer name
-	SGCFinalizerName = "static-gateway-configuration-controller.microsoft.com"
-
 	// GatewayLBConfiguration finalizer name
 	LBConfigFinalizerName = "gateway-lb-configuration-controller.microsoft.com"
 
@@ -35,6 +32,9 @@ const (
 
 	// Key name in the wireugard private key secret
 	WireguardSecretKeyName = "WireguardPrivateKey"
+
+	// Key name in the wireugard private key secret
+	WireguardPublicKeyName = "WireguardPublicKey"
 
 	// Wireguard listening port range start, inclusive
 	WireguardPortStart int32 = 6000

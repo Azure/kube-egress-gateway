@@ -145,7 +145,9 @@ func (r *GatewayVMConfigurationReconciler) reconcile(
 			return ctrl.Result{}, err
 		}
 	}
-
+	if vmConfig.Status == nil {
+		vmConfig.Status = &egressgatewayv1alpha1.GatewayVMConfigurationStatus{}
+	}
 	vmConfig.Status.EgressIpPrefix = ipPrefix
 
 	if !equality.Semantic.DeepEqual(existing, vmConfig) {

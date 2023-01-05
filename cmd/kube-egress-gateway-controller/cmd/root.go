@@ -203,7 +203,6 @@ func startControllers(cmd *cobra.Command, args []string) {
 
 	if err = (&controllers.StaticGatewayConfigurationReconciler{
 		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "StaticGatewayConfiguration")
 		os.Exit(1)
