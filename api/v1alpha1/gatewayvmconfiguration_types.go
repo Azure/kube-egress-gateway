@@ -66,8 +66,8 @@ type GatewayVMConfiguration struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   GatewayVMConfigurationSpec   `json:"spec,omitempty"`
-	Status GatewayVMConfigurationStatus `json:"status,omitempty"`
+	Spec   GatewayVMConfigurationSpec    `json:"spec,omitempty"`
+	Status *GatewayVMConfigurationStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true

@@ -128,6 +128,9 @@ func (r *GatewayLBConfigurationReconciler) reconcile(
 		log.Error(err, "failed to reconcile LB rules")
 		return ctrl.Result{}, err
 	}
+	if lbConfig.Status == nil {
+		lbConfig.Status = &egressgatewayv1alpha1.GatewayLBConfigurationStatus{}
+	}
 	lbConfig.Status.FrontendIP = ip
 	lbConfig.Status.ServerPort = port
 

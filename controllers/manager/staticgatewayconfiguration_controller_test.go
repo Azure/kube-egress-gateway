@@ -1,8 +1,31 @@
+/*
+MIT License
+
+Copyright (c) Microsoft Corporation.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE
+*/
+
 package manager
 
 import (
 	"context"
-
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/controllers/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
@@ -14,7 +37,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
-
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -76,7 +98,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 		When("gwConfig is not found", func() {
 			BeforeEach(func() {
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
-				r = &StaticGatewayConfigurationReconciler{Client: cl, Scheme: s}
+				r = &StaticGatewayConfigurationReconciler{Client: cl}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundGWConfig)
 			})
@@ -91,7 +113,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 		When("gwConfig is newly created", func() {
 			BeforeEach(func() {
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig).Build()
-				r = &StaticGatewayConfigurationReconciler{Client: cl, Scheme: s}
+				r = &StaticGatewayConfigurationReconciler{Client: cl}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundGWConfig)
 			})
@@ -102,16 +124,12 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 				Expect(res).To(Equal(ctrl.Result{}))
 			})
 
-			It("should add finalizer", func() {
-				Expect(controllerutil.ContainsFinalizer(foundGWConfig, consts.SGCFinalizerName)).To(BeTrue())
-			})
 		})
 
-		When("gwConfig only has finalizer", func() {
+		When("gwConfig is out of sync", func() {
 			BeforeEach(func() {
-				controllerutil.AddFinalizer(gwConfig, consts.SGCFinalizerName)
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig).Build()
-				r = &StaticGatewayConfigurationReconciler{Client: cl, Scheme: s}
+				r = &StaticGatewayConfigurationReconciler{Client: cl}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundGWConfig)
 			})
@@ -179,14 +197,15 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 
 		When("secret, lbConfig, vmConfig can all be found with status", func() {
 			BeforeEach(func() {
-				controllerutil.AddFinalizer(gwConfig, consts.SGCFinalizerName)
 				secret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      testName,
-						Namespace: testNamespace,
+						Name:              testName,
+						Namespace:         testNamespace,
+						CreationTimestamp: metav1.Now(),
 					},
 					Data: map[string][]byte{
 						consts.WireguardSecretKeyName: []byte(privK),
+						consts.WireguardPublicKeyName: []byte(pubK),
 					},
 				}
 				lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{
@@ -202,7 +221,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 							PublicIpPrefixSize: 31,
 						},
 					},
-					Status: egressgatewayv1alpha1.GatewayLBConfigurationStatus{
+					Status: &egressgatewayv1alpha1.GatewayLBConfigurationStatus{
 						FrontendIP: "1.1.1.1",
 						ServerPort: 6000,
 					},
@@ -221,12 +240,12 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 						},
 						PublicIpPrefixId: "testPipPrefix",
 					},
-					Status: egressgatewayv1alpha1.GatewayVMConfigurationStatus{
+					Status: &egressgatewayv1alpha1.GatewayVMConfigurationStatus{
 						EgressIpPrefix: "1.2.3.4/31",
 					},
 				}
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig, secret, lbConfig, vmConfig).Build()
-				r = &StaticGatewayConfigurationReconciler{Client: cl, Scheme: s}
+				r = &StaticGatewayConfigurationReconciler{Client: cl}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundGWConfig)
 			})
@@ -247,7 +266,6 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 
 		When("updating gwConfig", func() {
 			BeforeEach(func() {
-				controllerutil.AddFinalizer(gwConfig, consts.SGCFinalizerName)
 				secret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      testName,
@@ -270,7 +288,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 							PublicIpPrefixSize: 30,
 						},
 					},
-					Status: egressgatewayv1alpha1.GatewayLBConfigurationStatus{
+					Status: &egressgatewayv1alpha1.GatewayLBConfigurationStatus{
 						FrontendIP: "1.1.1.1",
 						ServerPort: 6000,
 					},
@@ -289,12 +307,12 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 						},
 						PublicIpPrefixId: "testPipPrefix1",
 					},
-					Status: egressgatewayv1alpha1.GatewayVMConfigurationStatus{
+					Status: &egressgatewayv1alpha1.GatewayVMConfigurationStatus{
 						EgressIpPrefix: "1.2.3.4/31",
 					},
 				}
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig, secret, lbConfig, vmConfig).Build()
-				r = &StaticGatewayConfigurationReconciler{Client: cl, Scheme: s}
+				r = &StaticGatewayConfigurationReconciler{Client: cl}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundGWConfig)
 			})
@@ -327,7 +345,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 			BeforeEach(func() {
 				gwConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig).Build()
-				r = &StaticGatewayConfigurationReconciler{Client: cl, Scheme: s}
+				r = &StaticGatewayConfigurationReconciler{Client: cl}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundGWConfig)
 			})
@@ -342,27 +360,22 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 		When("deleting a gwConfig with finalizer but no subresources", func() {
 			BeforeEach(func() {
 				gwConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
-				controllerutil.AddFinalizer(gwConfig, consts.SGCFinalizerName)
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig).Build()
-				r = &StaticGatewayConfigurationReconciler{Client: cl, Scheme: s}
+				r = &StaticGatewayConfigurationReconciler{Client: cl}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundGWConfig)
 			})
 
-			It("shouldn't error", func() {
+			It("shouldn't return error", func() {
 				Expect(reconcileErr).To(BeNil())
 				Expect(res).To(Equal(ctrl.Result{}))
 			})
 
-			It("should delete gwConfig", func() {
-				Expect(apierrors.IsNotFound(getErr)).To(BeTrue())
-			})
 		})
 
 		When("deleting a gwConfig with finalizer and subresources", func() {
 			BeforeEach(func() {
 				gwConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
-				controllerutil.AddFinalizer(gwConfig, consts.SGCFinalizerName)
 				lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      testName,
@@ -378,7 +391,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 				controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
 				controllerutil.AddFinalizer(vmConfig, consts.VMConfigFinalizerName)
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig, lbConfig, vmConfig).Build()
-				r = &StaticGatewayConfigurationReconciler{Client: cl, Scheme: s}
+				r = &StaticGatewayConfigurationReconciler{Client: cl}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundGWConfig)
 			})
@@ -390,7 +403,6 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 
 			It("should not delete gwConfig", func() {
 				Expect(getErr).To(BeNil())
-				Expect(controllerutil.ContainsFinalizer(foundGWConfig, consts.SGCFinalizerName)).To(BeTrue())
 			})
 
 			It("should delete subresources", func() {
