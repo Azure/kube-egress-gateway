@@ -29,7 +29,7 @@ import (
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/controllers/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	corev1 "k8s.io/api/core/v1"
@@ -42,6 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"time"
 )
 
 const (
@@ -429,3 +430,87 @@ func getResource(cl client.Client, object client.Object) error {
 	err := cl.Get(context.TODO(), key, object)
 	return err
 }
+
+var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, func() {
+	var (
+		ctx       context.Context
+		cancel    context.CancelFunc
+		timeout   = time.Second * 10
+		interval  = time.Millisecond * 250
+		gwConfig  *egressgatewayv1alpha1.StaticGatewayConfiguration
+		namespace *corev1.Namespace
+	)
+	BeforeAll(func() {
+		ctx, cancel = context.WithCancel(context.TODO())
+		k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
+			Scheme: scheme.Scheme,
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		err = (&StaticGatewayConfigurationReconciler{
+			Client: k8sManager.GetClient(),
+		}).SetupWithManager(k8sManager)
+		Expect(err).ToNot(HaveOccurred())
+		go func() {
+			defer GinkgoRecover()
+			err = k8sManager.Start(ctx)
+			Expect(err).ToNot(HaveOccurred(), "failed to run manager")
+		}()
+
+		namespace = &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: testNamespace,
+			},
+		}
+		Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
+
+		gwConfig = &egressgatewayv1alpha1.StaticGatewayConfiguration{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      testName,
+				Namespace: testNamespace,
+			},
+			Spec: egressgatewayv1alpha1.StaticGatewayConfigurationSpec{
+				GatewayNodepoolName: "testgw",
+				GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
+					VMSSResourceGroup:  "vmssRG",
+					VMSSName:           "vmss",
+					PublicIpPrefixSize: 31,
+				},
+				PublicIpPrefixId: "testPipPrefix",
+			},
+		}
+		Expect(k8sClient.Create(ctx, gwConfig)).ToNot(HaveOccurred())
+	})
+	AfterAll(func() {
+		Expect(k8sClient.Delete(ctx, gwConfig)).ToNot(HaveOccurred())
+		Expect(k8sClient.Delete(ctx, namespace)).ToNot(HaveOccurred())
+
+		cancel()
+	})
+	Context("New StaticGatewayConfiguration", func() {
+		It("should create a new secret", func() {
+			secret := &corev1.Secret{}
+			Eventually(func() error {
+				return k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), secret)
+			}, timeout, interval).ShouldNot(HaveOccurred())
+			Expect(len(secret.Data)).To(Equal(2))
+			Expect(secret.Data[consts.WireguardSecretKeyName]).ToNot(BeNil())
+		})
+
+		It("should create a new vmconfig", func() {
+			vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{}
+			Eventually(func() error {
+				return k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), vmConfig)
+			}, timeout, interval).ShouldNot(HaveOccurred())
+			Expect(vmConfig.Spec.VMSSName).To(BeEquivalentTo("vmss"))
+		})
+
+		It("should create a new lbconfig", func() {
+			lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{}
+			Eventually(func() error {
+				return k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), lbConfig)
+			}, timeout, interval).ShouldNot(HaveOccurred())
+			Expect(lbConfig.Spec.VMSSName).To(BeEquivalentTo("vmss"))
+		})
+	})
+})
