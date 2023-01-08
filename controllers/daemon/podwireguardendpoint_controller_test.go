@@ -55,8 +55,9 @@ import (
 )
 
 const (
-	pubK2  = "xUgp0rzI2lqa78w9vRTfCTx8UQzZacu4WXXKw86Oy0c="
-	privK2 = "OGDxE0+PqdflLqQxdlHigfC7ZKtEh2VMxIElq4RpZWc="
+	pubK2        = "xUgp0rzI2lqa78w9vRTfCTx8UQzZacu4WXXKw86Oy0c="
+	privK2       = "OGDxE0+PqdflLqQxdlHigfC7ZKtEh2VMxIElq4RpZWc="
+	podIPAddrNet = "10.0.0.25/32"
 )
 
 var _ = Describe("Daemon PodWireguardEndpoint controller unit tests", func() {
@@ -89,7 +90,7 @@ var _ = Describe("Daemon PodWireguardEndpoint controller unit tests", func() {
 			},
 			Spec: egressgatewayv1alpha1.PodWireguardEndpointSpec{
 				StaticGatewayConfiguration: testName,
-				PodIpAddress:               "10.0.0.25",
+				PodIpAddress:               podIPAddrNet,
 				PodWireguardPublicKey:      pubK,
 			},
 		}
@@ -210,7 +211,7 @@ var _ = Describe("Daemon PodWireguardEndpoint controller unit tests", func() {
 						PublicKey:         pk,
 						ReplaceAllowedIPs: true,
 						AllowedIPs: []net.IPNet{
-							*getIPNet("10.0.0.25/32"),
+							*getIPNet(podIPAddrNet),
 						},
 					},
 				},
@@ -237,7 +238,7 @@ var _ = Describe("Daemon PodWireguardEndpoint controller unit tests", func() {
 							PublicKey:         pk,
 							ReplaceAllowedIPs: true,
 							AllowedIPs: []net.IPNet{
-								*getIPNet("10.0.0.25/32"),
+								*getIPNet(podIPAddrNet),
 							},
 						},
 					},
@@ -263,7 +264,7 @@ var _ = Describe("Daemon PodWireguardEndpoint controller unit tests", func() {
 				wg0 := &netlink.Wireguard{}
 				gomock.InOrder(
 					mnl.EXPECT().LinkByName("wg0").Return(wg0, nil),
-					mnl.EXPECT().RouteReplace(&netlink.Route{LinkIndex: 0, Scope: netlink.SCOPE_LINK, Dst: getIPNet("10.0.0.25/32")}).Return(fmt.Errorf("failed")),
+					mnl.EXPECT().RouteReplace(&netlink.Route{LinkIndex: 0, Scope: netlink.SCOPE_LINK, Dst: getIPNet(podIPAddrNet)}).Return(fmt.Errorf("failed")),
 				)
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(errors.Unwrap(errors.Unwrap(reconcileErr))).To(Equal(fmt.Errorf("failed")))
@@ -274,7 +275,7 @@ var _ = Describe("Daemon PodWireguardEndpoint controller unit tests", func() {
 				wg0 := &netlink.Wireguard{}
 				gomock.InOrder(
 					mnl.EXPECT().LinkByName("wg0").Return(wg0, nil),
-					mnl.EXPECT().RouteReplace(&netlink.Route{LinkIndex: 0, Scope: netlink.SCOPE_LINK, Dst: getIPNet("10.0.0.25/32")}).Return(nil),
+					mnl.EXPECT().RouteReplace(&netlink.Route{LinkIndex: 0, Scope: netlink.SCOPE_LINK, Dst: getIPNet(podIPAddrNet)}).Return(nil),
 				)
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(BeNil())
