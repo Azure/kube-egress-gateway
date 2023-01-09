@@ -29,6 +29,7 @@ import (
 	"fmt"
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/controllers/consts"
+	networkattachmentv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -86,6 +87,7 @@ func (r *StaticGatewayConfigurationReconciler) SetupWithManager(mgr ctrl.Manager
 		Owns(&corev1.Secret{}).
 		Owns(&egressgatewayv1alpha1.GatewayLBConfiguration{}).
 		Owns(&egressgatewayv1alpha1.GatewayVMConfiguration{}).
+		Owns(&networkattachmentv1.NetworkAttachmentDefinition{}).
 		Complete(r)
 }
 
@@ -114,6 +116,10 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 			log.Error(err, "failed to reconcile gateway VM configuration")
 			return err
 		}
+		if err := r.reconcileNetworkAttachement(ctx, gwConfig); err != nil {
+			log.Error(err, "failed to reconcile networkattachment")
+			return err
+		}
 		return nil
 	})
 
@@ -128,6 +134,7 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 	log := log.FromContext(ctx)
 	log.Info(fmt.Sprintf("Reconciling staticGatewayConfiguration deletion %s/%s", gwConfig.Namespace, gwConfig.Name))
 
+	log.Info("Deleting wireguard key")
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      gwConfig.Name,
@@ -163,6 +170,20 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 		},
 	}
 	if err := r.Delete(ctx, vmConfig); err != nil {
+		if !apierrors.IsNotFound(err) {
+			log.Error(err, "failed to delete existing gateway VM configuration")
+			return err
+		}
+	}
+
+	log.Info("Deleting networkattachement")
+	networkattachment := &networkattachmentv1.NetworkAttachmentDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      gwConfig.Name,
+			Namespace: gwConfig.Namespace,
+		},
+	}
+	if err := r.Delete(ctx, networkattachment); err != nil {
 		if !apierrors.IsNotFound(err) {
 			log.Error(err, "failed to delete existing gateway VM configuration")
 			return err
@@ -280,5 +301,31 @@ func (r *StaticGatewayConfigurationReconciler) reconcileGatewayVMConfig(
 		gwConfig.Status.PublicIpPrefix = vmConfig.Status.EgressIpPrefix
 	}
 
+	return nil
+}
+
+func (r *StaticGatewayConfigurationReconciler) reconcileNetworkAttachement(ctx context.Context, gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) error {
+	log := log.FromContext(ctx)
+
+	networkattachement := &networkattachmentv1.NetworkAttachmentDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      gwConfig.Name,
+			Namespace: gwConfig.Namespace,
+		},
+	}
+	if _, err := controllerutil.CreateOrUpdate(ctx, r, networkattachement, func() error {
+		networkattachement.Spec.Config = fmt.Sprintf(`'{
+			"cniVersion": "0.4.0",
+			"type": "kube-egress-cni",
+			"ipam": {
+				"type": "kube-egress-cni-ipam"
+			},
+			"gatewayName":"%s"
+		}'`, gwConfig.Name)
+		return controllerutil.SetControllerReference(gwConfig, networkattachement, r.Client.Scheme())
+	}); err != nil {
+		log.Error(err, "failed to reconcile networkattachementconfiguration")
+		return err
+	}
 	return nil
 }

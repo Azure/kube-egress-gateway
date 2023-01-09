@@ -29,6 +29,7 @@ import (
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/controllers/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
+	networkattachmentv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
@@ -482,9 +483,7 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 		Expect(k8sClient.Create(ctx, gwConfig)).ToNot(HaveOccurred())
 	})
 	AfterAll(func() {
-		Expect(k8sClient.Delete(ctx, gwConfig)).ToNot(HaveOccurred())
 		Expect(k8sClient.Delete(ctx, namespace)).ToNot(HaveOccurred())
-
 		cancel()
 	})
 	Context("New StaticGatewayConfiguration", func() {
@@ -511,6 +510,82 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 				return k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), lbConfig)
 			}, timeout, interval).ShouldNot(HaveOccurred())
 			Expect(lbConfig.Spec.VMSSName).To(BeEquivalentTo("vmss"))
+		})
+		It("should create a new networkattachment config", func() {
+			networkattachment := &networkattachmentv1.NetworkAttachmentDefinition{}
+			Eventually(func() error {
+				return k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), networkattachment)
+			}, timeout, interval).ShouldNot(HaveOccurred())
+			Expect(len(networkattachment.Spec.Config) > 0).To(BeTrue())
+		})
+	})
+	Context("New StaticGatewayConfiguration", func() {
+		It("should create a new secret", func() {
+			secret := &corev1.Secret{}
+			Eventually(func() error {
+				return k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), secret)
+			}, timeout, interval).ShouldNot(HaveOccurred())
+			Expect(len(secret.Data)).To(Equal(2))
+			Expect(secret.Data[consts.WireguardSecretKeyName]).ToNot(BeNil())
+		})
+
+		It("should create a new vmconfig", func() {
+			vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{}
+			Eventually(func() error {
+				return k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), vmConfig)
+			}, timeout, interval).ShouldNot(HaveOccurred())
+			Expect(vmConfig.Spec.VMSSName).To(BeEquivalentTo("vmss"))
+		})
+
+		It("should create a new lbconfig", func() {
+			lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{}
+			Eventually(func() error {
+				return k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), lbConfig)
+			}, timeout, interval).ShouldNot(HaveOccurred())
+			Expect(lbConfig.Spec.VMSSName).To(BeEquivalentTo("vmss"))
+		})
+		It("should create a new networkattachment config", func() {
+			networkattachment := &networkattachmentv1.NetworkAttachmentDefinition{}
+			Eventually(func() error {
+				return k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), networkattachment)
+			}, timeout, interval).ShouldNot(HaveOccurred())
+			Expect(len(networkattachment.Spec.Config) > 0).To(BeTrue())
+		})
+	})
+	Context(" gateway profile config is deleted", func() {
+		BeforeAll(func() {
+			Expect(k8sClient.Delete(ctx, gwConfig, client.PropagationPolicy(metav1.DeletePropagationForeground))).ToNot(HaveOccurred())
+		})
+		It("should delete the new secret", func() {
+			secret := &corev1.Secret{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: testName}, secret)
+				if err == nil {
+					return false
+				}
+				GinkgoWriter.Println(err.Error())
+				return apierrors.IsNotFound(err)
+			}, timeout, interval).Should(BeTrue())
+		})
+
+		It("should delete a new vmconfig", func() {
+			vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{}
+			Eventually(func() bool {
+				return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: testName}, vmConfig))
+			}, timeout, interval).Should(BeTrue())
+		})
+
+		It("should delete a new lbconfig", func() {
+			lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{}
+			Eventually(func() bool {
+				return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: testName}, lbConfig))
+			}, timeout, interval).Should(BeTrue())
+		})
+		It("should delete a new networkattachment config", func() {
+			networkattachment := &networkattachmentv1.NetworkAttachmentDefinition{}
+			Eventually(func() bool {
+				return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: testName}, networkattachment))
+			}, timeout, interval).Should(BeTrue())
 		})
 	})
 })
