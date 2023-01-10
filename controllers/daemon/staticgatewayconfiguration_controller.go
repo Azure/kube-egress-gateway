@@ -34,8 +34,8 @@ import (
 	"strings"
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
-	"github.com/Azure/kube-egress-gateway/controllers/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
+	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/imds"
 	"github.com/Azure/kube-egress-gateway/pkg/iptableswrapper"
 	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper"

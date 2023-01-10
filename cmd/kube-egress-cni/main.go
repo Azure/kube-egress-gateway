@@ -70,7 +70,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// exchange public key with daemon
 	conn, err := grpc.DialContext(context.Background(),
-		consts.CNI_SOCKET_PATH,
+		consts.CNISocketPath,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithStreamInterceptor(grpc_retry.StreamClientInterceptor()),
 		grpc.WithUnaryInterceptor(grpc_retry.UnaryClientInterceptor()),
@@ -192,7 +192,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 	conn, err := grpc.DialContext(context.Background(),
-		consts.CNI_SOCKET_PATH,
+		consts.CNISocketPath,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithStreamInterceptor(grpc_retry.StreamClientInterceptor()),
 		grpc.WithUnaryInterceptor(grpc_retry.UnaryClientInterceptor()),

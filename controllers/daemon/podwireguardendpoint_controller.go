@@ -31,7 +31,7 @@ import (
 	"os"
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
-	"github.com/Azure/kube-egress-gateway/controllers/consts"
+	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper"
 	"github.com/Azure/kube-egress-gateway/pkg/netnswrapper"
 	"github.com/Azure/kube-egress-gateway/pkg/wgctrlwrapper"
