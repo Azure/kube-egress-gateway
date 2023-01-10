@@ -23,10 +23,10 @@ import (
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
-	"github.com/Azure/kube-egress-gateway/controllers/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
+	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/imds"
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"

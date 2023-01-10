@@ -54,7 +54,7 @@ import (
 
 const (
 	protocol = "unix"
-	sockAddr = consts.CNI_SOCKET_PATH
+	sockAddr = consts.CNISocketPath
 )
 
 // serveCmd represents the serve command
