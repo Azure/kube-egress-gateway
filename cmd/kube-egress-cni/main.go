@@ -51,7 +51,7 @@ import (
 )
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString("kube-egress-cni"))
+	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString(consts.KubeEgressCNIName))
 }
 
 func cmdAdd(args *skel.CmdArgs) error {

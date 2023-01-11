@@ -10,10 +10,8 @@ import (
 type CNIConfig struct {
 	types.NetConf
 
-	ExcludedCIDRs      []string  `json:"excludedCIDRs"`
-	GatewayName        string    `json:"gatewayName"`
-	KeepAliveInSeconds int       `json:"keepAliveInSeconds"`
-	K8sInfo            K8sConfig `json:"-"`
+	ExcludedCIDRs []string `json:"excludedCIDRs"`
+	GatewayName   string   `json:"gatewayName"`
 }
 
 func ParseCNIConfig(stdin []byte) (*CNIConfig, error) {

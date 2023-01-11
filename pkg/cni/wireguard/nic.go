@@ -79,11 +79,6 @@ func WithWireGuardNic(containerID string, podNSPath string, ifName string, ipWra
 			if err = netlink.LinkSetUp(wgLink); err != nil {
 				return fmt.Errorf("failed to set %q up: %v", ifName, err)
 			}
-			// Retrieve link again to get up-to-date name and attributes
-			wgLink, err = netlink.LinkByName(ifName)
-			if err != nil {
-				return fmt.Errorf("failed to find %q: %v", ifName, err)
-			}
 			return nil
 		})
 		if err != nil {
@@ -131,18 +126,22 @@ func WithWireGuardNic(containerID string, podNSPath string, ifName string, ipWra
 			return errors.New("ipam result is empty")
 		}
 
-		ipamResult.Interfaces = []*current.Interface{
-			{
-				Mac:     wgLink.Attrs().HardwareAddr.String(),
-				Name:    wgLink.Attrs().Name,
-				Sandbox: podNSPath,
-			},
-		}
-		for _, item := range ipamResult.IPs {
-			item.Interface = current.Int(0)
-		}
-
 		err = podNetNS.Do(func(nn ns.NetNS) error {
+			// Retrieve link again to get up-to-date name and attributes
+			wgLink, err = netlink.LinkByName(ifName)
+			if err != nil {
+				return fmt.Errorf("failed to find %q: %v", ifName, err)
+			}
+			ipamResult.Interfaces = []*current.Interface{
+				{
+					Mac:     wgLink.Attrs().HardwareAddr.String(),
+					Name:    wgLink.Attrs().Name,
+					Sandbox: podNSPath,
+				},
+			}
+			for _, item := range ipamResult.IPs {
+				item.Interface = current.Int(0)
+			}
 			return cniipam.ConfigureIface(ifName, ipamResult)
 		})
 		if err != nil {

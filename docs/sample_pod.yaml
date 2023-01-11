@@ -3,7 +3,7 @@ kind: Pod
 metadata:
   name: samplepod
   annotations:
-    k8s.v1.cni.cncf.io/networks: whereabouts-conf@wg0
+    k8s.v1.cni.cncf.io/networks: staticgatewayconfiguration-sample@wg0
 spec:
   containers:
     - name: samplepod

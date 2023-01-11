@@ -21,3 +21,7 @@ target "cnimanager-tags" {
 target "cni-tags" {
     tags = ["${IMAGE_REGISTRY}/kube-egress-gateway-cni:${TAG}"]
 }
+
+target "cni-ipam-tags" {
+    tags = ["${IMAGE_REGISTRY}/kube-egress-gateway-cni-ipam:${TAG}"]
+}

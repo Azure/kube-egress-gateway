@@ -24,6 +24,13 @@ spec:
               name: cni-bin
           securityContext:
             privileged: true
+        - name: cni-ipam-install
+          image: cni-ipam:latest
+          volumeMounts:
+            - mountPath: /opt/cni/bin
+              name: cni-bin
+          securityContext:
+            privileged: true
       containers:
         - command:
             - /kube-egress-gateway-cnimanager

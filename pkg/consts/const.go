@@ -78,3 +78,8 @@ const (
 const (
 	CNISocketPath = "/var/run/egressgateway.sock"
 )
+
+const (
+	KubeEgressCNIName     = "kube-egress-cni"
+	KubeEgressIPAMCNIName = "kube-egress-cni-ipam"
+)
