@@ -1,6 +1,6 @@
 
 group "default" {
-  targets = ["daemon", "controller", "cnimanager", "cni"]
+  targets = ["daemon", "controller", "cnimanager", "cni", "cni-ipam"]
 }
 
 target "base" {
@@ -57,5 +57,19 @@ target "cni" {
   dockerfile = "cni.Dockerfile"
   contexts = {
     baseimg = "target:cni-compile"
+  }
+}
+
+target "cni-ipam-compile" {
+  inherits = ["base"]
+  args = {
+    MAIN_ENTRY = "kube-egress-cni-ipam",
+  }
+}
+target "cni-ipam" {
+  inherits = ["cni-ipam-tags"]
+  dockerfile = "cni.Dockerfile"
+  contexts = {
+    baseimg = "target:cni-ipam-compile"
   }
 }

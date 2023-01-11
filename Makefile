@@ -4,6 +4,7 @@ CONTROLLER_IMG ?= kube-egress-gateway-controller
 DAEMON_IMG ?= kube-egress-gateway-daemon
 CNIMANAGER_IMG ?= kube-egress-gateway-cnimanager
 CNI_IMG ?= kube-egress-gateway-cni
+CNI_IPAM_IMG ?= kube-egress-gateway-cni-ipam
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.25.0
 
@@ -83,6 +84,7 @@ build: generate fmt vet ## Build manager binary.
 	CGO_ENABLED=0 go build -o bin/manager ./cmd/kube-egress-gateway-controller/main.go
 	CGO_ENABLED=0 go build -o bin/daemon ./cmd/kube-egress-gateway-daemon/main.go
 	CGO_ENABLED=0 go build -o bin/cni ./cmd/kube-egress-cni/main.go
+	CGO_ENABLED=0 go build -o bin/cni-ipam ./cmd/kube-egress-cni-ipam/main.go
 	CGO_ENABLED=0 go build -o bin/cnimanager ./cmd/kube-egress-gateway-cnimanager/main.go
 
 AZURE_CONFIG_FILE ?= ./tests/deploy/azure.json
@@ -110,7 +112,8 @@ install: manifests kustomize docker-build ## Install CRDs into the K8s cluster s
 	$(KUSTOMIZE) edit set image controller=$(IMAGE_REGISTRY)/$(CONTROLLER_IMG):$(IMAGE_TAG) && \
 	$(KUSTOMIZE) edit set image daemon=$(IMAGE_REGISTRY)/${DAEMON_IMG}:$(IMAGE_TAG) && \
 	$(KUSTOMIZE) edit set image cnimanager=$(IMAGE_REGISTRY)/${CNIMANAGER_IMG}:$(IMAGE_TAG) && \
-	$(KUSTOMIZE) edit set image cni=$(IMAGE_REGISTRY)/${CNI_IMG}:$(IMAGE_TAG)
+	$(KUSTOMIZE) edit set image cni=$(IMAGE_REGISTRY)/${CNI_IMG}:$(IMAGE_TAG) && \
+	$(KUSTOMIZE) edit set image cni-ipam=$(IMAGE_REGISTRY)/${CNI_IPAM_IMG}:$(IMAGE_TAG)
 	$(KUSTOMIZE) build config/default | kubectl apply -f -
 
 .PHONY: uninstall

@@ -26,9 +26,13 @@ package manager
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	"github.com/Azure/kube-egress-gateway/pkg/cni/conf"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
+	"github.com/containernetworking/cni/pkg/types"
+	type100 "github.com/containernetworking/cni/pkg/types/100"
 	networkattachmentv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	corev1 "k8s.io/api/core/v1"
@@ -48,13 +52,14 @@ type StaticGatewayConfigurationReconciler struct {
 	client.Client
 }
 
-//+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=k8s.cni.cncf.io,resources=network-attachment-definitions,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -314,14 +319,21 @@ func (r *StaticGatewayConfigurationReconciler) reconcileNetworkAttachement(ctx c
 		},
 	}
 	if _, err := controllerutil.CreateOrUpdate(ctx, r, networkattachement, func() error {
-		networkattachement.Spec.Config = fmt.Sprintf(`'{
-			"cniVersion": "0.4.0",
-			"type": "kube-egress-cni",
-			"ipam": {
-				"type": "kube-egress-cni-ipam"
+		cniconfig := conf.CNIConfig{
+			NetConf: types.NetConf{
+				CNIVersion: type100.ImplementedSpecVersion,
+				Type:       consts.KubeEgressCNIName,
+				IPAM: types.IPAM{
+					Type: consts.KubeEgressIPAMCNIName,
+				},
 			},
-			"gatewayName":"%s"
-		}'`, gwConfig.Name)
+			GatewayName: gwConfig.Name,
+		}
+		if rawConfig, err := json.Marshal(cniconfig); err != nil {
+			return err
+		} else {
+			networkattachement.Spec.Config = string(rawConfig)
+		}
 		return controllerutil.SetControllerReference(gwConfig, networkattachement, r.Client.Scheme())
 	}); err != nil {
 		log.Error(err, "failed to reconcile networkattachementconfiguration")

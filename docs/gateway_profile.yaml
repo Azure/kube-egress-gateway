@@ -1,4 +1,10 @@
 apiVersion: egressgateway.kubernetes.azure.com/v1alpha1
 kind: StaticGatewayConfiguration
 metadata:
-  name: testgw
+  name: staticgatewayconfiguration-sample
+spec:
+  gatewayNodepoolName: gwnodepool
+  gatewayVmssProfile:
+    vmssResourceGroup: MC_gwnodetest_test_westus2
+    vmssName: aks-gwnodepool-####-vmss
+    publicIpPrefixSize: 31
