@@ -56,6 +56,9 @@ func (s *NicService) NicAdd(ctx context.Context, in *cniprotocol.NicAddRequest) 
 	if err := s.k8sClient.Get(ctx, client.ObjectKey{Name: in.GetGatewayName(), Namespace: in.GetPodConfig().GetPodNamespace()}, gwConfig); err != nil {
 		return nil, status.Errorf(codes.Unknown, "failed to retrieve staticgatewayconfiguration %s/%s: %s", in.GetPodConfig().GetPodNamespace(), in.GetPodConfig().GetPodName(), err)
 	}
+	if len(gwConfig.Status.WireguardServerIP) == 0 {
+		return nil, status.Errorf(codes.FailedPrecondition, "the gateway is not ready yet.")
+	}
 	podEndpoint := &current.PodWireguardEndpoint{ObjectMeta: metav1.ObjectMeta{Name: in.GetPodConfig().GetPodName(), Namespace: in.GetPodConfig().GetPodNamespace()}}
 	if _, err := controllerutil.CreateOrUpdate(ctx, s.k8sClient, podEndpoint, func() error {
 		if err := controllerutil.SetControllerReference(gwConfig, podEndpoint, s.k8sClient.Scheme()); err != nil {
