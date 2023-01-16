@@ -79,6 +79,34 @@ var _ = Describe("Server", func() {
 		fakeClient = fakeClientBuilder.Build()
 		service = cnimanager.NewNicService(fakeClient)
 	})
+	Context("when gateway is not ready", func() {
+		BeforeEach(func() {
+			gatewayProfile = &current.StaticGatewayConfiguration{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "tgw1",
+					Namespace: "default",
+				},
+				Status: current.StaticGatewayConfigurationStatus{
+					GatewayWireguardProfile: current.GatewayWireguardProfile{
+						WireguardPublicKey: "somerandompublickey",
+					},
+				},
+			}
+			fakeClientBuilder := fake.NewClientBuilder()
+			apischeme := runtime.NewScheme()
+			utilruntime.Must(current.AddToScheme(apischeme))
+			fakeClientBuilder.WithScheme(apischeme)
+			fakeClientBuilder.WithRuntimeObjects(gatewayProfile)
+			fakeClient = fakeClientBuilder.Build()
+			service = cnimanager.NewNicService(fakeClient)
+		})
+		When("when gateway is not ready", func() {
+			It("should return error", func() {
+				_, err := service.NicAdd(context.Background(), nicAddInputRequest)
+				Expect(err).To(HaveOccurred())
+			})
+		})
+	})
 	Context("when nic is created", func() {
 		When("gateway is found", func() {
 			It("should fetch gateway and create pod endpoint", func() {
