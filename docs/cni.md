@@ -13,7 +13,7 @@ Nic is created in init namespace and moved to container ns
 This nic is attached as secondary nic so this plugin should be used with multus / danm /genie meta cni plugin
 ### IPAM
 
-ipam is delegated to [azure vnet ipam](https://github.com/Azure/azure-container-networking/blob/master/docs/cni.md)/[whereabounts](https://github.com/k8snetworkplumbingwg/whereabouts)
+ip address is the same as the ipv6 one in eth0.
 
 ### Routing
 
@@ -39,7 +39,7 @@ To be discussed.
       {
         "type": "kube-egress-cni",
         "ipam": {
-          "type": "whereabouts"
+          "type": "kube-egress-cni-ipam"
         }
       }
     ]

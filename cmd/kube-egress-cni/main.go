@@ -170,7 +170,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 				},
 			})
 		})
-
 	})
 	if err != nil {
 		return err

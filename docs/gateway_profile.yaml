@@ -1,7 +1,7 @@
 apiVersion: egressgateway.kubernetes.azure.com/v1alpha1
 kind: StaticGatewayConfiguration
 metadata:
-  name: staticgatewayconfiguration-sample
+  name: sgw1
 spec:
   gatewayNodepoolName: gwnodepool
   gatewayVmssProfile:

@@ -26,13 +26,9 @@ package manager
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
-	"github.com/Azure/kube-egress-gateway/pkg/cni/conf"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
-	"github.com/containernetworking/cni/pkg/types"
-	type100 "github.com/containernetworking/cni/pkg/types/100"
 	networkattachmentv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	corev1 "k8s.io/api/core/v1"
@@ -121,8 +117,8 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 			log.Error(err, "failed to reconcile gateway VM configuration")
 			return err
 		}
-		if err := r.reconcileNetworkAttachement(ctx, gwConfig); err != nil {
-			log.Error(err, "failed to reconcile networkattachment")
+		if err := r.reconcileCNINicConfig(ctx, gwConfig); err != nil {
+			log.Error(err, "failed to reconcile nic networkattachment")
 			return err
 		}
 		return nil
@@ -181,16 +177,16 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 		}
 	}
 
-	log.Info("Deleting networkattachement")
+	log.Info("Deleting nic networkattachement")
 	networkattachment := &networkattachmentv1.NetworkAttachmentDefinition{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      gwConfig.Name,
+			Name:      getCNINicConfig(gwConfig.Name),
 			Namespace: gwConfig.Namespace,
 		},
 	}
 	if err := r.Delete(ctx, networkattachment); err != nil {
 		if !apierrors.IsNotFound(err) {
-			log.Error(err, "failed to delete existing gateway VM configuration")
+			log.Error(err, "failed to delete existing egress cni configuration")
 			return err
 		}
 	}
@@ -309,35 +305,45 @@ func (r *StaticGatewayConfigurationReconciler) reconcileGatewayVMConfig(
 	return nil
 }
 
-func (r *StaticGatewayConfigurationReconciler) reconcileNetworkAttachement(ctx context.Context, gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) error {
+func (r *StaticGatewayConfigurationReconciler) reconcileCNINicConfig(ctx context.Context, gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) error {
 	log := log.FromContext(ctx)
 
 	networkattachement := &networkattachmentv1.NetworkAttachmentDefinition{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      gwConfig.Name,
+			Name:      getCNINicConfig(gwConfig.Name),
 			Namespace: gwConfig.Namespace,
 		},
 	}
 	if _, err := controllerutil.CreateOrUpdate(ctx, r, networkattachement, func() error {
-		cniconfig := conf.CNIConfig{
-			NetConf: types.NetConf{
-				CNIVersion: type100.ImplementedSpecVersion,
-				Type:       consts.KubeEgressCNIName,
-				IPAM: types.IPAM{
-					Type: consts.KubeEgressIPAMCNIName,
-				},
-			},
-			GatewayName: gwConfig.Name,
-		}
-		if rawConfig, err := json.Marshal(cniconfig); err != nil {
-			return err
-		} else {
-			networkattachement.Spec.Config = string(rawConfig)
-		}
+		cniconfig := fmt.Sprintf(
+			`{
+				"cniVersion": "1.0.0",
+				"name": "mynet",
+				"plugins": [
+					{
+						"type": "kube-egress-cni",
+						"ipam": {
+							"type": "kube-egress-cni-ipam"
+						},
+						"gatewayName": "%s"
+					},
+					{
+						  "type": "tuning",
+						  "sysctl": {
+								  "net.ipv4.conf.all.arp_filter": "2"
+						  }
+					}
+				]
+			}`, gwConfig.Name)
+		networkattachement.Spec.Config = cniconfig
 		return controllerutil.SetControllerReference(gwConfig, networkattachement, r.Client.Scheme())
 	}); err != nil {
-		log.Error(err, "failed to reconcile networkattachementconfiguration")
+		log.Error(err, "failed to reconcile nic networkattachementconfiguration")
 		return err
 	}
 	return nil
+}
+
+func getCNINicConfig(name string) string {
+	return name + "-cni"
 }
