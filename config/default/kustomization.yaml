@@ -24,17 +24,17 @@ resources:
 - ../cnimanager
 images:
 - name: cni
-  newName: local/kube-egress-gateway-cni
-  newTag: 6f809db
+  newName: shafantest.azurecr.io/kube-egress-gateway-cni
+  newTag: e9a583c
 - name: cni-ipam
-  newName: local/kube-egress-gateway-cni-ipam
-  newTag: 6f809db
+  newName: shafantest.azurecr.io/kube-egress-gateway-cni-ipam
+  newTag: e9a583c
 - name: cnimanager
-  newName: local/kube-egress-gateway-cnimanager
-  newTag: 6f809db
+  newName: shafantest.azurecr.io/kube-egress-gateway-cnimanager
+  newTag: e9a583c
 - name: controller
-  newName: local/kube-egress-gateway-controller
-  newTag: 6f809db
+  newName: shafantest.azurecr.io/kube-egress-gateway-controller
+  newTag: e9a583c
 - name: daemon
-  newName: local/kube-egress-gateway-daemon
-  newTag: 6f809db
+  newName: shafantest.azurecr.io/kube-egress-gateway-daemon
+  newTag: e9a583c
