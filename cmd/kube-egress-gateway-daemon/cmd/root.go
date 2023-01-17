@@ -146,6 +146,7 @@ func startControllers(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	cloudConfig.TrimSpace()
 	if err := cloudConfig.Validate(); err != nil {
 		setupLog.Error(err, "cloud configuration is invalid")
 		os.Exit(1)
