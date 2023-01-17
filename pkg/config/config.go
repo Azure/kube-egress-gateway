@@ -1,6 +1,9 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type CloudConfig struct {
 	// azure cloud
@@ -27,6 +30,20 @@ type CloudConfig struct {
 	LoadBalancerName string
 	// resource group where the gateway ILB belongs
 	LoadBalancerResourceGroup string
+}
+
+func (cfg *CloudConfig) TrimSpace() {
+	cfg.Cloud = strings.TrimSpace(cfg.Cloud)
+	cfg.Location = strings.TrimSpace(cfg.Location)
+	cfg.SubscriptionID = strings.TrimSpace(cfg.SubscriptionID)
+	cfg.TenantID = strings.TrimSpace(cfg.TenantID)
+	cfg.UserAssignedIdentityID = strings.TrimSpace(cfg.UserAssignedIdentityID)
+	cfg.AADClientID = strings.TrimSpace(cfg.AADClientID)
+	cfg.AADClientSecret = strings.TrimSpace(cfg.AADClientSecret)
+	cfg.UserAgent = strings.TrimSpace(cfg.UserAgent)
+	cfg.ResourceGroup = strings.TrimSpace(cfg.ResourceGroup)
+	cfg.LoadBalancerName = strings.TrimSpace(cfg.LoadBalancerName)
+	cfg.LoadBalancerResourceGroup = strings.TrimSpace(cfg.LoadBalancerResourceGroup)
 }
 
 func (cfg *CloudConfig) Validate() error {

@@ -4,6 +4,44 @@ import (
 	"testing"
 )
 
+func TestTrimSpace(t *testing.T) {
+	t.Run("test spaces are trimmed", func(t *testing.T) {
+		config := CloudConfig{
+			Cloud:                     "  test  \n",
+			Location:                  "  test  \n",
+			SubscriptionID:            "  test  \n",
+			TenantID:                  "  test  \t \n",
+			UserAgent:                 "  test  \n",
+			ResourceGroup:             "\r\n  test  \n",
+			LoadBalancerName:          "  test  \r\n",
+			LoadBalancerResourceGroup: "  test  \n",
+			UseUserAssignedIdentity:   true,
+			UserAssignedIdentityID:    "  test  \n",
+			AADClientID:               "\n  test  \n",
+			AADClientSecret:           "  test  \n",
+		}
+
+		expected := CloudConfig{
+			Cloud:                     "test",
+			Location:                  "test",
+			SubscriptionID:            "test",
+			TenantID:                  "test",
+			UserAgent:                 "test",
+			ResourceGroup:             "test",
+			LoadBalancerName:          "test",
+			LoadBalancerResourceGroup: "test",
+			UseUserAssignedIdentity:   true,
+			UserAssignedIdentityID:    "test",
+			AADClientID:               "test",
+			AADClientSecret:           "test",
+		}
+		config.TrimSpace()
+		if config != expected {
+			t.Fatalf("failed to test TrimSpace: expect config fields are trimmed, got: %v", config)
+		}
+	})
+}
+
 func TestValidate(t *testing.T) {
 	tests := map[string]struct {
 		Cloud                   string
