@@ -42,8 +42,11 @@ const (
 	// Wireguard listening port range end, exclusive
 	WireguardPortEnd int32 = 7000
 
-	// Wireguard daemon on gateway nodes listening port
-	WireguardDaemonServicePort int32 = 8080
+	// Gateway lb health probe path
+	GatewayHealthProbeEndpoint = "/gw/"
+
+	// Gateway lb health probe port
+	WireguardDaemonServicePort int32 = 8082
 
 	// nodepool name tag key in aks clusters
 	AKSNodepoolTagKey = "aks-managed-poolName"

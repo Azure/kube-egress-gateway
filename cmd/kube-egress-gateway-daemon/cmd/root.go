@@ -35,6 +35,7 @@ import (
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
+	"github.com/Azure/kube-egress-gateway/pkg/healthprobe"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -48,6 +49,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -197,6 +199,11 @@ func startControllers(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder
+
+	if err := mgr.Add(manager.RunnableFunc(healthprobe.Start)); err != nil {
+		setupLog.Error(err, "unbaled to set up gateway health probe server")
+		os.Exit(1)
+	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")

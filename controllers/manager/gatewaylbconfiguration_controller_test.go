@@ -56,8 +56,9 @@ const (
 	testRG          = "testRG"
 	testLBName      = "testLB"
 	testLBRG        = "testLBRG"
-	testLBConfigUID = "123"
+	testLBConfigUID = "testLBConfig"
 	testVMSSUID     = "testvmss"
+	testGWConfigUID = "testGWConfig"
 )
 
 var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
@@ -90,6 +91,12 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					Name:      testName,
 					Namespace: testNamespace,
 					UID:       testLBConfigUID,
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Name: testName,
+							UID:  testGWConfigUID,
+						},
+					},
 				},
 				Spec: egressgatewayv1alpha1.GatewayLBConfigurationSpec{
 					GatewayNodepoolName: "testgw",
@@ -717,7 +724,7 @@ func getExpectedLB() *network.LoadBalancer {
 				{
 					Name: to.Ptr(testLBConfigUID),
 					Properties: &network.ProbePropertiesFormat{
-						RequestPath: to.Ptr("/" + testNamespace + "/" + testName),
+						RequestPath: to.Ptr("/gw/" + testGWConfigUID),
 						Protocol:    to.Ptr(network.ProbeProtocolHTTP),
 						Port:        to.Ptr(consts.WireguardDaemonServicePort),
 					},

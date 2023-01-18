@@ -36,6 +36,7 @@ import (
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
+	"github.com/Azure/kube-egress-gateway/pkg/healthprobe"
 	"github.com/Azure/kube-egress-gateway/pkg/imds"
 	"github.com/Azure/kube-egress-gateway/pkg/iptableswrapper"
 	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper"
@@ -150,7 +151,7 @@ func (r *StaticGatewayConfigurationReconciler) Reconcile(ctx context.Context, re
 	}
 
 	// Reconcile gateway namespace
-	return r.reconcile(ctx, gwConfig)
+	return ctrl.Result{}, r.reconcile(ctx, gwConfig)
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -169,33 +170,33 @@ func (r *StaticGatewayConfigurationReconciler) SetupWithManager(mgr ctrl.Manager
 func (r *StaticGatewayConfigurationReconciler) reconcile(
 	ctx context.Context,
 	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
-) (ctrl.Result, error) {
+) error {
 	log := log.FromContext(ctx)
 	log.Info("Reconciling gateway configuration")
 
 	// get wireguard private key from secret
 	privateKey, err := r.getWireguardPrivateKey(ctx, gwConfig)
 	if err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 
 	// add lb ip (if not exists) to eth0
 	if err := r.reconcileIlbIPOnHost(ctx, gwConfig.Status.GatewayWireguardProfile.WireguardServerIP, false /* deleting */); err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 
 	// remove secondary ip from eth0
 	vmPrimaryIP, vmSecondaryIP, err := r.getVMIP(ctx, gwConfig)
 	if err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 	if err := r.removeSecondaryIpFromHost(ctx, vmSecondaryIP); err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 
 	// configure gateway namespace (if not exists)
 	if err := r.configureGatewayNamespace(ctx, gwConfig, privateKey, vmPrimaryIP, vmSecondaryIP); err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
 
 	// update gateway status
@@ -204,10 +205,15 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 		NetnsName:                  getGatewayNamespaceName(gwConfig),
 	}
 	if err := r.updateGatewayNodeStatus(ctx, gwStatus, true /* add */); err != nil {
-		return ctrl.Result{}, err
+		return err
 	}
+
+	if err := healthprobe.AddGateway(string(gwConfig.GetUID())); err != nil {
+		return err
+	}
+
 	log.Info("Gateway configuration reconciled")
-	return ctrl.Result{}, nil
+	return nil
 }
 
 func (r *StaticGatewayConfigurationReconciler) cleanUp(ctx context.Context) error {
@@ -243,7 +249,7 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(ctx context.Context
 	log := log.FromContext(ctx)
 
 	// remove lb ip (if exists) from eth0
-	ilbIP := strings.Replace(netns[strings.LastIndex(netns, "-")+1:], "_", ".", -1)
+	ilbIP := getILBIPFromNamespaceName(netns)
 	if err := r.reconcileIlbIPOnHost(ctx, ilbIP, true /* deleting */); err != nil {
 		return err
 	}
@@ -265,6 +271,11 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(ctx context.Context
 		NetnsName: netns,
 	}
 	if err := r.updateGatewayNodeStatus(ctx, gwStatus, false /* add */); err != nil {
+		return err
+	}
+
+	gwUID := getGatewayUIDFromNamespaceName(netns)
+	if err := healthprobe.RemoveGateway(gwUID); err != nil {
 		return err
 	}
 	return nil
@@ -916,4 +927,12 @@ func getGatewayNamespaceName(gwConfig *egressgatewayv1alpha1.StaticGatewayConfig
 func getVethHostLinkName(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) string {
 	nsName := getGatewayNamespaceName(gwConfig)
 	return nsName[:11]
+}
+
+func getGatewayUIDFromNamespaceName(netns string) string {
+	return netns[strings.Index(netns, "-")+1 : strings.LastIndex(netns, "-")]
+}
+
+func getILBIPFromNamespaceName(netns string) string {
+	return strings.Replace(netns[strings.LastIndex(netns, "-")+1:], "_", ".", -1)
 }
