@@ -410,8 +410,16 @@ func getExpectedLBProbe(
 	probeName *string,
 	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
 ) *network.Probe {
+	gatewayUID := ""
+	for _, refer := range lbConfig.OwnerReferences {
+		// there should be only one ownerReference actually
+		if refer.Name == lbConfig.Name {
+			gatewayUID = string(refer.UID)
+			break
+		}
+	}
 	probeProp := &network.ProbePropertiesFormat{
-		RequestPath: to.Ptr("/" + lbConfig.Namespace + "/" + lbConfig.Name),
+		RequestPath: to.Ptr(consts.GatewayHealthProbeEndpoint + gatewayUID),
 		Protocol:    to.Ptr(network.ProbeProtocolHTTP),
 		Port:        to.Ptr(consts.WireguardDaemonServicePort),
 	}
