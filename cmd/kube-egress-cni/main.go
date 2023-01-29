@@ -92,7 +92,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	var result *type100.Result
-	err = wireguard.WithWireGuardNic(args.ContainerID, args.Netns, args.IfName, ipam.New(config.IPAM.Type, args.StdinData), []string{}, func(podNs ns.NetNS, ipamResult *type100.Result) error {
+	err = wireguard.WithWireGuardNic(args.ContainerID, args.Netns, args.IfName, ipam.New(config.IPAM.Type, args.StdinData), config.ExcludedCIDRs, func(podNs ns.NetNS, ipamResult *type100.Result) error {
 
 		//generate private key
 		privateKey, err := wgtypes.GeneratePrivateKey()

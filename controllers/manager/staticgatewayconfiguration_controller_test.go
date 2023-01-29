@@ -514,7 +514,7 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 		It("should create a new nic networkattachment config", func() {
 			networkattachment := &networkattachmentv1.NetworkAttachmentDefinition{}
 			objKey := client.ObjectKeyFromObject(gwConfig)
-			objKey.Name = getCNINicConfig(gwConfig.Name)
+			objKey.Name = gwConfig.Name
 			Eventually(func() error {
 				return k8sClient.Get(ctx, objKey, networkattachment)
 			}, timeout, interval).ShouldNot(HaveOccurred())
@@ -553,7 +553,7 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 		It("should delete a new nic networkattachment config", func() {
 			networkattachment := &networkattachmentv1.NetworkAttachmentDefinition{}
 			Eventually(func() bool {
-				return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: getCNINicConfig(testName)}, networkattachment))
+				return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: testName}, networkattachment))
 			}, timeout, interval).Should(BeTrue())
 		})
 	})

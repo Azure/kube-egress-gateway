@@ -72,6 +72,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	var address net.IPNet
 	ipv6AddrFound := false
+	var extraRoutes []*types.Route
 	err = podNetNS.Do(func(netNS ns.NetNS) error {
 		eth0Link, err := netlink.LinkByName("eth0")
 		if err != nil {
@@ -87,6 +88,27 @@ func cmdAdd(args *skel.CmdArgs) error {
 				ipv6AddrFound = true
 			}
 		}
+		routes, err := netlink.RouteList(eth0Link, netlink.FAMILY_V4)
+		if err != nil {
+			return err
+		}
+
+		for _, route := range routes {
+			if route.Dst == nil {
+				for _, item := range config.ExcludedCIDRs {
+					_, cidr, err := net.ParseCIDR(item)
+					if err != nil {
+						return err
+					}
+					extraRoutes = append(extraRoutes, &types.Route{
+						Dst: *cidr,
+						GW:  route.Gw,
+					})
+				}
+				break
+			}
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -100,8 +122,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		IPs: []*type100.IPConfig{
 			{
 				Address: address,
+				Gateway: net.ParseIP(consts.GatewayIP),
 			},
 		},
+		Routes: extraRoutes,
 	}
 	// outputCmdArgs(args)
 	return types.PrintResult(result, config.CNIVersion)
