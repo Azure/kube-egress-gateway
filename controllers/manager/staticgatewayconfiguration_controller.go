@@ -25,7 +25,9 @@
 package manager
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
@@ -39,6 +41,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"text/template"
 )
 
 var _ reconcile.Reconciler = &StaticGatewayConfigurationReconciler{}
@@ -180,7 +183,7 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 	log.Info("Deleting nic networkattachement")
 	networkattachment := &networkattachmentv1.NetworkAttachmentDefinition{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      getCNINicConfig(gwConfig.Name),
+			Name:      gwConfig.Name,
 			Namespace: gwConfig.Namespace,
 		},
 	}
@@ -305,45 +308,49 @@ func (r *StaticGatewayConfigurationReconciler) reconcileGatewayVMConfig(
 	return nil
 }
 
+var cniRawTemplate = `
+{
+	"cniVersion": "1.0.0",
+	"name": "mynet",
+	"plugins": [
+		{
+			"type": "kube-egress-cni",
+			"ipam": {"type": "kube-egress-cni-ipam"},
+			{{if .Spec.ExcludeCIDRs}}
+			"excludedCIDRs": [{{range $i, $a := .Spec.ExcludeCIDRs}}{{$a}}{{- end}}],
+			{{- end}}
+			"gatewayName": "{{.Name}}"
+		},
+		{"type": "sbr"},
+		{"type": "tuning","sysctl": {"net.ipv4.conf.all.arp_filter": "2"}}
+	]
+}`
+
+var cniTemplate = template.Must(template.New("cniTemplate").Parse(cniRawTemplate))
+
 func (r *StaticGatewayConfigurationReconciler) reconcileCNINicConfig(ctx context.Context, gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) error {
 	log := log.FromContext(ctx)
 
 	networkattachement := &networkattachmentv1.NetworkAttachmentDefinition{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      getCNINicConfig(gwConfig.Name),
+			Name:      gwConfig.Name,
 			Namespace: gwConfig.Namespace,
 		},
 	}
 	if _, err := controllerutil.CreateOrUpdate(ctx, r, networkattachement, func() error {
-		cniconfig := fmt.Sprintf(
-			`{
-				"cniVersion": "1.0.0",
-				"name": "mynet",
-				"plugins": [
-					{
-						"type": "kube-egress-cni",
-						"ipam": {
-							"type": "kube-egress-cni-ipam"
-						},
-						"gatewayName": "%s"
-					},
-					{
-						  "type": "tuning",
-						  "sysctl": {
-								  "net.ipv4.conf.all.arp_filter": "2"
-						  }
-					}
-				]
-			}`, gwConfig.Name)
-		networkattachement.Spec.Config = cniconfig
+		raw := &bytes.Buffer{}
+		if err := cniTemplate.Execute(raw, gwConfig); err != nil {
+			return err
+		}
+		w := &bytes.Buffer{}
+		if err := json.Compact(w, raw.Bytes()); err != nil {
+			return err
+		}
+		networkattachement.Spec.Config = w.String()
 		return controllerutil.SetControllerReference(gwConfig, networkattachement, r.Client.Scheme())
 	}); err != nil {
 		log.Error(err, "failed to reconcile nic networkattachementconfiguration")
 		return err
 	}
 	return nil
-}
-
-func getCNINicConfig(name string) string {
-	return name + "-cni"
 }

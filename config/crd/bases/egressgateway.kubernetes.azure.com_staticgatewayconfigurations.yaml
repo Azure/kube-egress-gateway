@@ -37,6 +37,11 @@ spec:
             description: StaticGatewayConfigurationSpec defines the desired state
               of StaticGatewayConfiguration
             properties:
+              excludeCIDRs:
+                description: CIDRs to be excluded from outbound.
+                items:
+                  type: string
+                type: array
               gatewayNodepoolName:
                 description: Name of the gateway nodepool to apply the gateway configuration.
                 type: string

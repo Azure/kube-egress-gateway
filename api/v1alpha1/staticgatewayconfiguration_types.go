@@ -60,6 +60,9 @@ type StaticGatewayConfigurationSpec struct {
 	// BYO Resource ID of public IP prefix to be used as outbound.
 	// +optional
 	PublicIpPrefixId string `json:"publicIpPrefixId,omitempty"`
+
+	// CIDRs to be excluded from outbound.
+	ExcludeCIDRs []string `json:"excludeCIDRs,omitempty"`
 }
 
 // GatewayWireguardProfile provides details about gateway side wireguard configuration.
