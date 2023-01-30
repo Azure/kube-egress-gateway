@@ -8,7 +8,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	v2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
+	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -36,10 +36,10 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 }
 
 // CreateOrUpdate mocks base method.
-func (m *MockInterface) CreateOrUpdate(ctx context.Context, resourceGroupName, loadBalancerName string, loadBalancer v2.LoadBalancer) (*v2.LoadBalancer, error) {
+func (m *MockInterface) CreateOrUpdate(ctx context.Context, resourceGroupName, loadBalancerName string, loadBalancer armnetwork.LoadBalancer) (*armnetwork.LoadBalancer, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateOrUpdate", ctx, resourceGroupName, loadBalancerName, loadBalancer)
-	ret0, _ := ret[0].(*v2.LoadBalancer)
+	ret0, _ := ret[0].(*armnetwork.LoadBalancer)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -50,11 +50,25 @@ func (mr *MockInterfaceMockRecorder) CreateOrUpdate(ctx, resourceGroupName, load
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOrUpdate", reflect.TypeOf((*MockInterface)(nil).CreateOrUpdate), ctx, resourceGroupName, loadBalancerName, loadBalancer)
 }
 
+// Delete mocks base method.
+func (m *MockInterface) Delete(ctx context.Context, resourceGroupName, loadBalancerName string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", ctx, resourceGroupName, loadBalancerName)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockInterfaceMockRecorder) Delete(ctx, resourceGroupName, loadBalancerName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockInterface)(nil).Delete), ctx, resourceGroupName, loadBalancerName)
+}
+
 // Get mocks base method.
-func (m *MockInterface) Get(ctx context.Context, resourceGroupName, loadBalancerName, expand string) (*v2.LoadBalancer, error) {
+func (m *MockInterface) Get(ctx context.Context, resourceGroupName, loadBalancerName, expand string) (*armnetwork.LoadBalancer, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", ctx, resourceGroupName, loadBalancerName, expand)
-	ret0, _ := ret[0].(*v2.LoadBalancer)
+	ret0, _ := ret[0].(*armnetwork.LoadBalancer)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

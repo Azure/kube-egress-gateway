@@ -26,7 +26,9 @@ package manager
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -37,6 +39,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
@@ -215,6 +218,18 @@ func getLBPropertyName(
 	return names, nil
 }
 
+func (r *GatewayLBConfigurationReconciler) getGatewayLB() (*network.LoadBalancer, error) {
+	lb, err := r.GetLB()
+	if err == nil {
+		return lb, nil
+	}
+	var respErr *azcore.ResponseError
+	if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+	return nil, err
+}
+
 func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
 	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
 ) (*compute.VirtualMachineScaleSet, error) {
@@ -246,21 +261,34 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
 	needLB bool,
 ) (string, int32, error) {
-	// assuming gateway VMSS's corresponding frontend and backend setup are done with VMSS provisioning,
-	// just need to reconcile LB rule
 	log := log.FromContext(ctx)
 	frontendIP := ""
 	var lbPort int32
 	updateLB := false
+	deleteFrontend := false
 
 	// get LoadBalancer
-	lb, err := r.GetLB()
+	lb, err := r.getGatewayLB()
 	if err != nil {
 		log.Error(err, "failed to get LoadBalancer")
 		return "", 0, err
 	}
+	if lb == nil {
+		if !needLB {
+			log.Info(fmt.Sprintf("gateway lb(%s) not found, no more clean up needed", r.LoadBalancerName()))
+			return "", 0, nil
+		} else {
+			lb = &network.LoadBalancer{
+				Name:       to.Ptr(r.LoadBalancerName()),
+				Location:   to.Ptr(r.Location()),
+				Properties: &network.LoadBalancerPropertiesFormat{},
+			}
+			updateLB = true
+		}
+	}
 
 	// get gateway VMSS
+	// we need this because each gateway vmss needs one fronendConfig and one backendpool
 	vmss, err := r.getGatewayVMSS(lbConfig)
 	if err != nil {
 		log.Error(err, "failed to get vmss")
@@ -279,20 +307,23 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 	}
 
 	frontendID := r.GetLBFrontendIPConfigurationID(names.frontendName)
-	for _, frontendConfig := range lb.Properties.FrontendIPConfigurations {
-		if strings.EqualFold(*frontendConfig.Name, names.frontendName) &&
-			strings.EqualFold(*frontendConfig.ID, *frontendID) &&
-			frontendConfig.Properties != nil &&
-			frontendConfig.Properties.PrivateIPAddressVersion != nil &&
-			*frontendConfig.Properties.PrivateIPAddressVersion == network.IPVersionIPv4 &&
-			frontendConfig.Properties.PrivateIPAddress != nil {
-			log.Info("Found LB frontendIPConfiguration", "frontendName", names.frontendName)
-			frontendIP = *frontendConfig.Properties.PrivateIPAddress
-			break
-		}
+	frontendIP, err = findFrontendIP(lb, names.frontendName)
+	if err != nil {
+		return "", 0, err
 	}
 	if frontendIP == "" {
-		return "", 0, fmt.Errorf("failed to find corresponding LB frontend IPConfig")
+		if needLB {
+			subnet, err := r.GetSubnet()
+			if err != nil {
+				log.Error(err, "failed to get subnet")
+				return "", 0, err
+			}
+			lb.Properties.FrontendIPConfigurations =
+				append(lb.Properties.FrontendIPConfigurations, getExpectedFrontendConfig(to.Ptr(names.frontendName), subnet.ID))
+			updateLB = true
+		}
+	} else {
+		log.Info("Found LB frontendIPConfiguration", "frontendIP", frontendIP)
 	}
 
 	backendID := r.GetLBBackendAddressPoolID(names.backendName)
@@ -306,7 +337,11 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 		}
 	}
 	if !foundBackend {
-		return "", 0, fmt.Errorf("failed to find corresponding LB backend address pool")
+		if needLB {
+			lb.Properties.BackendAddressPools =
+				append(lb.Properties.BackendAddressPools, getExpectedBackendPool(to.Ptr(names.backendName)))
+			updateLB = true
+		}
 	}
 
 	probeID := r.GetLBProbeID(names.probeName)
@@ -347,15 +382,20 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 			updateLB = true
 		}
 	} else {
-		for i := range lbRules {
+		ruleRefCnt := 0
+		for i := len(lbRules) - 1; i >= 0; i = i - 1 {
 			lbRule := lbRules[i]
 			if strings.EqualFold(*lbRule.Name, *expectedLBRule.Name) {
 				log.Info("Found LB rule, dropping")
 				lbRules = append(lbRules[:i], lbRules[i+1:]...)
 				updateLB = true
 				lb.Properties.LoadBalancingRules = lbRules
-				break
+			} else if strings.EqualFold(to.Val(lbRule.Properties.FrontendIPConfiguration.ID), to.Val(frontendID)) {
+				ruleRefCnt = ruleRefCnt + 1
 			}
+		}
+		if ruleRefCnt == 0 {
+			deleteFrontend = true
 		}
 	}
 
@@ -400,14 +440,75 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 		}
 	}
 
+	if !needLB && deleteFrontend {
+		log.Info(fmt.Sprintf("no more gateway profile refering vmss(%s), deleting frontend and backend", names.frontendName))
+		frontends := lb.Properties.FrontendIPConfigurations
+		for i, frontendConfig := range frontends {
+			if strings.EqualFold(to.Val(frontendConfig.ID), to.Val(frontendID)) {
+				frontends = append(frontends[:i], frontends[i+1:]...)
+				updateLB = true
+				lb.Properties.FrontendIPConfigurations = frontends
+				break
+			}
+		}
+		backends := lb.Properties.BackendAddressPools
+		for i, backendPool := range backends {
+			if strings.EqualFold(to.Val(backendPool.ID), to.Val(backendID)) {
+				backends = append(backends[:i], backends[i+1:]...)
+				updateLB = true
+				lb.Properties.BackendAddressPools = backends
+				break
+			}
+		}
+
+		if len(lb.Properties.FrontendIPConfigurations) == 0 {
+			log.Info("Deleting load balancer")
+			if err := r.DeleteLB(); err != nil {
+				log.Error(err, "failed to delete LB")
+				return "", 0, err
+			}
+			return "", 0, nil
+		}
+	}
+
 	if updateLB {
 		log.Info("Updating load balancer")
-		if err := r.CreateOrUpdateLB(*lb); err != nil {
+		updatedLB, err := r.CreateOrUpdateLB(*lb)
+		if err != nil {
 			log.Error(err, "failed to update LB")
 			return "", 0, err
 		}
+		if needLB && frontendIP == "" {
+			frontendIP, err = findFrontendIP(updatedLB, names.frontendName)
+			if err != nil {
+				log.Error(err, "failed to find frontend ip")
+				return "", 0, err
+			} else if frontendIP == "" {
+				return "", 0, fmt.Errorf("frontend ip not found even after updating lb")
+			}
+		}
 	}
+
 	return frontendIP, lbPort, nil
+}
+
+func findFrontendIP(
+	lb *network.LoadBalancer,
+	frontendName string,
+) (string, error) {
+	for _, frontendConfig := range lb.Properties.FrontendIPConfigurations {
+		if strings.EqualFold(*frontendConfig.Name, frontendName) {
+			if frontendConfig.Properties == nil ||
+				frontendConfig.Properties.PrivateIPAddressVersion == nil ||
+				*frontendConfig.Properties.PrivateIPAddressVersion != network.IPVersionIPv4 ||
+				frontendConfig.Properties.PrivateIPAddress == nil {
+				return "", fmt.Errorf("found frontend(%s) with unexpected configuration", frontendName)
+			} else {
+				return *frontendConfig.Properties.PrivateIPAddress, nil
+			}
+		}
+	}
+	return "", nil
 }
 
 func getExpectedLBRule(lbRuleName, frontendID, backendID, probeID *string) *network.LoadBalancingRule {
@@ -450,6 +551,32 @@ func getExpectedLBProbe(
 	return &network.Probe{
 		Name:       probeName,
 		Properties: probeProp,
+	}
+}
+
+func getExpectedFrontendConfig(
+	frontendName *string,
+	subnetID *string,
+) *network.FrontendIPConfiguration {
+	frontendProp := &network.FrontendIPConfigurationPropertiesFormat{
+		PrivateIPAddressVersion:   to.Ptr(network.IPVersionIPv4),
+		PrivateIPAllocationMethod: to.Ptr(network.IPAllocationMethodDynamic),
+		Subnet: &network.Subnet{
+			ID: subnetID,
+		},
+	}
+	return &network.FrontendIPConfiguration{
+		Name:       frontendName,
+		Properties: frontendProp,
+	}
+}
+
+func getExpectedBackendPool(
+	backendPoolName *string,
+) *network.BackendAddressPool {
+	return &network.BackendAddressPool{
+		Name:       backendPoolName,
+		Properties: &network.BackendAddressPoolPropertiesFormat{},
 	}
 }
 

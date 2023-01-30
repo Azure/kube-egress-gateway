@@ -26,13 +26,16 @@ package manager
 import (
 	"context"
 	"fmt"
+	"net/http"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
+	"github.com/Azure/kube-egress-gateway/pkg/azureclients/subnetclient/mocksubnetclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssclient/mockvmssclient"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
@@ -57,6 +60,9 @@ const (
 	testLBName      = "testLB"
 	testLBRG        = "testLBRG"
 	testLBConfigUID = "testLBConfig"
+	testVnetName    = "testVnet"
+	testVnetRG      = "testVnetRG"
+	testSubnetName  = "testSubnet"
 	testVMSSUID     = "testvmss"
 	testGWConfigUID = "testGWConfig"
 )
@@ -251,7 +257,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			})
 
 			Context("test frontend search", func() {
-				frontendNotFoundErr := fmt.Errorf("failed to find corresponding LB frontend IPConfig")
+				frontendNotFoundErr := fmt.Errorf("found frontend(testvmss) with unexpected configuration")
 				lb := &network.LoadBalancer{
 					Properties: &network.LoadBalancerPropertiesFormat{
 						FrontendIPConfigurations: []*network.FrontendIPConfiguration{},
@@ -262,22 +268,17 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 						Properties: &compute.VirtualMachineScaleSetProperties{UniqueID: to.Ptr(testVMSSUID)},
 						Tags:       map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")},
 					}
+					lb.Properties.FrontendIPConfigurations = append(lb.Properties.FrontendIPConfigurations, &network.FrontendIPConfiguration{
+						Name: to.Ptr(testVMSSUID),
+						ID:   r.GetLBFrontendIPConfigurationID(testVMSSUID),
+					})
 					mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
 					mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(lb, nil)
 					mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
 					mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
 				})
 
-				It("should report error if lb frontend not found", func() {
-					_, reconcileErr = r.Reconcile(context.TODO(), req)
-					Expect(reconcileErr).To(Equal(frontendNotFoundErr))
-				})
-
 				It("should report error if lb frontend does not properties", func() {
-					lb.Properties.FrontendIPConfigurations = append(lb.Properties.FrontendIPConfigurations, &network.FrontendIPConfiguration{
-						Name: to.Ptr(testVMSSUID),
-						ID:   r.GetLBFrontendIPConfigurationID(testVMSSUID),
-					})
 					_, reconcileErr = r.Reconcile(context.TODO(), req)
 					Expect(reconcileErr).To(Equal(frontendNotFoundErr))
 				})
@@ -305,31 +306,32 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				})
 			})
 
-			It("should report error if backend is not found", func() {
+			It("should create new lb when it does not exist", func() {
 				vmss := &compute.VirtualMachineScaleSet{
 					Properties: &compute.VirtualMachineScaleSetProperties{UniqueID: to.Ptr(testVMSSUID)},
 					Tags:       map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")},
 				}
-				lb := &network.LoadBalancer{
-					Properties: &network.LoadBalancerPropertiesFormat{
-						FrontendIPConfigurations: []*network.FrontendIPConfiguration{
-							{
-								Name: to.Ptr(testVMSSUID),
-								ID:   r.GetLBFrontendIPConfigurationID(testVMSSUID),
-								Properties: &network.FrontendIPConfigurationPropertiesFormat{
-									PrivateIPAddressVersion: to.Ptr(network.IPVersionIPv4),
-									PrivateIPAddress:        to.Ptr("10.0.0.4"),
-								},
-							},
-						},
-					},
-				}
+				requestedLB, expectedLB := getExpectedLB(), getExpectedLB()
 				mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
-				mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(lb, nil)
+				mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(nil, &azcore.ResponseError{
+					StatusCode: http.StatusNotFound,
+				})
+				mockLoadBalancerClient.EXPECT().CreateOrUpdate(gomock.Any(), testLBRG, testLBName, gomock.Any()).DoAndReturn(
+					func(ctx context.Context, resourceGroupName string, loadBalancerName string, loadBalancer network.LoadBalancer) (*network.LoadBalancer, error) {
+						requestedLB.Properties.FrontendIPConfigurations[0].Properties.PrivateIPAddress = nil
+						requestedLB.Properties.FrontendIPConfigurations[0].ID = nil
+						requestedLB.Properties.BackendAddressPools[0].ID = nil
+						Expect(equality.Semantic.DeepEqual(loadBalancer, *requestedLB)).To(BeTrue())
+						return expectedLB, nil
+					})
+				mockSubnetClient := az.SubnetClient.(*mocksubnetclient.MockInterface)
+				mockSubnetClient.EXPECT().Get(gomock.Any(), testVnetRG, testVnetName, testSubnetName, gomock.Any()).Return(&network.Subnet{
+					ID: to.Ptr("testSubnet"),
+				}, nil)
 				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
-				Expect(reconcileErr).To(Equal(fmt.Errorf("failed to find corresponding LB backend address pool")))
+				Expect(reconcileErr).To(BeNil())
 			})
 
 			Context("reconcile lbRule, lbProbe and vmConfig", func() {
@@ -627,25 +629,22 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
 			})
 
-			It("should delete lbConfig if lb does not need cleanup", func() {
+			It("should delete lb and lbConfig if lb does not need cleanup", func() {
 				lb := getEmptyLB()
 				mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
 				mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(lb, nil)
+				mockLoadBalancerClient.EXPECT().Delete(gomock.Any(), testLBRG, testLBName).Return(nil)
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(BeNil())
 				getErr = getResource(cl, foundLBConfig)
 				Expect(apierrors.IsNotFound(getErr)).To(BeTrue())
 			})
 
-			It("should clean lb and delete lbConfig", func() {
+			It("should delete lb and delete lbConfig", func() {
 				lb := getExpectedLB()
 				mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
 				mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(lb, nil)
-				mockLoadBalancerClient.EXPECT().CreateOrUpdate(gomock.Any(), testLBRG, testLBName, gomock.Any()).DoAndReturn(func(ctx context.Context, resourceGroupName string, loadBalancerName string, loadBalancer network.LoadBalancer) (*network.LoadBalancer, error) {
-					expectedLB := getEmptyLB()
-					Expect(equality.Semantic.DeepEqual(loadBalancer, *expectedLB)).To(BeTrue())
-					return expectedLB, nil
-				})
+				mockLoadBalancerClient.EXPECT().Delete(gomock.Any(), testLBRG, testLBName).Return(nil)
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(BeNil())
 				getErr = getResource(cl, foundLBConfig)
@@ -656,12 +655,41 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				lb := getExpectedLB()
 				mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
 				mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(lb, nil)
-				mockLoadBalancerClient.EXPECT().CreateOrUpdate(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(nil, fmt.Errorf("failed to update lb"))
+				mockLoadBalancerClient.EXPECT().Delete(gomock.Any(), testLBRG, testLBName).Return(fmt.Errorf("failed to delete lb"))
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
-				Expect(reconcileErr).To(Equal(fmt.Errorf("failed to update lb")))
+				Expect(reconcileErr).To(Equal(fmt.Errorf("failed to delete lb")))
 				getErr = getResource(cl, foundLBConfig)
 				Expect(getErr).To(BeNil())
 				Expect(controllerutil.ContainsFinalizer(foundLBConfig, consts.LBConfigFinalizerName)).To(BeTrue())
+			})
+
+			It("should not delete lb but just the rules when there are other rules referencing the same frontend/backend", func() {
+				lb := getExpectedLB()
+				additionalRule := &network.LoadBalancingRule{
+					Name: to.Ptr("additional"),
+					Properties: &network.LoadBalancingRulePropertiesFormat{
+						FrontendIPConfiguration: &network.SubResource{
+							ID: to.Ptr(fmt.Sprintf("/subscriptions/testSub/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/frontendIPConfigurations/%s", testLBRG, testLBName, testVMSSUID)),
+						},
+						BackendAddressPool: &network.SubResource{
+							ID: to.Ptr(fmt.Sprintf("/subscriptions/testSub/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s", testLBRG, testLBName, testVMSSUID)),
+						},
+					},
+				}
+				lb.Properties.LoadBalancingRules = append(lb.Properties.LoadBalancingRules, additionalRule)
+				mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(lb, nil)
+				mockLoadBalancerClient.EXPECT().CreateOrUpdate(gomock.Any(), testLBRG, testLBName, gomock.Any()).DoAndReturn(
+					func(ctx context.Context, resourceGroupName string, loadBalancerName string, loadBalancer network.LoadBalancer) (*network.LoadBalancer, error) {
+						emptyLB := getEmptyLB()
+						emptyLB.Properties.LoadBalancingRules = append(emptyLB.Properties.LoadBalancingRules, additionalRule)
+						Expect(equality.Semantic.DeepEqual(loadBalancer, *emptyLB)).To(BeTrue())
+						return emptyLB, nil
+					})
+				_, reconcileErr = r.Reconcile(context.TODO(), req)
+				Expect(reconcileErr).To(BeNil())
+				getErr = getResource(cl, foundLBConfig)
+				Expect(apierrors.IsNotFound(getErr)).To(BeTrue())
 			})
 		})
 
@@ -792,6 +820,9 @@ func getMockAzureManager(ctrl *gomock.Controller) *azmanager.AzureManager {
 		ResourceGroup:             testRG,
 		LoadBalancerName:          testLBName,
 		LoadBalancerResourceGroup: testLBRG,
+		VnetName:                  testVnetName,
+		VnetResourceGroup:         testVnetRG,
+		SubnetName:                testSubnetName,
 	}
 	az, _ := azmanager.CreateAzureManager(conf, azureclients.NewMockAzureClientsFactory(ctrl))
 	return az
@@ -799,22 +830,26 @@ func getMockAzureManager(ctrl *gomock.Controller) *azmanager.AzureManager {
 
 func getEmptyLB() *network.LoadBalancer {
 	return &network.LoadBalancer{
-		Name: to.Ptr(testLBName),
+		Name:     to.Ptr(testLBName),
+		Location: to.Ptr("location"),
 		Properties: &network.LoadBalancerPropertiesFormat{
 			FrontendIPConfigurations: []*network.FrontendIPConfiguration{
 				&network.FrontendIPConfiguration{
 					Name: to.Ptr(testVMSSUID),
 					ID:   to.Ptr(fmt.Sprintf("/subscriptions/testSub/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/frontendIPConfigurations/%s", testLBRG, testLBName, testVMSSUID)),
 					Properties: &network.FrontendIPConfigurationPropertiesFormat{
-						PrivateIPAddressVersion: to.Ptr(network.IPVersionIPv4),
-						PrivateIPAddress:        to.Ptr("10.0.0.4"),
+						PrivateIPAddressVersion:   to.Ptr(network.IPVersionIPv4),
+						PrivateIPAllocationMethod: to.Ptr(network.IPAllocationMethodDynamic),
+						PrivateIPAddress:          to.Ptr("10.0.0.4"),
+						Subnet:                    &network.Subnet{ID: to.Ptr("testSubnet")},
 					},
 				},
 			},
 			BackendAddressPools: []*network.BackendAddressPool{
 				&network.BackendAddressPool{
-					Name: to.Ptr(testVMSSUID),
-					ID:   to.Ptr(fmt.Sprintf("/subscriptions/testSub/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s", testLBRG, testLBName, testVMSSUID)),
+					Name:       to.Ptr(testVMSSUID),
+					ID:         to.Ptr(fmt.Sprintf("/subscriptions/testSub/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s", testLBRG, testLBName, testVMSSUID)),
+					Properties: &network.BackendAddressPoolPropertiesFormat{},
 				},
 			},
 		},
@@ -823,22 +858,26 @@ func getEmptyLB() *network.LoadBalancer {
 
 func getExpectedLB() *network.LoadBalancer {
 	return &network.LoadBalancer{
-		Name: to.Ptr(testLBName),
+		Name:     to.Ptr(testLBName),
+		Location: to.Ptr("location"),
 		Properties: &network.LoadBalancerPropertiesFormat{
 			FrontendIPConfigurations: []*network.FrontendIPConfiguration{
 				&network.FrontendIPConfiguration{
 					Name: to.Ptr(testVMSSUID),
 					ID:   to.Ptr(fmt.Sprintf("/subscriptions/testSub/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/frontendIPConfigurations/%s", testLBRG, testLBName, testVMSSUID)),
 					Properties: &network.FrontendIPConfigurationPropertiesFormat{
-						PrivateIPAddressVersion: to.Ptr(network.IPVersionIPv4),
-						PrivateIPAddress:        to.Ptr("10.0.0.4"),
+						PrivateIPAddressVersion:   to.Ptr(network.IPVersionIPv4),
+						PrivateIPAllocationMethod: to.Ptr(network.IPAllocationMethodDynamic),
+						PrivateIPAddress:          to.Ptr("10.0.0.4"),
+						Subnet:                    &network.Subnet{ID: to.Ptr("testSubnet")},
 					},
 				},
 			},
 			BackendAddressPools: []*network.BackendAddressPool{
 				&network.BackendAddressPool{
-					Name: to.Ptr(testVMSSUID),
-					ID:   to.Ptr(fmt.Sprintf("/subscriptions/testSub/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s", testLBRG, testLBName, testVMSSUID)),
+					Name:       to.Ptr(testVMSSUID),
+					ID:         to.Ptr(fmt.Sprintf("/subscriptions/testSub/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s", testLBRG, testLBName, testVMSSUID)),
+					Properties: &network.BackendAddressPoolPropertiesFormat{},
 				},
 			},
 			LoadBalancingRules: []*network.LoadBalancingRule{

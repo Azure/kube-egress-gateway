@@ -22,7 +22,7 @@
    SOFTWARE
 */
 
-package vmssclient
+package subnetclient
 
 import (
 	"testing"
@@ -33,14 +33,14 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 )
 
-func TestNewVirtualMachineScaleSetsClient(t *testing.T) {
+func TestNewSubnetsClient(t *testing.T) {
 	tests := []struct {
 		name           string
 		subscriptionID string
 		options        *arm.ClientOptions
 	}{
 		{
-			name:           "TestNewVirtualMachineScaleSetsClient",
+			name:           "TestNewSubnetsClient",
 			subscriptionID: "subID",
 			options: &arm.ClientOptions{
 				ClientOptions: azcore.ClientOptions{
@@ -55,12 +55,12 @@ func TestNewVirtualMachineScaleSetsClient(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewDefaultAzureCredential() failed with error %v", err)
 			}
-			client, err := NewVirtualMachineScaleSetsClient(test.subscriptionID, credential, test.options)
+			client, err := NewSubnetsClient(test.subscriptionID, credential, test.options)
 			if err != nil {
-				t.Fatalf("NewVirtualMachineScaleSetsClient() failed with error %v", err)
+				t.Fatalf("NewSubnetsClient() failed with error %v", err)
 			}
 			if client == nil {
-				t.Fatal("NewVirtualMachineScaleSetsClient() returns nil client")
+				t.Fatal("NewSubnetsClient() returns nil client")
 			}
 		})
 	}

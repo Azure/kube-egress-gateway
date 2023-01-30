@@ -53,6 +53,12 @@ type CloudConfig struct {
 	LoadBalancerName string
 	// resource group where the gateway ILB belongs
 	LoadBalancerResourceGroup string
+	// name of the virtual network where the gateway ILB is deployed
+	VnetName string
+	// name of the resource group where the virtual network is deployed
+	VnetResourceGroup string
+	// name of the subnet in the vnet where the gateway ILB is deployed
+	SubnetName string
 }
 
 func (cfg *CloudConfig) TrimSpace() {
@@ -67,6 +73,9 @@ func (cfg *CloudConfig) TrimSpace() {
 	cfg.ResourceGroup = strings.TrimSpace(cfg.ResourceGroup)
 	cfg.LoadBalancerName = strings.TrimSpace(cfg.LoadBalancerName)
 	cfg.LoadBalancerResourceGroup = strings.TrimSpace(cfg.LoadBalancerResourceGroup)
+	cfg.VnetName = strings.TrimSpace(cfg.VnetName)
+	cfg.VnetResourceGroup = strings.TrimSpace(cfg.VnetResourceGroup)
+	cfg.SubnetName = strings.TrimSpace(cfg.SubnetName)
 }
 
 func (cfg *CloudConfig) Validate() error {
@@ -98,6 +107,14 @@ func (cfg *CloudConfig) Validate() error {
 
 	if cfg.LoadBalancerName == "" {
 		return fmt.Errorf("load balancer name is empty")
+	}
+
+	if cfg.VnetName == "" {
+		return fmt.Errorf("virtual network name is empty")
+	}
+
+	if cfg.SubnetName == "" {
+		return fmt.Errorf("virtual network subnet name is empty")
 	}
 
 	return nil

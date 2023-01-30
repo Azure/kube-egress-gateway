@@ -42,6 +42,9 @@ func TestTrimSpace(t *testing.T) {
 			UserAssignedIdentityID:    "  test  \n",
 			AADClientID:               "\n  test  \n",
 			AADClientSecret:           "  test  \n",
+			VnetName:                  "  test   ",
+			VnetResourceGroup:         " \t  test   ",
+			SubnetName:                "  test  ",
 		}
 
 		expected := CloudConfig{
@@ -57,6 +60,9 @@ func TestTrimSpace(t *testing.T) {
 			UserAssignedIdentityID:    "test",
 			AADClientID:               "test",
 			AADClientSecret:           "test",
+			VnetName:                  "test",
+			VnetResourceGroup:         "test",
+			SubnetName:                "test",
 		}
 		config.TrimSpace()
 		if config != expected {
@@ -72,6 +78,8 @@ func TestValidate(t *testing.T) {
 		SubscriptionID          string
 		ResourceGroup           string
 		LoadBalancerName        string
+		VnetName                string
+		SubnetName              string
 		UseUserAssignedIdentity bool
 		UserAssignedIdentityID  string
 		AADClientID             string
@@ -84,6 +92,8 @@ func TestValidate(t *testing.T) {
 			SubscriptionID:          "s",
 			ResourceGroup:           "v",
 			LoadBalancerName:        "l",
+			VnetName:                "v",
+			SubnetName:              "s",
 			UseUserAssignedIdentity: true,
 			UserAssignedIdentityID:  "a",
 			expectPass:              false,
@@ -94,6 +104,8 @@ func TestValidate(t *testing.T) {
 			SubscriptionID:          "s",
 			ResourceGroup:           "v",
 			LoadBalancerName:        "l",
+			VnetName:                "v",
+			SubnetName:              "s",
 			UseUserAssignedIdentity: true,
 			UserAssignedIdentityID:  "a",
 			expectPass:              false,
@@ -104,6 +116,8 @@ func TestValidate(t *testing.T) {
 			SubscriptionID:          "",
 			ResourceGroup:           "v",
 			LoadBalancerName:        "l",
+			VnetName:                "v",
+			SubnetName:              "s",
 			UseUserAssignedIdentity: true,
 			UserAssignedIdentityID:  "a",
 			expectPass:              false,
@@ -114,6 +128,8 @@ func TestValidate(t *testing.T) {
 			SubscriptionID:          "s",
 			ResourceGroup:           "",
 			LoadBalancerName:        "l",
+			VnetName:                "v",
+			SubnetName:              "s",
 			UseUserAssignedIdentity: true,
 			UserAssignedIdentityID:  "a",
 			expectPass:              false,
@@ -124,6 +140,32 @@ func TestValidate(t *testing.T) {
 			SubscriptionID:          "s",
 			ResourceGroup:           "v",
 			LoadBalancerName:        "",
+			VnetName:                "v",
+			SubnetName:              "s",
+			UseUserAssignedIdentity: true,
+			UserAssignedIdentityID:  "a",
+			expectPass:              false,
+		},
+		"VnetName empty": {
+			Cloud:                   "c",
+			Location:                "l",
+			SubscriptionID:          "s",
+			ResourceGroup:           "v",
+			LoadBalancerName:        "l",
+			VnetName:                "",
+			SubnetName:              "s",
+			UseUserAssignedIdentity: true,
+			UserAssignedIdentityID:  "a",
+			expectPass:              false,
+		},
+		"SubnetName empty": {
+			Cloud:                   "c",
+			Location:                "l",
+			SubscriptionID:          "s",
+			ResourceGroup:           "v",
+			LoadBalancerName:        "l",
+			VnetName:                "v",
+			SubnetName:              "",
 			UseUserAssignedIdentity: true,
 			UserAssignedIdentityID:  "a",
 			expectPass:              false,
@@ -133,7 +175,9 @@ func TestValidate(t *testing.T) {
 			Location:                "l",
 			SubscriptionID:          "s",
 			ResourceGroup:           "v",
-			LoadBalancerName:        "",
+			LoadBalancerName:        "l",
+			VnetName:                "v",
+			SubnetName:              "s",
 			UseUserAssignedIdentity: true,
 			UserAssignedIdentityID:  "",
 			expectPass:              false,
@@ -144,6 +188,8 @@ func TestValidate(t *testing.T) {
 			SubscriptionID:   "s",
 			ResourceGroup:    "v",
 			LoadBalancerName: "l",
+			VnetName:         "v",
+			SubnetName:       "s",
 			AADClientID:      "",
 			AADClientSecret:  "2",
 			expectPass:       false,
@@ -154,6 +200,8 @@ func TestValidate(t *testing.T) {
 			SubscriptionID:   "s",
 			ResourceGroup:    "v",
 			LoadBalancerName: "l",
+			VnetName:         "v",
+			SubnetName:       "s",
 			AADClientID:      "1",
 			AADClientSecret:  "",
 			expectPass:       false,
@@ -164,6 +212,8 @@ func TestValidate(t *testing.T) {
 			SubscriptionID:   "s",
 			ResourceGroup:    "v",
 			LoadBalancerName: "l",
+			VnetName:         "v",
+			SubnetName:       "s",
 			AADClientID:      "1",
 			AADClientSecret:  "2",
 			expectPass:       true,
@@ -174,6 +224,8 @@ func TestValidate(t *testing.T) {
 			SubscriptionID:          "s",
 			ResourceGroup:           "v",
 			LoadBalancerName:        "l",
+			VnetName:                "v",
+			SubnetName:              "s",
 			UseUserAssignedIdentity: true,
 			UserAssignedIdentityID:  "u",
 			expectPass:              true,
@@ -188,6 +240,8 @@ func TestValidate(t *testing.T) {
 				SubscriptionID:          test.SubscriptionID,
 				ResourceGroup:           test.ResourceGroup,
 				LoadBalancerName:        test.LoadBalancerName,
+				VnetName:                test.VnetName,
+				SubnetName:              test.SubnetName,
 				UseUserAssignedIdentity: test.UseUserAssignedIdentity,
 				UserAssignedIdentityID:  test.UserAssignedIdentityID,
 				AADClientID:             test.AADClientID,
@@ -197,7 +251,7 @@ func TestValidate(t *testing.T) {
 			err := config.Validate()
 
 			if test.expectPass && err != nil {
-				t.Fatalf("failed to test Validate: expected pass: actual fail with err %s", err)
+				t.Fatalf("failed to test Validate: expected pass: actual fail with err(%s)", err)
 			}
 
 			if !test.expectPass && err == nil {

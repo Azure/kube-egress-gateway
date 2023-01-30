@@ -22,7 +22,7 @@
    SOFTWARE
 */
 
-package loadbalancerclient
+package subnetclient
 
 import (
 	"context"
@@ -31,12 +31,6 @@ import (
 )
 
 type Interface interface {
-	// Get() gets a load balancer object
-	Get(ctx context.Context, resourceGroupName string, loadBalancerName string, expand string) (*network.LoadBalancer, error)
-
-	// CreateOrUpdate() creates or updates a load balancer object
-	CreateOrUpdate(ctx context.Context, resourceGroupName string, loadBalancerName string, loadBalancer network.LoadBalancer) (*network.LoadBalancer, error)
-
-	// Delete() deletes a load balancer object
-	Delete(ctx context.Context, resourceGroupName string, loadBalancerName string) error
+	// Get() gets a subnet object
+	Get(ctx context.Context, resourceGroupName string, virtualNetworkName string, subnetName string, expand string) (*network.Subnet, error)
 }

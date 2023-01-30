@@ -22,46 +22,36 @@
    SOFTWARE
 */
 
-package vmssclient
+package subnetclient
 
 import (
-	"testing"
+	"context"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
 )
 
-func TestNewVirtualMachineScaleSetsClient(t *testing.T) {
-	tests := []struct {
-		name           string
-		subscriptionID string
-		options        *arm.ClientOptions
-	}{
-		{
-			name:           "TestNewVirtualMachineScaleSetsClient",
-			subscriptionID: "subID",
-			options: &arm.ClientOptions{
-				ClientOptions: azcore.ClientOptions{
-					Cloud: cloud.AzurePublic,
-				},
-			},
-		},
+type SubnetsClient struct {
+	*network.SubnetsClient
+}
+
+func NewSubnetsClient(subscriptionID string, credential azcore.TokenCredential, options *arm.ClientOptions) (*SubnetsClient, error) {
+	client, err := network.NewSubnetsClient(subscriptionID, credential, options)
+	if err != nil {
+		return nil, err
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			credential, err := azidentity.NewDefaultAzureCredential(nil)
-			if err != nil {
-				t.Fatalf("NewDefaultAzureCredential() failed with error %v", err)
-			}
-			client, err := NewVirtualMachineScaleSetsClient(test.subscriptionID, credential, test.options)
-			if err != nil {
-				t.Fatalf("NewVirtualMachineScaleSetsClient() failed with error %v", err)
-			}
-			if client == nil {
-				t.Fatal("NewVirtualMachineScaleSetsClient() returns nil client")
-			}
-		})
+	return &SubnetsClient{client}, nil
+}
+
+func (client *SubnetsClient) Get(ctx context.Context, resourceGroupName string, virtualNetworkName string, subnetName string, expand string) (*network.Subnet, error) {
+	var options *network.SubnetsClientGetOptions
+	if expand != "" {
+		options = &network.SubnetsClientGetOptions{Expand: &expand}
 	}
+	resp, err := client.SubnetsClient.Get(ctx, resourceGroupName, virtualNetworkName, subnetName, options)
+	if err != nil {
+		return nil, err
+	}
+	return &resp.Subnet, nil
 }
