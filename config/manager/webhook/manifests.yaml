@@ -11,7 +11,7 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-kube-egress-gateway-microsoft-com-v1alpha1-staticgatewayconfiguration
+      path: /mutate-egressgateway-kubernetes-azure-com-v1alpha1-staticgatewayconfiguration
   failurePolicy: Fail
   name: mstaticgatewayconfiguration.kb.io
   rules:
@@ -38,7 +38,7 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-kube-egress-gateway-microsoft-com-v1alpha1-staticgatewayconfiguration
+      path: /validate-egressgateway-kubernetes-azure-com-v1alpha1-staticgatewayconfiguration
   failurePolicy: Fail
   name: vstaticgatewayconfiguration.kb.io
   rules:
