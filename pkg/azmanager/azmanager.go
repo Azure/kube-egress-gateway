@@ -33,6 +33,7 @@ import (
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/loadbalancerclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/publicipprefixclient"
+	"github.com/Azure/kube-egress-gateway/pkg/azureclients/subnetclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssvmclient"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
@@ -58,6 +59,7 @@ type AzureManager struct {
 	VmssVMClient         vmssvmclient.Interface
 	PublicIPPrefixClient publicipprefixclient.Interface
 	InterfaceClient      interfaceclient.Interface
+	SubnetClient         subnetclient.Interface
 }
 
 func CreateAzureManager(cloud *config.CloudConfig, factory azureclients.AzureClientsFactory) (*AzureManager, error) {
@@ -71,6 +73,10 @@ func CreateAzureManager(cloud *config.CloudConfig, factory azureclients.AzureCli
 
 	if az.LoadBalancerResourceGroup == "" {
 		az.LoadBalancerResourceGroup = az.ResourceGroup
+	}
+
+	if az.VnetResourceGroup == "" {
+		az.VnetResourceGroup = az.ResourceGroup
 	}
 
 	lbClient, err := factory.GetLoadBalancersClient()
@@ -103,6 +109,12 @@ func CreateAzureManager(cloud *config.CloudConfig, factory azureclients.AzureCli
 	}
 	az.InterfaceClient = interfaceClient
 
+	subnetClient, err := factory.GetSubnetsClient()
+	if err != nil {
+		return &AzureManager{}, err
+	}
+	az.SubnetClient = subnetClient
+
 	return &az, nil
 }
 
@@ -114,28 +126,40 @@ func (az *AzureManager) Location() string {
 	return az.CloudConfig.Location
 }
 
+func (az *AzureManager) LoadBalancerName() string {
+	return az.CloudConfig.LoadBalancerName
+}
+
 func (az *AzureManager) GetLBFrontendIPConfigurationID(name string) *string {
-	return to.Ptr(fmt.Sprintf(LBFrontendIPConfigTemplate, az.SubscriptionID(), az.LoadBalancerResourceGroup, az.LoadBalancerName, name))
+	return to.Ptr(fmt.Sprintf(LBFrontendIPConfigTemplate, az.SubscriptionID(), az.LoadBalancerResourceGroup, az.LoadBalancerName(), name))
 }
 
 func (az *AzureManager) GetLBBackendAddressPoolID(name string) *string {
-	return to.Ptr(fmt.Sprintf(LBBackendPoolIDTemplate, az.SubscriptionID(), az.LoadBalancerResourceGroup, az.LoadBalancerName, name))
+	return to.Ptr(fmt.Sprintf(LBBackendPoolIDTemplate, az.SubscriptionID(), az.LoadBalancerResourceGroup, az.LoadBalancerName(), name))
 }
 
 func (az *AzureManager) GetLBProbeID(name string) *string {
-	return to.Ptr(fmt.Sprintf(LBProbeIDTemplate, az.SubscriptionID(), az.LoadBalancerResourceGroup, az.LoadBalancerName, name))
+	return to.Ptr(fmt.Sprintf(LBProbeIDTemplate, az.SubscriptionID(), az.LoadBalancerResourceGroup, az.LoadBalancerName(), name))
 }
 
 func (az *AzureManager) GetLB() (*network.LoadBalancer, error) {
-	lb, err := az.LoadBalancerClient.Get(context.Background(), az.LoadBalancerResourceGroup, az.LoadBalancerName, "")
+	lb, err := az.LoadBalancerClient.Get(context.Background(), az.LoadBalancerResourceGroup, az.LoadBalancerName(), "")
 	if err != nil {
 		return nil, err
 	}
 	return lb, nil
 }
 
-func (az *AzureManager) CreateOrUpdateLB(lb network.LoadBalancer) error {
-	if _, err := az.LoadBalancerClient.CreateOrUpdate(context.Background(), az.LoadBalancerResourceGroup, to.Val(lb.Name), lb); err != nil {
+func (az *AzureManager) CreateOrUpdateLB(lb network.LoadBalancer) (*network.LoadBalancer, error) {
+	ret, err := az.LoadBalancerClient.CreateOrUpdate(context.Background(), az.LoadBalancerResourceGroup, to.Val(lb.Name), lb)
+	if err != nil {
+		return nil, err
+	}
+	return ret, nil
+}
+
+func (az *AzureManager) DeleteLB() error {
+	if err := az.LoadBalancerClient.Delete(context.Background(), az.LoadBalancerResourceGroup, az.LoadBalancerName()); err != nil {
 		return err
 	}
 	return nil
@@ -281,4 +305,12 @@ func (az *AzureManager) GetVMSSInterface(resourceGroup, vmssName, instanceID, in
 		return nil, err
 	}
 	return nic, nil
+}
+
+func (az *AzureManager) GetSubnet() (*network.Subnet, error) {
+	subnet, err := az.SubnetClient.Get(context.Background(), az.VnetResourceGroup, az.VnetName, az.SubnetName, "")
+	if err != nil {
+		return nil, err
+	}
+	return subnet, nil
 }

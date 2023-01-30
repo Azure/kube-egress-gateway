@@ -80,20 +80,6 @@ GW_VMSS_NAME=${VMSS_INFO[1]}
 # hack: add additional tag to GW VMSS
 GW_VMSS=$(az vmss update --name ${GW_VMSS_NAME} -g ${AKS_NODE_RESOURCE_GROUP} --set tags.aks-managed-gatewayIPPrefixSize=31)
 
-
-# Creating ILB
-echo "Creating ILB: ${LB_NAME}"
-LB=$(az network lb create -g ${RESOURCE_GROUP} -n ${LB_NAME} --sku Standard --frontend-ip-name ${GW_VMSS_ID} --subnet ${SUBNET_GATEWAY_ID} --backend-pool-name ${GW_VMSS_ID})
-
-LB_BACKEND_ID=$(echo ${LB} | jq -r '. | .loadBalancer | .backendAddressPools[0] | .id')
-echo $LB_BACKEND_ID
-
-# Updating Gateway VMSS backend to ILB backend
-echo "Updating Gateway VMSS to bind to LB backend"
-VMSS_UPDATE=$(az vmss update -g ${AKS_NODE_RESOURCE_GROUP} -n ${GW_VMSS_NAME} --add virtualMachineProfile.networkProfile.networkInterfaceConfigurations[0].ipConfigurations[0].loadBalancerBackendAddressPools \
-    "{\"id\": \"${LB_BACKEND_ID}\"}")
-VMSS_INSTANCE_UPDATE=$(az vmss update-instances -g ${AKS_NODE_RESOURCE_GROUP} -n ${GW_VMSS_NAME} --instance-ids '*')
-
 # Creating azure configuration file for the controllers
 echo "Generating azure configuration file"
 cat << EOF > ./azure.json
@@ -106,7 +92,10 @@ cat << EOF > ./azure.json
     "resourceGroup": "${AKS_NODE_RESOURCE_GROUP}",
     "location": "${LOCATION}",
     "loadBalancerName": "${LB_NAME}",
-    "loadBalancerResourceGroup": "${RESOURCE_GROUP}"
+    "loadBalancerResourceGroup": "${RESOURCE_GROUP}",
+    "vnetName": "${VNET_NAME}",
+    "vnetResourceGroup": "${RESOURCE_GROUP}",
+    "subnetName": "gateway"
 }
 EOF
 
