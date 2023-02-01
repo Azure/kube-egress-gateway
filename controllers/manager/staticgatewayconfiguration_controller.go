@@ -29,6 +29,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"text/template"
+
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	networkattachmentv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
@@ -41,7 +43,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"text/template"
 )
 
 var _ reconcile.Reconciler = &StaticGatewayConfigurationReconciler{}
@@ -56,8 +57,6 @@ type StaticGatewayConfigurationReconciler struct {
 // +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=k8s.cni.cncf.io,resources=network-attachment-definitions,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -90,7 +89,6 @@ func (r *StaticGatewayConfigurationReconciler) SetupWithManager(mgr ctrl.Manager
 		For(&egressgatewayv1alpha1.StaticGatewayConfiguration{}).
 		Owns(&corev1.Secret{}).
 		Owns(&egressgatewayv1alpha1.GatewayLBConfiguration{}).
-		Owns(&egressgatewayv1alpha1.GatewayVMConfiguration{}).
 		Owns(&networkattachmentv1.NetworkAttachmentDefinition{}).
 		Complete(r)
 }
@@ -115,11 +113,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 			return err
 		}
 
-		// reconcile vmconfig
-		if err := r.reconcileGatewayVMConfig(ctx, gwConfig); err != nil {
-			log.Error(err, "failed to reconcile gateway VM configuration")
-			return err
-		}
+		// reconcile CNI nic config
 		if err := r.reconcileCNINicConfig(ctx, gwConfig); err != nil {
 			log.Error(err, "failed to reconcile nic networkattachment")
 			return err
@@ -162,20 +156,6 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 	if err := r.Delete(ctx, lbConfig); err != nil {
 		if !apierrors.IsNotFound(err) {
 			log.Error(err, "failed to delete existing gateway LB configuration")
-			return err
-		}
-	}
-
-	log.Info("Deleting VMConfig")
-	vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      gwConfig.Name,
-			Namespace: gwConfig.Namespace,
-		},
-	}
-	if err := r.Delete(ctx, vmConfig); err != nil {
-		if !apierrors.IsNotFound(err) {
-			log.Error(err, "failed to delete existing gateway VM configuration")
 			return err
 		}
 	}
@@ -264,6 +244,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcileGatewayLBConfig(
 	if _, err := controllerutil.CreateOrPatch(ctx, r, lbConfig, func() error {
 		lbConfig.Spec.GatewayNodepoolName = gwConfig.Spec.GatewayNodepoolName
 		lbConfig.Spec.GatewayVMSSProfile = gwConfig.Spec.GatewayVMSSProfile
+		lbConfig.Spec.PublicIpPrefixId = gwConfig.Spec.PublicIpPrefixId
 		return controllerutil.SetControllerReference(gwConfig, lbConfig, r.Client.Scheme())
 	}); err != nil {
 		log.Error(err, "failed to reconcile gateway lb configuration")
@@ -272,37 +253,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcileGatewayLBConfig(
 	if lbConfig.DeletionTimestamp.IsZero() && lbConfig.Status != nil {
 		gwConfig.Status.WireguardServerIP = lbConfig.Status.FrontendIP
 		gwConfig.Status.WireguardServerPort = lbConfig.Status.ServerPort
-	}
-
-	return nil
-}
-
-func (r *StaticGatewayConfigurationReconciler) reconcileGatewayVMConfig(
-	ctx context.Context,
-	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
-) error {
-	log := log.FromContext(ctx)
-
-	// check existence of the gatewayVMConfig
-	vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      gwConfig.Name,
-			Namespace: gwConfig.Namespace,
-		},
-	}
-	if _, err := controllerutil.CreateOrPatch(ctx, r, vmConfig, func() error {
-		vmConfig.Spec.GatewayNodepoolName = gwConfig.Spec.GatewayNodepoolName
-		vmConfig.Spec.GatewayVMSSProfile = gwConfig.Spec.GatewayVMSSProfile
-		vmConfig.Spec.PublicIpPrefixId = gwConfig.Spec.PublicIpPrefixId
-		return controllerutil.SetControllerReference(gwConfig, vmConfig, r.Client.Scheme())
-	}); err != nil {
-		log.Error(err, "failed to reconcile gateway vm configuration")
-		return err
-	}
-
-	// Collect status from vmConfig to staticGatewayConfiguration
-	if vmConfig.DeletionTimestamp.IsZero() && vmConfig.Status != nil {
-		gwConfig.Status.PublicIpPrefix = vmConfig.Status.EgressIpPrefix
+		gwConfig.Status.PublicIpPrefix = lbConfig.Status.PublicIpPrefix
 	}
 
 	return nil

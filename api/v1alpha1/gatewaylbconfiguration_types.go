@@ -43,6 +43,10 @@ type GatewayLBConfigurationSpec struct {
 	// Profile of the gateway VMSS to apply the gateway configuration.
 	// +optional
 	GatewayVMSSProfile `json:"gatewayVmssProfile,omitempty"`
+
+	// BYO Resource ID of public IP prefix to be used as outbound.
+	// +optional
+	PublicIpPrefixId string `json:"publicIpPrefixId,omitempty"`
 }
 
 // GatewayLBConfigurationStatus defines the observed state of GatewayLBConfiguration
@@ -55,6 +59,9 @@ type GatewayLBConfigurationStatus struct {
 
 	// Listening port of the gateway side wireguard daemon.
 	ServerPort int32 `json:"serverPort,omitempty"`
+
+	// Public IP Prefix CIDR used for this gateway configuration.
+	PublicIpPrefix string `json:"publicIpPrefix,omitempty"`
 }
 
 //+kubebuilder:object:root=true

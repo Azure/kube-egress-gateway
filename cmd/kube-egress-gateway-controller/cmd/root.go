@@ -213,7 +213,6 @@ func startControllers(cmd *cobra.Command, args []string) {
 	}
 	if err = (&controllers.GatewayLBConfigurationReconciler{
 		Client:       mgr.GetClient(),
-		Scheme:       mgr.GetScheme(),
 		AzureManager: az,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GatewayLBConfiguration")
@@ -221,7 +220,6 @@ func startControllers(cmd *cobra.Command, args []string) {
 	}
 	if err = (&controllers.GatewayVMConfigurationReconciler{
 		Client:       mgr.GetClient(),
-		Scheme:       mgr.GetScheme(),
 		AzureManager: az,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GatewayVMConfiguration")

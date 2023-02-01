@@ -107,7 +107,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			It("should only report error in get", func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
-				r = &GatewayVMConfigurationReconciler{Client: cl, Scheme: s, AzureManager: az}
+				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundVMConfig)
 
@@ -121,7 +121,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			BeforeEach(func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(vmConfig).Build()
-				r = &GatewayVMConfigurationReconciler{Client: cl, Scheme: s, AzureManager: az}
+				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundVMConfig)
 			})
@@ -718,7 +718,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				controllerutil.AddFinalizer(vmConfig, consts.VMConfigFinalizerName)
 				vmConfig.Spec.PublicIpPrefixId = "/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix"
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(vmConfig).Build()
-				r = &GatewayVMConfigurationReconciler{Client: cl, Scheme: s, AzureManager: az}
+				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az}
 			})
 
 			It("should report error when getGatewayVMSS fails", func() {
@@ -830,7 +830,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				vmConfig.Spec.PublicIpPrefixId = "/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix"
 				vmConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(vmConfig).Build()
-				r = &GatewayVMConfigurationReconciler{Client: cl, Scheme: s, AzureManager: az}
+				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az}
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(BeNil())
 				getErr = getResource(cl, foundVMConfig)
@@ -845,7 +845,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				vmConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
 				controllerutil.AddFinalizer(vmConfig, consts.VMConfigFinalizerName)
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(vmConfig).Build()
-				r = &GatewayVMConfigurationReconciler{Client: cl, Scheme: s, AzureManager: az}
+				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az}
 			})
 
 			It("should report error when getGatewayVMSS fails", func() {
