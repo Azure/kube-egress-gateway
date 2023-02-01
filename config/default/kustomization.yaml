@@ -25,16 +25,16 @@ resources:
 images:
 - name: cni
   newName: local/kube-egress-gateway-cni
-  newTag: e9a583c
+  newTag: 4e7fd0e
 - name: cni-ipam
   newName: local/kube-egress-gateway-cni-ipam
-  newTag: e9a583c
+  newTag: 4e7fd0e
 - name: cnimanager
   newName: local/kube-egress-gateway-cnimanager
-  newTag: e9a583c
+  newTag: 4e7fd0e
 - name: controller
   newName: local/kube-egress-gateway-controller
-  newTag: e9a583c
+  newTag: 4e7fd0e
 - name: daemon
   newName: local/kube-egress-gateway-daemon
-  newTag: e9a583c
+  newTag: 4e7fd0e

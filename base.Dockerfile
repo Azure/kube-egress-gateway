@@ -1,5 +1,4 @@
 # syntax=docker/dockerfile:1
-ARG BASE_IMAGE=gcr.io/distroless/static
 # Build the manager binary
 FROM --platform=$BUILDPLATFORM golang:1.19 as builder 
 WORKDIR /workspace
@@ -15,7 +14,7 @@ COPY api/ api/
 COPY controllers/ controllers/
 COPY pkg/ pkg/
 
-ARG MAIN_ENTRY=kube-egress-gateway-controller
+ARG MAIN_ENTRY
 ARG TARGETARCH
 FROM builder as base
 WORKDIR /workspace
@@ -24,8 +23,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -a -o ${MAIN_ENTRY}  ./
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
-# FROM gcr.io/distroless/static
-FROM $BASE_IMAGE
+FROM gcr.io/distroless/static:nonroot
 WORKDIR /
 COPY --from=base /workspace/${MAIN_ENTRY} .
 USER 65532:65532
