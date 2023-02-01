@@ -31,7 +31,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -48,8 +48,6 @@ import (
 // GatewayLBConfigurationReconciler reconciles a GatewayLBConfiguration object
 type GatewayLBConfigurationReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
-
 	*azmanager.AzureManager
 }
 
@@ -63,6 +61,8 @@ type lbPropertyNames struct {
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations/finalizers,verbs=update
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get;update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -99,6 +99,7 @@ func (r *GatewayLBConfigurationReconciler) Reconcile(ctx context.Context, req ct
 func (r *GatewayLBConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&egressgatewayv1alpha1.GatewayLBConfiguration{}).
+		Owns(&egressgatewayv1alpha1.GatewayVMConfiguration{}).
 		Complete(r)
 }
 
@@ -128,6 +129,13 @@ func (r *GatewayLBConfigurationReconciler) reconcile(
 		log.Error(err, "failed to reconcile LB rules")
 		return ctrl.Result{}, err
 	}
+
+	// reconcile vmconfig
+	if err := r.reconcileGatewayVMConfig(ctx, lbConfig); err != nil {
+		log.Error(err, "failed to reconcile gateway VM configuration")
+		return ctrl.Result{}, err
+	}
+
 	if lbConfig.Status == nil {
 		lbConfig.Status = &egressgatewayv1alpha1.GatewayLBConfigurationStatus{}
 	}
@@ -156,6 +164,22 @@ func (r *GatewayLBConfigurationReconciler) ensureDeleted(
 		log.Info("lbConfig does not have finalizer, no additional cleanup needed")
 		return ctrl.Result{}, nil
 	}
+
+	log.Info("Deleting VMConfig")
+	vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      lbConfig.Name,
+			Namespace: lbConfig.Namespace,
+		},
+	}
+	if err := r.Delete(ctx, vmConfig); err == nil {
+		// deleting vmConfig, skip reconciling lb
+		log.Info("Waiting gateway vmss to be cleaned first")
+		return ctrl.Result{}, nil
+	} else if !apierrors.IsNotFound(err) {
+		log.Error(err, "failed to delete existing gateway VM configuration")
+		return ctrl.Result{}, err
+	} // vmConfig is already deleted, continue to clean up lb
 
 	// delete LB rule
 	_, _, err := r.reconcileLBRule(ctx, lbConfig, false)
@@ -488,4 +512,37 @@ func selectPortForLBRule(targetRule *network.LoadBalancingRule, lbRules []*netwo
 		}
 	}
 	return 0, fmt.Errorf("selectPortForLBRule: No available ports")
+}
+
+func (r *GatewayLBConfigurationReconciler) reconcileGatewayVMConfig(
+	ctx context.Context,
+	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
+) error {
+	log := log.FromContext(ctx)
+
+	vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      lbConfig.Name,
+			Namespace: lbConfig.Namespace,
+		},
+	}
+	if _, err := controllerutil.CreateOrPatch(ctx, r, vmConfig, func() error {
+		vmConfig.Spec.GatewayNodepoolName = lbConfig.Spec.GatewayNodepoolName
+		vmConfig.Spec.GatewayVMSSProfile = lbConfig.Spec.GatewayVMSSProfile
+		vmConfig.Spec.PublicIpPrefixId = lbConfig.Spec.PublicIpPrefixId
+		return controllerutil.SetControllerReference(lbConfig, vmConfig, r.Client.Scheme())
+	}); err != nil {
+		log.Error(err, "failed to reconcile gateway vm configuration")
+		return err
+	}
+
+	// Collect status from vmConfig to staticGatewayConfiguration
+	if vmConfig.DeletionTimestamp.IsZero() && vmConfig.Status != nil {
+		if lbConfig.Status == nil {
+			lbConfig.Status = &egressgatewayv1alpha1.GatewayLBConfigurationStatus{}
+		}
+		lbConfig.Status.PublicIpPrefix = vmConfig.Status.EgressIpPrefix
+	}
+
+	return nil
 }

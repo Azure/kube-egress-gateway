@@ -26,6 +26,8 @@ package manager
 
 import (
 	"context"
+	"time"
+
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
@@ -43,7 +45,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"time"
 )
 
 const (
@@ -179,25 +180,9 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 				Expect(foundGWConfig.Status.WireguardServerIP).To(BeEmpty())
 				Expect(foundGWConfig.Status.WireguardServerPort).To(BeZero())
 			})
-
-			It("should create a new vmConfig", func() {
-				vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{}
-				err := getResource(cl, vmConfig)
-				Expect(err).To(BeNil())
-
-				Expect(vmConfig.Spec.GatewayNodepoolName).To(Equal(gwConfig.Spec.GatewayNodepoolName))
-				Expect(vmConfig.Spec.GatewayVMSSProfile).To(Equal(gwConfig.Spec.GatewayVMSSProfile))
-				Expect(vmConfig.Spec.PublicIpPrefixId).To(Equal(vmConfig.Spec.PublicIpPrefixId))
-
-				existing := metav1.GetControllerOf(vmConfig)
-				Expect(existing).NotTo(BeNil())
-				Expect(existing.Name).To(Equal(testName))
-
-				Expect(foundGWConfig.Status.PublicIpPrefix).To(BeEmpty())
-			})
 		})
 
-		When("secret, lbConfig, vmConfig can all be found with status", func() {
+		When("secret and lbConfig can be found with status", func() {
 			BeforeEach(func() {
 				secret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
@@ -224,29 +209,12 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 						},
 					},
 					Status: &egressgatewayv1alpha1.GatewayLBConfigurationStatus{
-						FrontendIP: "1.1.1.1",
-						ServerPort: 6000,
+						FrontendIP:     "1.1.1.1",
+						ServerPort:     6000,
+						PublicIpPrefix: "1.2.3.4/31",
 					},
 				}
-				vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      testName,
-						Namespace: testNamespace,
-					},
-					Spec: egressgatewayv1alpha1.GatewayVMConfigurationSpec{
-						GatewayNodepoolName: "testgw",
-						GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
-							VMSSResourceGroup:  "vmssRG",
-							VMSSName:           "vmss",
-							PublicIpPrefixSize: 31,
-						},
-						PublicIpPrefixId: "testPipPrefix",
-					},
-					Status: &egressgatewayv1alpha1.GatewayVMConfigurationStatus{
-						EgressIpPrefix: "1.2.3.4/31",
-					},
-				}
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig, secret, lbConfig, vmConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig, secret, lbConfig).Build()
 				r = &StaticGatewayConfigurationReconciler{Client: cl}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundGWConfig)
@@ -258,7 +226,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 				Expect(res).To(Equal(ctrl.Result{}))
 			})
 
-			It("should update gwConfig's status from secret, lbConfig and vmConfig", func() {
+			It("should update gwConfig's status from secret and lbConfig", func() {
 				Expect(foundGWConfig.Status.WireguardPublicKey).To(Equal(pubK))
 				Expect(foundGWConfig.Status.WireguardServerIP).To(Equal("1.1.1.1"))
 				Expect(foundGWConfig.Status.WireguardServerPort).To(Equal(int32(6000)))
@@ -267,7 +235,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 		})
 
 		When("updating gwConfig", func() {
-			BeforeEach(func() {
+			It("should update lbConfig accordingly", func() {
 				secret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      testName,
@@ -295,51 +263,20 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 						ServerPort: 6000,
 					},
 				}
-				vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      testName,
-						Namespace: testNamespace,
-					},
-					Spec: egressgatewayv1alpha1.GatewayVMConfigurationSpec{
-						GatewayNodepoolName: "testgw1",
-						GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
-							VMSSResourceGroup:  "vmssRG1",
-							VMSSName:           "vmss1",
-							PublicIpPrefixSize: 30,
-						},
-						PublicIpPrefixId: "testPipPrefix1",
-					},
-					Status: &egressgatewayv1alpha1.GatewayVMConfigurationStatus{
-						EgressIpPrefix: "1.2.3.4/31",
-					},
-				}
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig, secret, lbConfig, vmConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig, secret, lbConfig).Build()
 				r = &StaticGatewayConfigurationReconciler{Client: cl}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundGWConfig)
-			})
-
-			It("shouldn't error", func() {
 				Expect(reconcileErr).To(BeNil())
 				Expect(getErr).To(BeNil())
 				Expect(res).To(Equal(ctrl.Result{}))
-			})
 
-			It("should update lbConfig and vmConfig accordingly", func() {
-				lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{}
+				lbConfig = &egressgatewayv1alpha1.GatewayLBConfiguration{}
 				err := getResource(cl, lbConfig)
 				Expect(err).To(BeNil())
 
 				Expect(lbConfig.Spec.GatewayNodepoolName).To(Equal(gwConfig.Spec.GatewayNodepoolName))
 				Expect(lbConfig.Spec.GatewayVMSSProfile).To(Equal(gwConfig.Spec.GatewayVMSSProfile))
-
-				vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{}
-				err = getResource(cl, vmConfig)
-				Expect(err).To(BeNil())
-
-				Expect(vmConfig.Spec.GatewayNodepoolName).To(Equal(gwConfig.Spec.GatewayNodepoolName))
-				Expect(vmConfig.Spec.GatewayVMSSProfile).To(Equal(gwConfig.Spec.GatewayVMSSProfile))
-				Expect(vmConfig.Spec.PublicIpPrefixId).To(Equal(vmConfig.Spec.PublicIpPrefixId))
 			})
 		})
 
@@ -384,15 +321,8 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 						Namespace: testNamespace,
 					},
 				}
-				vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      testName,
-						Namespace: testNamespace,
-					},
-				}
 				controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
-				controllerutil.AddFinalizer(vmConfig, consts.VMConfigFinalizerName)
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig, lbConfig, vmConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig, lbConfig).Build()
 				r = &StaticGatewayConfigurationReconciler{Client: cl}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundGWConfig)
@@ -411,13 +341,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 				lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{}
 				err := getResource(cl, lbConfig)
 				Expect(err).To(BeNil())
-
-				vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{}
-				err = getResource(cl, vmConfig)
-				Expect(err).To(BeNil())
-
 				Expect(lbConfig.GetDeletionTimestamp().IsZero()).To(BeFalse())
-				Expect(vmConfig.GetDeletionTimestamp().IsZero()).To(BeFalse())
 			})
 		})
 	})
@@ -441,6 +365,7 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 		gwConfig  *egressgatewayv1alpha1.StaticGatewayConfiguration
 		namespace *corev1.Namespace
 	)
+
 	BeforeAll(func() {
 		ctx, cancel = context.WithCancel(context.TODO())
 		k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
@@ -482,10 +407,12 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 		}
 		Expect(k8sClient.Create(ctx, gwConfig)).ToNot(HaveOccurred())
 	})
+
 	AfterAll(func() {
 		Expect(k8sClient.Delete(ctx, namespace)).ToNot(HaveOccurred())
 		cancel()
 	})
+
 	Context("New StaticGatewayConfiguration", func() {
 		It("should create a new secret", func() {
 			secret := &corev1.Secret{}
@@ -496,14 +423,6 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 			Expect(secret.Data[consts.WireguardSecretKeyName]).ToNot(BeNil())
 		})
 
-		It("should create a new vmconfig", func() {
-			vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{}
-			Eventually(func() error {
-				return k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), vmConfig)
-			}, timeout, interval).ShouldNot(HaveOccurred())
-			Expect(vmConfig.Spec.VMSSName).To(BeEquivalentTo("vmss"))
-		})
-
 		It("should create a new lbconfig", func() {
 			lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{}
 			Eventually(func() error {
@@ -511,6 +430,7 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 			}, timeout, interval).ShouldNot(HaveOccurred())
 			Expect(lbConfig.Spec.VMSSName).To(BeEquivalentTo("vmss"))
 		})
+
 		It("should create a new nic networkattachment config", func() {
 			networkattachment := &networkattachmentv1.NetworkAttachmentDefinition{}
 			objKey := client.ObjectKeyFromObject(gwConfig)
@@ -521,10 +441,12 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 			Expect(len(networkattachment.Spec.Config) > 0).To(BeTrue())
 		})
 	})
-	Context(" gateway profile config is deleted", func() {
+
+	Context("gateway profile config is deleted", func() {
 		BeforeAll(func() {
 			Expect(k8sClient.Delete(ctx, gwConfig, client.PropagationPolicy(metav1.DeletePropagationForeground))).ToNot(HaveOccurred())
 		})
+
 		It("should delete the new secret", func() {
 			secret := &corev1.Secret{}
 			Eventually(func() bool {
@@ -537,19 +459,13 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 			}, timeout, interval).Should(BeTrue())
 		})
 
-		It("should delete a new vmconfig", func() {
-			vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{}
-			Eventually(func() bool {
-				return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: testName}, vmConfig))
-			}, timeout, interval).Should(BeTrue())
-		})
-
 		It("should delete a new lbconfig", func() {
 			lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{}
 			Eventually(func() bool {
 				return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: testName}, lbConfig))
 			}, timeout, interval).Should(BeTrue())
 		})
+
 		It("should delete a new nic networkattachment config", func() {
 			networkattachment := &networkattachmentv1.NetworkAttachmentDefinition{}
 			Eventually(func() bool {

@@ -77,6 +77,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			getErr        error
 			lbConfig      *egressgatewayv1alpha1.GatewayLBConfiguration
 			foundLBConfig = &egressgatewayv1alpha1.GatewayLBConfiguration{}
+			foundVMConfig = &egressgatewayv1alpha1.GatewayVMConfiguration{}
 		)
 
 		BeforeEach(func() {
@@ -116,7 +117,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			It("should only report error in get", func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
-				r = &GatewayLBConfigurationReconciler{Client: cl, Scheme: s, AzureManager: az}
+				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundLBConfig)
 
@@ -130,7 +131,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			BeforeEach(func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(lbConfig).Build()
-				r = &GatewayLBConfigurationReconciler{Client: cl, Scheme: s, AzureManager: az}
+				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundLBConfig)
 			})
@@ -207,7 +208,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(lbConfig).Build()
-				r = &GatewayLBConfigurationReconciler{Client: cl, Scheme: s, AzureManager: az}
+				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az}
 			})
 
 			It("should report error if gateway LB is not found", func() {
@@ -331,7 +332,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				Expect(reconcileErr).To(Equal(fmt.Errorf("failed to find corresponding LB backend address pool")))
 			})
 
-			Context("reconcile lbRule and lbProbe", func() {
+			Context("reconcile lbRule, lbProbe and vmConfig", func() {
 				BeforeEach(func() {
 					vmss := &compute.VirtualMachineScaleSet{
 						Properties: &compute.VirtualMachineScaleSetProperties{UniqueID: to.Ptr(testVMSSUID)},
@@ -454,12 +455,113 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			})
 		})
 
+		When("lb is reconciled", func() {
+			BeforeEach(func() {
+				controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
+				az = getMockAzureManager(gomock.NewController(GinkgoT()))
+				expectedLB := getExpectedLB()
+				mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(expectedLB, nil)
+				vmss := &compute.VirtualMachineScaleSet{
+					Properties: &compute.VirtualMachineScaleSetProperties{UniqueID: to.Ptr(testVMSSUID)},
+					Tags:       map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")},
+				}
+				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil).AnyTimes()
+			})
+
+			It("should create a new vmConfig", func() {
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(lbConfig).Build()
+				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az}
+				res, reconcileErr = r.Reconcile(context.TODO(), req)
+				Expect(reconcileErr).To(BeNil())
+				Expect(res).To(Equal(ctrl.Result{}))
+
+				err := getResource(cl, foundVMConfig)
+				Expect(err).To(BeNil())
+
+				Expect(foundVMConfig.Spec.GatewayNodepoolName).To(Equal(lbConfig.Spec.GatewayNodepoolName))
+				Expect(foundVMConfig.Spec.GatewayVMSSProfile).To(Equal(lbConfig.Spec.GatewayVMSSProfile))
+				Expect(foundVMConfig.Spec.PublicIpPrefixId).To(Equal(lbConfig.Spec.PublicIpPrefixId))
+
+				existing := metav1.GetControllerOf(foundVMConfig)
+				Expect(existing).NotTo(BeNil())
+				Expect(existing.Name).To(Equal(testName))
+
+				getErr = getResource(cl, foundLBConfig)
+				Expect(getErr).To(BeNil())
+				Expect(foundLBConfig.Status.PublicIpPrefix).To(BeEmpty())
+			})
+
+			It("should update status from existing vmConfig", func() {
+				vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      testName,
+						Namespace: testNamespace,
+					},
+					Spec: egressgatewayv1alpha1.GatewayVMConfigurationSpec{
+						GatewayNodepoolName: "testgw",
+						GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
+							VMSSResourceGroup:  "vmssRG",
+							VMSSName:           "vmss",
+							PublicIpPrefixSize: 31,
+						},
+						PublicIpPrefixId: "testPipPrefix",
+					},
+					Status: &egressgatewayv1alpha1.GatewayVMConfigurationStatus{
+						EgressIpPrefix: "1.2.3.4/31",
+					},
+				}
+
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(lbConfig, vmConfig).Build()
+				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az}
+				res, reconcileErr = r.Reconcile(context.TODO(), req)
+				Expect(reconcileErr).To(BeNil())
+				Expect(res).To(Equal(ctrl.Result{}))
+
+				getErr = getResource(cl, foundLBConfig)
+				Expect(getErr).To(BeNil())
+				Expect(foundLBConfig.Status.PublicIpPrefix).To(Equal("1.2.3.4/31"))
+			})
+
+			It("should update existing vmConfig accordingly", func() {
+				vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      testName,
+						Namespace: testNamespace,
+					},
+					Spec: egressgatewayv1alpha1.GatewayVMConfigurationSpec{
+						GatewayNodepoolName: "testgw1",
+						GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
+							VMSSResourceGroup:  "vmssRG1",
+							VMSSName:           "vmss1",
+							PublicIpPrefixSize: 30,
+						},
+						PublicIpPrefixId: "testPipPrefix1",
+					},
+					Status: &egressgatewayv1alpha1.GatewayVMConfigurationStatus{
+						EgressIpPrefix: "1.2.3.4/31",
+					},
+				}
+
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(lbConfig, vmConfig).Build()
+				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az}
+				res, reconcileErr = r.Reconcile(context.TODO(), req)
+				Expect(reconcileErr).To(BeNil())
+				Expect(res).To(Equal(ctrl.Result{}))
+
+				getErr = getResource(cl, foundVMConfig)
+				Expect(getErr).To(BeNil())
+				Expect(foundVMConfig.Spec.GatewayNodepoolName).To(Equal(lbConfig.Spec.GatewayNodepoolName))
+			})
+		})
+
 		When("deleting lbConfig without finalizer", func() {
 			BeforeEach(func() {
 				lbConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(lbConfig).Build()
-				r = &GatewayLBConfigurationReconciler{Client: cl, Scheme: s, AzureManager: az}
+				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az}
 			})
 
 			It("should not do anything", func() {
@@ -471,13 +573,52 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			})
 		})
 
-		When("deleting a lbConfig with finalizer", func() {
+		When("deleting a lbConfig with finalizer and vmConfig", func() {
+			BeforeEach(func() {
+				controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
+				lbConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
+				az = getMockAzureManager(gomock.NewController(GinkgoT()))
+			})
+
+			It("should delete vmConfig before cleaning lb", func() {
+				vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      testName,
+						Namespace: testNamespace,
+					},
+				}
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(lbConfig, vmConfig).Build()
+				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az}
+				_, reconcileErr = r.Reconcile(context.TODO(), req)
+				Expect(reconcileErr).To(BeNil())
+				getErr = getResource(cl, foundVMConfig)
+				Expect(apierrors.IsNotFound(getErr)).To(BeTrue())
+			})
+
+			It("should wait for vmConfig to be deleted before cleaning lb", func() {
+				vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              testName,
+						Namespace:         testNamespace,
+						DeletionTimestamp: to.Ptr(metav1.Now()),
+					},
+				}
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(lbConfig, vmConfig).Build()
+				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az}
+				_, reconcileErr = r.Reconcile(context.TODO(), req)
+				Expect(reconcileErr).To(BeNil())
+				getErr = getResource(cl, foundVMConfig)
+				Expect(apierrors.IsNotFound(getErr)).To(BeTrue())
+			})
+		})
+
+		When("deleting a lbConfig with finalizer but no vmConfig", func() {
 			BeforeEach(func() {
 				controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
 				lbConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(lbConfig).Build()
-				r = &GatewayLBConfigurationReconciler{Client: cl, Scheme: s, AzureManager: az}
+				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az}
 				vmss := &compute.VirtualMachineScaleSet{
 					Properties: &compute.VirtualMachineScaleSetProperties{UniqueID: to.Ptr(testVMSSUID)},
 					Tags:       map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")},

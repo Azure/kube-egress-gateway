@@ -53,6 +53,9 @@ spec:
                     description: Resource group of the VMSS. Must be in the same subscription.
                     type: string
                 type: object
+              publicIpPrefixId:
+                description: BYO Resource ID of public IP prefix to be used as outbound.
+                type: string
             type: object
           status:
             description: GatewayLBConfigurationStatus defines the observed state of
@@ -60,6 +63,9 @@ spec:
             properties:
               frontendIP:
                 description: Gateway IP for wireguard connection.
+                type: string
+              publicIpPrefix:
+                description: Public IP Prefix CIDR used for this gateway configuration.
                 type: string
               serverPort:
                 description: Listening port of the gateway side wireguard daemon.
