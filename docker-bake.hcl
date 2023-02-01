@@ -11,14 +11,16 @@ target "daemon-compile" {
   inherits = ["base"]
   args = {
     MAIN_ENTRY = "kube-egress-gateway-daemon",
-    BASE_IMAGE = "mcr.microsoft.com/aks/devinfra/base-os-runtime-nettools:master.221105.1",
   }
 }
 target "daemon" {
   inherits = ["daemon-tags"]
-  dockerfile = "root.Dockerfile"
+  dockerfile = "gwdaemon.Dockerfile"
   contexts = {
     baseimg = "target:daemon-compile"
+  }
+  args = {
+    MAIN_ENTRY = "kube-egress-gateway-daemon",
   }
 }
 
@@ -43,6 +45,7 @@ target "cnimanager" {
     baseimg = "target:cnimanager-compile"
   }
   args = {
+    MAIN_ENTRY = "kube-egress-gateway-cnimanager",
     GRPC_HEALTH_PROBE_VERSION = "v0.4.14"
   }
 }
