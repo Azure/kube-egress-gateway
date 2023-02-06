@@ -346,8 +346,9 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSS(
 		return fmt.Errorf("vmss has empty network profile")
 	}
 
+	lbBackendpoolID := r.GetLBBackendAddressPoolID(to.Val(vmss.Properties.UniqueID))
 	interfaces := vmss.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
-	needUpdate, err := r.reconcileVMSSNetworkInterface(ctx, ipConfigName, ipPrefixID, wantIPConfig, interfaces)
+	needUpdate, err := r.reconcileVMSSNetworkInterface(ctx, ipConfigName, ipPrefixID, to.Val(lbBackendpoolID), wantIPConfig, interfaces)
 	if err != nil {
 		return fmt.Errorf("failed to reconcile vmss interface(%s): %w", to.Val(vmss.Name), err)
 	}
@@ -373,7 +374,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSS(
 		return fmt.Errorf("failed to get vm instances from vmss(%s): %w", to.Val(vmss.Name), err)
 	}
 	for _, instance := range instances {
-		if err := r.reconcileVMSSVM(ctx, vmConfig, to.Val(vmss.Name), instance, ipPrefixID, wantIPConfig); err != nil {
+		if err := r.reconcileVMSSVM(ctx, vmConfig, to.Val(vmss.Name), instance, ipPrefixID, to.Val(lbBackendpoolID), wantIPConfig); err != nil {
 			return err
 		}
 	}
@@ -386,6 +387,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 	vmssName string,
 	vm *compute.VirtualMachineScaleSetVM,
 	ipPrefixID string,
+	lbBackendpoolID string,
 	wantIPConfig bool,
 ) error {
 	log := log.FromContext(ctx)
@@ -396,7 +398,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 	}
 
 	interfaces := vm.Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations
-	needUpdate, err := r.reconcileVMSSNetworkInterface(ctx, ipConfigName, ipPrefixID, wantIPConfig, interfaces)
+	needUpdate, err := r.reconcileVMSSNetworkInterface(ctx, ipConfigName, ipPrefixID, lbBackendpoolID, wantIPConfig, interfaces)
 	if err != nil {
 		return fmt.Errorf("failed to reconcile vm interface(%s): %w", to.Val(vm.InstanceID), err)
 	}
@@ -420,6 +422,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSNetworkInterface(
 	ctx context.Context,
 	ipConfigName string,
 	ipPrefixID string,
+	lbBackendpoolID string,
 	wantIPConfig bool,
 	interfaces []*compute.VirtualMachineScaleSetNetworkConfiguration,
 ) (bool, error) {
@@ -461,7 +464,48 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSNetworkInterface(
 		primaryNic.Properties.IPConfigurations = append(primaryNic.Properties.IPConfigurations, expectedConfig)
 		needUpdate = true
 	}
+
+	changed, err := r.reconcileLbBackendPool(lbBackendpoolID, primaryNic, len(primaryNic.Properties.IPConfigurations) > 1 /* needBackendPool */)
+	if err != nil {
+		return false, err
+	}
+	needUpdate = needUpdate || changed
+
 	return needUpdate, nil
+}
+
+func (r *GatewayVMConfigurationReconciler) reconcileLbBackendPool(
+	lbBackendpoolID string,
+	primaryNic *compute.VirtualMachineScaleSetNetworkConfiguration,
+	needBackendPool bool,
+) (needUpdate bool, err error) {
+	if primaryNic == nil {
+		return false, fmt.Errorf("vmss(vm) primary network interface not found")
+	}
+
+	for _, ipConfig := range primaryNic.Properties.IPConfigurations {
+		if ipConfig.Properties != nil && to.Val(ipConfig.Properties.Primary) {
+			backendPools := ipConfig.Properties.LoadBalancerBackendAddressPools
+			for i, backend := range backendPools {
+				if strings.EqualFold(lbBackendpoolID, to.Val(backend.ID)) {
+					if !needBackendPool {
+						backendPools = append(backendPools[:i], backendPools[i+1:]...)
+						ipConfig.Properties.LoadBalancerBackendAddressPools = backendPools
+						return true, nil
+					} else {
+						return false, nil
+					}
+				}
+			}
+			if !needBackendPool {
+				return false, nil
+			}
+			backendPools = append(backendPools, &compute.SubResource{ID: to.Ptr(lbBackendpoolID)})
+			ipConfig.Properties.LoadBalancerBackendAddressPools = backendPools
+			return true, nil
+		}
+	}
+	return false, fmt.Errorf("vmss(vm) primary ipConfig not found")
 }
 
 func (r *GatewayVMConfigurationReconciler) getExpectedIPConfig(

@@ -612,7 +612,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				Expect(errors.Unwrap(err)).To(Equal(fmt.Errorf("failed")))
 			})
 
-			It("should create new ipConfig for vmss and vms", func() {
+			It("should create new ipConfig and update lb backend for vmss and vms", func() {
 				existingVMSS := getEmptyVMSS()
 				expectedVMSS := getConfiguredVMSS()
 				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
@@ -636,9 +636,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				Expect(err).To(BeNil())
 			})
 
-			It("should not create new ipConfig for vmss and vms when they already have expected ipConfig", func() {
-				existingVMSS := getConfiguredVMSS()
-				existingVMSS.Name = to.Ptr(vmssName)
+			It("should not create new ipConfig or update lb backend for vmss and vms when they already have expected ipConfig", func() {
+				existingVMSS := getConfiguredVMSSWithNameAndUID()
 				existingVM := getConfiguredVMSSVM()
 				existingVM.InstanceID = to.Ptr("0")
 				vms := []*compute.VirtualMachineScaleSetVM{existingVM}
@@ -649,8 +648,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			})
 
 			It("should update ipConfigs for vmss and vms when they have unexpected setup", func() {
-				existingVMSS, expectedVMSS := getConfiguredVMSS(), getConfiguredVMSS()
-				existingVMSS.Name = to.Ptr(vmssName)
+				existingVMSS, expectedVMSS := getConfiguredVMSSWithNameAndUID(), getConfiguredVMSS()
 				existingVMSS.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations[0].
 					Properties.IPConfigurations[1].Properties.PrivateIPAddressVersion = to.Ptr(compute.IPVersionIPv6)
 				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
@@ -677,10 +675,10 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				Expect(err).To(BeNil())
 			})
 
-			It("should drop ipConfig for vmss and vms when reconciling deletion", func() {
-				existingVMSS, expectedVMSS := getConfiguredVMSS(), getEmptyVMSS()
+			It("should drop ipConfig and lb backend for vmss and vms when reconciling deletion", func() {
+				existingVMSS, expectedVMSS := getConfiguredVMSSWithNameAndUID(), getEmptyVMSS()
 				expectedVMSS.Name = nil
-				existingVMSS.Name = to.Ptr(vmssName)
+				expectedVMSS.Properties.UniqueID = nil
 				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
 				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, vmssName, gomock.Any()).
 					DoAndReturn(func(ctx context.Context, rg, vmssName string, vmss compute.VirtualMachineScaleSet) (*compute.VirtualMachineScaleSet, error) {
@@ -744,8 +742,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			})
 
 			It("should report error when reconcileVMSS fails", func() {
-				vmss := getConfiguredVMSS()
-				vmss.Name = to.Ptr(vmssName)
+				vmss := getConfiguredVMSSWithNameAndUID()
 				vmss.Tags = map[string]*string{
 					consts.AKSNodepoolTagKey:             to.Ptr("testgw"),
 					consts.AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
@@ -769,8 +766,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			})
 
 			It("should report error when removing managed public ip prefix fails", func() {
-				vmss := getConfiguredVMSS()
-				vmss.Name = to.Ptr(vmssName)
+				vmss := getConfiguredVMSSWithNameAndUID()
 				vmss.Tags = map[string]*string{
 					consts.AKSNodepoolTagKey:             to.Ptr("testgw"),
 					consts.AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
@@ -795,8 +791,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			})
 
 			It("should update vmConfig with public ip prefix", func() {
-				vmss := getConfiguredVMSS()
-				vmss.Name = to.Ptr(vmssName)
+				vmss := getConfiguredVMSSWithNameAndUID()
 				vmss.Tags = map[string]*string{
 					consts.AKSNodepoolTagKey:             to.Ptr("testgw"),
 					consts.AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
@@ -913,6 +908,7 @@ func getEmptyVMSS() *compute.VirtualMachineScaleSet {
 		Name:     to.Ptr(vmssName),
 		Location: to.Ptr("location"),
 		Properties: &compute.VirtualMachineScaleSetProperties{
+			UniqueID: to.Ptr(testVMSSUID),
 			VirtualMachineProfile: &compute.VirtualMachineScaleSetVMProfile{
 				NetworkProfile: &compute.VirtualMachineScaleSetNetworkProfile{
 					NetworkInterfaceConfigurations: []*compute.VirtualMachineScaleSetNetworkConfiguration{
@@ -922,8 +918,9 @@ func getEmptyVMSS() *compute.VirtualMachineScaleSet {
 								IPConfigurations: []*compute.VirtualMachineScaleSetIPConfiguration{
 									{
 										Properties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-											Primary: to.Ptr(true),
-											Subnet:  &compute.APIEntityReference{ID: to.Ptr("subnet")},
+											Primary:                         to.Ptr(true),
+											Subnet:                          &compute.APIEntityReference{ID: to.Ptr("subnet")},
+											LoadBalancerBackendAddressPools: []*compute.SubResource{},
 										},
 									},
 								},
@@ -948,8 +945,9 @@ func getEmptyVMSSVM() *compute.VirtualMachineScaleSetVM {
 							IPConfigurations: []*compute.VirtualMachineScaleSetIPConfiguration{
 								{
 									Properties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-										Primary: to.Ptr(true),
-										Subnet:  &compute.APIEntityReference{ID: to.Ptr("subnet")},
+										Primary:                         to.Ptr(true),
+										Subnet:                          &compute.APIEntityReference{ID: to.Ptr("subnet")},
+										LoadBalancerBackendAddressPools: []*compute.SubResource{},
 									},
 								},
 							},
@@ -959,6 +957,15 @@ func getEmptyVMSSVM() *compute.VirtualMachineScaleSetVM {
 			},
 		},
 	}
+}
+
+// When updating a vmss, we only provide the network profile part
+// Need vmss name and UID for other tests
+func getConfiguredVMSSWithNameAndUID() *compute.VirtualMachineScaleSet {
+	vmss := getConfiguredVMSS()
+	vmss.Name = to.Ptr(vmssName)
+	vmss.Properties.UniqueID = to.Ptr(testVMSSUID)
+	return vmss
 }
 
 func getConfiguredVMSS() *compute.VirtualMachineScaleSet {
@@ -976,6 +983,11 @@ func getConfiguredVMSS() *compute.VirtualMachineScaleSet {
 										Properties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
 											Primary: to.Ptr(true),
 											Subnet:  &compute.APIEntityReference{ID: to.Ptr("subnet")},
+											LoadBalancerBackendAddressPools: []*compute.SubResource{
+												{ID: to.Ptr(fmt.Sprintf("/subscriptions/testSub/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s",
+													testLBRG, testLBName, testVMSSUID)),
+												},
+											},
 										},
 									},
 									{
@@ -1017,6 +1029,11 @@ func getConfiguredVMSSVM() *compute.VirtualMachineScaleSetVM {
 									Properties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
 										Primary: to.Ptr(true),
 										Subnet:  &compute.APIEntityReference{ID: to.Ptr("subnet")},
+										LoadBalancerBackendAddressPools: []*compute.SubResource{
+											{ID: to.Ptr(fmt.Sprintf("/subscriptions/testSub/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s",
+												testLBRG, testLBName, testVMSSUID)),
+											},
+										},
 									},
 								},
 								{
