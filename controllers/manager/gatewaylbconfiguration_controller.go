@@ -279,8 +279,12 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 			return "", 0, nil
 		} else {
 			lb = &network.LoadBalancer{
-				Name:       to.Ptr(r.LoadBalancerName()),
-				Location:   to.Ptr(r.Location()),
+				Name:     to.Ptr(r.LoadBalancerName()),
+				Location: to.Ptr(r.Location()),
+				SKU: &network.LoadBalancerSKU{
+					Name: to.Ptr(network.LoadBalancerSKUNameStandard),
+					Tier: to.Ptr(network.LoadBalancerSKUTierRegional),
+				},
 				Properties: &network.LoadBalancerPropertiesFormat{},
 			}
 			updateLB = true

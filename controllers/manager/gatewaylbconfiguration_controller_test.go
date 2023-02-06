@@ -832,6 +832,10 @@ func getEmptyLB() *network.LoadBalancer {
 	return &network.LoadBalancer{
 		Name:     to.Ptr(testLBName),
 		Location: to.Ptr("location"),
+		SKU: &network.LoadBalancerSKU{
+			Name: to.Ptr(network.LoadBalancerSKUNameStandard),
+			Tier: to.Ptr(network.LoadBalancerSKUTierRegional),
+		},
 		Properties: &network.LoadBalancerPropertiesFormat{
 			FrontendIPConfigurations: []*network.FrontendIPConfiguration{
 				&network.FrontendIPConfiguration{
@@ -860,6 +864,10 @@ func getExpectedLB() *network.LoadBalancer {
 	return &network.LoadBalancer{
 		Name:     to.Ptr(testLBName),
 		Location: to.Ptr("location"),
+		SKU: &network.LoadBalancerSKU{
+			Name: to.Ptr(network.LoadBalancerSKUNameStandard),
+			Tier: to.Ptr(network.LoadBalancerSKUTierRegional),
+		},
 		Properties: &network.LoadBalancerPropertiesFormat{
 			FrontendIPConfigurations: []*network.FrontendIPConfiguration{
 				&network.FrontendIPConfiguration{
