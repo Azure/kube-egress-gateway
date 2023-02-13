@@ -45,6 +45,8 @@ spec:
                   publicIpPrefixSize:
                     description: Public IP prefix size to be applied to this VMSS.
                     format: int32
+                    maximum: 31
+                    minimum: 0
                     type: integer
                   vmssName:
                     description: Name of the VMSS

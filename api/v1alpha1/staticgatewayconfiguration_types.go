@@ -41,6 +41,8 @@ type GatewayVMSSProfile struct {
 	VMSSName string `json:"vmssName,omitempty"`
 
 	// Public IP prefix size to be applied to this VMSS.
+	//+kubebuilder:validation:Minimum=0
+	//+kubebuilder:validation:Maximum=31
 	PublicIpPrefixSize int32 `json:"publicIpPrefixSize,omitempty"`
 }
 
