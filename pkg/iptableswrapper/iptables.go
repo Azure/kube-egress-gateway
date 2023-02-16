@@ -26,8 +26,14 @@ package iptableswrapper
 import "github.com/coreos/go-iptables/iptables"
 
 type IpTables interface {
-	// AppendUnique appends give rulespec to specified table/chain if it does not exist
-	AppendUnique(table, chain string, rulespec ...string) error
+	// Exists checks if given rulespec in specified table/chain exists
+	Exists(table, chain string, rulespec ...string) (bool, error)
+	//Insert inserts given rulespec to specified table/chain at specified position
+	Insert(table, chain string, pos int, rulespec ...string) error
+	// Delete removes rulespec in specified table/chain
+	Delete(table, chain string, rulespec ...string) error
+	// List lists rules in specified table/chain
+	List(table, chain string) ([]string, error)
 }
 
 type Interface interface {

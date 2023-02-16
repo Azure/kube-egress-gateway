@@ -348,6 +348,36 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			Expect(errors.Unwrap(reconcileErr)).To(Equal(fmt.Errorf("failed")))
 		})
 
+		It("should add iptables rule when it does not exist", func() {
+			vm, nic := getTestVM(), getTestNic()
+			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
+			mns := r.NetNS.(*mocknetnswrapper.MockInterface)
+			mipt := r.IPTables.(*mockiptableswrapper.MockInterface)
+			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
+			mockVMSSVMClient := r.AzureManager.VmssVMClient.(*mockvmssvmclient.MockInterface)
+			mockInterfaceClient := r.AzureManager.InterfaceClient.(*mockinterfaceclient.MockInterface)
+			gomock.InOrder(
+				mnl.EXPECT().LinkByName("eth0").Return(eth0, nil),
+				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNet(ilbIPCidr)}}, nil),
+				mockVMSSVMClient.EXPECT().Get(gomock.Any(), vmssRG, vmssName, "0", gomock.Any()).Return(vm, nil),
+				mockInterfaceClient.EXPECT().
+					GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "primary", gomock.Any()).
+					Return(nic, nil),
+				mnl.EXPECT().LinkByName("eth0").Return(eth0, nil),
+				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{}, nil),
+				mipt.EXPECT().New().Return(mtable, nil),
+				mtable.EXPECT().Exists(
+					"nat", "POSTROUTING", "-s", "10.0.0.6/32", "-m", "comment", "--comment", "no SNAT for traffic from netns gw-1234567890-10_0_0_4",
+					"-j", "RETURN").Return(false, nil),
+				mtable.EXPECT().Insert(
+					"nat", "POSTROUTING", 1, "-s", "10.0.0.6/32", "-m", "comment", "--comment", "no SNAT for traffic from netns gw-1234567890-10_0_0_4",
+					"-j", "RETURN").Return(nil),
+				mns.EXPECT().GetNS(nsName).Return(nil, fmt.Errorf("failed")),
+			)
+			_, reconcileErr = r.Reconcile(context.TODO(), req)
+			Expect(errors.Unwrap(reconcileErr)).To(Equal(fmt.Errorf("failed")))
+		})
+
 		It("should create new network namespace, wireguard interface and veth pair, routes, and iptables rules", func() {
 			pk, _ := wgtypes.ParseKey(privK)
 			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
@@ -403,7 +433,8 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 				mnl.EXPECT().LinkSetUp(loop).Return(nil),
 				// setup iptables rule
 				mipt.EXPECT().New().Return(mtable, nil),
-				mtable.EXPECT().AppendUnique("nat", "POSTROUTING", "-o", "host0", "-j", "MASQUERADE").Return(nil),
+				mtable.EXPECT().Exists("nat", "POSTROUTING", "-o", "host0", "-j", "MASQUERADE").Return(false, nil),
+				mtable.EXPECT().Insert("nat", "POSTROUTING", 1, "-o", "host0", "-j", "MASQUERADE").Return(nil),
 			)
 			err := r.configureGatewayNamespace(context.TODO(), gwConfig, &pk, "10.0.0.5", "10.0.0.6")
 			Expect(err).To(BeNil())
@@ -456,7 +487,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 				mnl.EXPECT().LinkSetUp(loop).Return(nil),
 				// check iptables rule
 				mipt.EXPECT().New().Return(mtable, nil),
-				mtable.EXPECT().AppendUnique("nat", "POSTROUTING", "-o", "host0", "-j", "MASQUERADE").Return(nil),
+				mtable.EXPECT().Exists("nat", "POSTROUTING", "-o", "host0", "-j", "MASQUERADE").Return(true, nil),
 			)
 			err := r.configureGatewayNamespace(context.TODO(), gwConfig, &pk, "10.0.0.5", "10.0.0.6")
 			Expect(err).To(BeNil())
@@ -685,9 +716,10 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			os.Setenv(consts.NodeNameEnvKey, "")
 		})
 
-		It("should delete ilb ip from eth0 and gateway namespace and update gwStatus", func() {
+		It("should delete ilb ip from eth0, delete iptables rule, delete gateway namespace and update gwStatus", func() {
 			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
 			mns := r.NetNS.(*mocknetnswrapper.MockInterface)
+			mipt := r.IPTables.(*mockiptableswrapper.MockInterface)
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
 			nsToDel := "gw-ns-10_0_0_6"
 			gwns := &mocknetnswrapper.MockNetNS{Name: nsToDel}
@@ -696,6 +728,11 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 				mnl.EXPECT().LinkByName("eth0").Return(eth0, nil),
 				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNet("10.0.0.6/31")}}, nil),
 				mnl.EXPECT().AddrDel(eth0, &netlink.Addr{IPNet: getIPNet("10.0.0.6/31")}).Return(nil),
+				mipt.EXPECT().New().Return(mtable, nil),
+				mtable.EXPECT().List("nat", "POSTROUTING").Return([]string{"-s 10.0.0.7/32 --comment no SNAT for traffic from netns gw-ns-10_0_0_6"}, nil),
+				mtable.EXPECT().Delete(
+					"nat", "POSTROUTING", "-s", "10.0.0.7/32", "-m", "comment", "--comment", "no SNAT for traffic from netns gw-ns-10_0_0_6",
+					"-j", "RETURN").Return(nil),
 				mns.EXPECT().GetNS(nsToDel).Return(gwns, nil),
 				mns.EXPECT().UnmountNS(nsToDel).Return(nil),
 			)

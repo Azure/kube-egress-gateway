@@ -194,6 +194,13 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 		return err
 	}
 
+	// add iptables rule in host namespace
+	if err := r.addIPTablesRule(ctx, "-s", vmSecondaryIP+"/32",
+		"-m", "comment", "--comment", consts.IPTablesRuleComment+getGatewayNamespaceName(gwConfig),
+		"-j", "RETURN"); err != nil {
+		return err
+	}
+
 	// configure gateway namespace (if not exists)
 	if err := r.configureGatewayNamespace(ctx, gwConfig, privateKey, vmPrimaryIP, vmSecondaryIP); err != nil {
 		return err
@@ -251,6 +258,11 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(ctx context.Context
 	// remove lb ip (if exists) from eth0
 	ilbIP := getILBIPFromNamespaceName(netns)
 	if err := r.reconcileIlbIPOnHost(ctx, ilbIP, true /* deleting */); err != nil {
+		return err
+	}
+
+	// delete iptables rule in host namespace
+	if err := r.removeIPTablesRule(ctx, netns); err != nil {
 		return err
 	}
 
@@ -518,7 +530,7 @@ func (r *StaticGatewayConfigurationReconciler) configureGatewayNamespace(
 			return fmt.Errorf("failed to set lo up: %w", err)
 		}
 
-		if err := r.reconcileIPTablesRule(ctx); err != nil {
+		if err := r.addIPTablesRule(ctx, "-o", consts.HostLinkName, "-j", "MASQUERADE"); err != nil {
 			return err
 		}
 		return nil
@@ -824,16 +836,56 @@ func (r *StaticGatewayConfigurationReconciler) addOrReplaceRoute(ctx context.Con
 	return nil
 }
 
-func (r *StaticGatewayConfigurationReconciler) reconcileIPTablesRule(ctx context.Context) error {
+func (r *StaticGatewayConfigurationReconciler) addIPTablesRule(ctx context.Context, rulespec ...string) error {
 	log := log.FromContext(ctx)
 	ipt, err := r.IPTables.New()
 	if err != nil {
 		return fmt.Errorf("failed to get iptable: %w", err)
 	}
 
-	log.Info("Checking and creating nat rule (if not exists) in POSTROUTING chain")
-	if err := ipt.AppendUnique(consts.NatTable, consts.PostRoutingChain, "-o", consts.HostLinkName, "-j", "MASQUERADE"); err != nil {
-		return fmt.Errorf("failed to check or create nat rule in POSTROUTING chain: %w", err)
+	log.Info(fmt.Sprintf("Checking rule(%v) existence in nat table POSTROUTING chain", rulespec))
+	exists, err := ipt.Exists(consts.NatTable, consts.PostRoutingChain, rulespec...)
+	if err != nil {
+		return fmt.Errorf("failed to check existence of iptables rule: %w", err)
+	}
+
+	if !exists {
+		log.Info("Inserting rule at the beginning of nat table POSTROUTING chain")
+		if err := ipt.Insert(consts.NatTable, consts.PostRoutingChain, 1, rulespec...); err != nil {
+			return fmt.Errorf("failed to create iptables rule: %w", err)
+		}
+	}
+	return nil
+}
+
+func (r *StaticGatewayConfigurationReconciler) removeIPTablesRule(ctx context.Context, netns string) error {
+	log := log.FromContext(ctx)
+	ipt, err := r.IPTables.New()
+	if err != nil {
+		return fmt.Errorf("failed to get iptable: %w", err)
+	}
+
+	rules, err := ipt.List(consts.NatTable, consts.PostRoutingChain)
+	if err != nil {
+		return fmt.Errorf("failed to list rules in nat table POSTROUTING chain: %w", err)
+	}
+
+	for _, rule := range rules {
+		if strings.Contains(rule, netns) {
+			ruleSpec := strings.Split(rule, " ")
+			for i, spec := range ruleSpec {
+				if spec == "-s" {
+					srcIP := ruleSpec[i+1]
+					log.Info(fmt.Sprintf("Deleting rule(%s) from nat table POSTROUTING chain", rule))
+					if err := ipt.Delete(consts.NatTable, consts.PostRoutingChain, "-s", srcIP,
+						"-m", "comment", "--comment", consts.IPTablesRuleComment+netns,
+						"-j", "RETURN"); err != nil {
+						return fmt.Errorf("failed to delete iptables rule: %w", err)
+					}
+					break
+				}
+			}
+		}
 	}
 	return nil
 }
