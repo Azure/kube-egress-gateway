@@ -76,6 +76,9 @@ const (
 
 	// environment variable name for nodeName
 	NodeNameEnvKey = "MY_NODE_NAME"
+
+	// iptables rule comment
+	IPTablesRuleComment = "no SNAT for traffic from netns "
 )
 
 const (
