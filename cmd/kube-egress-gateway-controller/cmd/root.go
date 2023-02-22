@@ -27,6 +27,7 @@ import (
 	goflag "flag"
 	"fmt"
 	"os"
+	"strconv"
 
 	controllers "github.com/Azure/kube-egress-gateway/controllers/manager"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
@@ -73,9 +74,9 @@ var (
 	cloudConfig          config.CloudConfig
 	scheme               = runtime.NewScheme()
 	setupLog             = ctrl.Log.WithName("setup")
-	metricsAddr          string
+	metricsPort          int
 	enableLeaderElection bool
-	probeAddr            string
+	probePort            int
 	zapOpts              = zap.Options{
 		Development: true,
 	}
@@ -95,8 +96,8 @@ func init() {
 
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	rootCmd.Flags().StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	rootCmd.Flags().StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	rootCmd.Flags().IntVar(&metricsPort, "metrics-bind-port", 8080, "The port the metric endpoint binds to.")
+	rootCmd.Flags().IntVar(&probePort, "health-probe-bind-port", 8081, "The port the probe endpoint binds to.")
 	rootCmd.Flags().BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -134,9 +135,9 @@ func startControllers(cmd *cobra.Command, args []string) {
 	var err error
 	options := ctrl.Options{
 		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
+		MetricsBindAddress:     ":" + strconv.Itoa(metricsPort),
 		Port:                   9443,
-		HealthProbeBindAddress: probeAddr,
+		HealthProbeBindAddress: ":" + strconv.Itoa(probePort),
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "0a299682.microsoft.com",
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily

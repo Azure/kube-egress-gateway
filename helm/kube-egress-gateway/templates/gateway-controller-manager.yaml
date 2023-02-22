@@ -1,0 +1,428 @@
+{{- if .Values.gatewayControllerManager.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-egress-gateway-controller-manager
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kube-egress-gateway-leader-election-role
+  namespace: {{ .Release.Namespace }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: kube-egress-gateway-manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - gatewaylbconfigurations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - gatewaylbconfigurations/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - gatewaylbconfigurations/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - gatewayvmconfigurations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - gatewayvmconfigurations/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - gatewayvmconfigurations/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - staticgatewayconfigurations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - staticgatewayconfigurations/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - k8s.cni.cncf.io
+  resources:
+  - network-attachment-definitions
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kube-egress-gateway-metrics-reader
+rules:
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kube-egress-gateway-proxy-role
+rules:
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kube-egress-gateway-leader-election-rolebinding
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kube-egress-gateway-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: kube-egress-gateway-controller-manager
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kube-egress-gateway-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kube-egress-gateway-manager-role
+subjects:
+- kind: ServiceAccount
+  name: kube-egress-gateway-controller-manager
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kube-egress-gateway-proxy-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kube-egress-gateway-proxy-role
+subjects:
+- kind: ServiceAccount
+  name: kube-egress-gateway-controller-manager
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    control-plane: controller-manager
+  name: kube-egress-gateway-controller-manager-metrics-service
+  namespace: {{ .Release.Namespace }}
+spec:
+  ports:
+  - name: https
+    port: 8443
+    protocol: TCP
+    targetPort: https
+  selector:
+    control-plane: controller-manager
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-egress-gateway-webhook-service
+  namespace: {{ .Release.Namespace }}
+spec:
+  ports:
+  - port: 443
+    protocol: TCP
+    targetPort: 9443
+  selector:
+    control-plane: controller-manager
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    control-plane: controller-manager
+  name: kube-egress-gateway-controller-manager
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: {{ .Values.gatewayControllerManager.replicas }}
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+      labels:
+        control-plane: controller-manager
+    spec:
+      containers:
+      - args:
+        - --cloud-config=/azure/config/azure-cloud-config.json
+        - --leader-elect={{ .Values.gatewayControllerManager.leaderElect }}
+        {{- if hasKey .Values.gatewayControllerManager "metricsBindPort" }}
+        - --metrics-bind-port={{ .Values.gatewayControllerManager.metricsBindPort }}
+        {{- end }}
+        {{- if hasKey .Values.gatewayControllerManager "healthProbeBindPort" }}
+        - --health-probe-bind-port={{ .Values.gatewayControllerManager.healthProbeBindPort }}
+        {{- end }}
+        command:
+        - /kube-egress-gateway-controller
+        image: {{ template "image.gatewayControllerManager" . }}
+        imagePullPolicy: {{ .Values.gatewayControllerManager.imagePullPolicy }}
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: {{ .Values.gatewayControllerManager.healthProbeBindPort }}
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        name: manager
+        ports:
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: {{ .Values.gatewayControllerManager.healthProbeBindPort }}
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 500m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - mountPath: /azure/config
+          name: azure-cloud-config
+          readOnly: true
+        - mountPath: /tmp/k8s-webhook-server/serving-certs
+          name: cert
+          readOnly: true
+      - args:
+        - --secure-listen-address=0.0.0.0:8443
+        - --upstream={{ printf "http://127.0.0.1:%d" (int .Values.gatewayControllerManager.metricsBindPort) }}
+        - --logtostderr=true
+        - --v=0
+        image: gcr.io/kubebuilder/kube-rbac-proxy:v0.13.0
+        name: kube-rbac-proxy
+        ports:
+        - containerPort: 8443
+          name: https
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 500m
+            memory: 128Mi
+          requests:
+            cpu: 5m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+      securityContext:
+        runAsNonRoot: true
+      serviceAccountName: kube-egress-gateway-controller-manager
+      terminationGracePeriodSeconds: 10
+      volumes:
+      - name: azure-cloud-config
+        secret:
+          secretName: azure-cloud-config
+      - name: cert
+        secret:
+          defaultMode: 420
+          secretName: webhook-server-cert
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: kube-egress-gateway-serving-cert
+  namespace: {{ .Release.Namespace }}
+spec:
+  dnsNames:
+  - kube-egress-gateway-webhook-service.kube-egress-gateway-system.svc
+  - kube-egress-gateway-webhook-service.kube-egress-gateway-system.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: kube-egress-gateway-selfsigned-issuer
+  secretName: webhook-server-cert
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: kube-egress-gateway-selfsigned-issuer
+  namespace: {{ .Release.Namespace }}
+spec:
+  selfSigned: {}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  annotations:
+    cert-manager.io/inject-ca-from: kube-egress-gateway-system/kube-egress-gateway-serving-cert
+  name: kube-egress-gateway-mutating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: kube-egress-gateway-webhook-service
+      namespace: {{ .Release.Namespace }}
+      path: /mutate-egressgateway-kubernetes-azure-com-v1alpha1-staticgatewayconfiguration
+  failurePolicy: Fail
+  name: mstaticgatewayconfiguration.kb.io
+  rules:
+  - apiGroups:
+    - egressgateway.kubernetes.azure.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - staticgatewayconfigurations
+  sideEffects: None
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  annotations:
+    cert-manager.io/inject-ca-from: kube-egress-gateway-system/kube-egress-gateway-serving-cert
+  name: kube-egress-gateway-validating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: kube-egress-gateway-webhook-service
+      namespace: {{ .Release.Namespace }}
+      path: /validate-egressgateway-kubernetes-azure-com-v1alpha1-staticgatewayconfiguration
+  failurePolicy: Fail
+  name: vstaticgatewayconfiguration.kb.io
+  rules:
+  - apiGroups:
+    - egressgateway.kubernetes.azure.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - staticgatewayconfigurations
+  sideEffects: None
+{{- end }}

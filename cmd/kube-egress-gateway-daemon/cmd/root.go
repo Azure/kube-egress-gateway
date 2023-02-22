@@ -28,6 +28,7 @@ import (
 	goflag "flag"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
@@ -76,8 +77,8 @@ var (
 	cloudConfig     config.CloudConfig
 	scheme          = runtime.NewScheme()
 	setupLog        = ctrl.Log.WithName("setup")
-	metricsAddr     string
-	probeAddr       string
+	metricsPort     int
+	probePort       int
 	zapOpts         = zap.Options{
 		Development: true,
 	}
@@ -98,8 +99,8 @@ func init() {
 
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	rootCmd.Flags().StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	rootCmd.Flags().StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	rootCmd.Flags().IntVar(&metricsPort, "metrics-bind-port", 8080, "The port the metric endpoint binds to.")
+	rootCmd.Flags().IntVar(&probePort, "health-probe-bind-port", 8081, "The port the probe endpoint binds to.")
 
 	zapOpts.BindFlags(goflag.CommandLine)
 	rootCmd.Flags().AddGoFlagSet(goflag.CommandLine)
@@ -133,9 +134,9 @@ func startControllers(cmd *cobra.Command, args []string) {
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
+		MetricsBindAddress:     ":" + strconv.Itoa(metricsPort),
 		Port:                   9443,
-		HealthProbeBindAddress: probeAddr,
+		HealthProbeBindAddress: ":" + strconv.Itoa(probePort),
 		LeaderElection:         false, // daemonSet on each gateway node
 	})
 	if err != nil {
