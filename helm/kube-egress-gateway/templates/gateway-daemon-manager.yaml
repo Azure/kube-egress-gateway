@@ -1,0 +1,180 @@
+{{- if .Values.gatewayDaemonManager.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-egress-gateway-daemon-manager
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: kube-egress-gateway-daemon-manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - gatewaystatuses
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - podwireguardendpoints
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - podwireguardendpoints/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - staticgatewayconfigurations
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - staticgatewayconfigurations/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kube-egress-gateway-daemon-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kube-egress-gateway-daemon-manager-role
+subjects:
+- kind: ServiceAccount
+  name: kube-egress-gateway-daemon-manager
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    control-plane: daemon-manager
+  name: kube-egress-gateway-daemon-manager
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      control-plane: daemon-manager
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: daemon
+      labels:
+        control-plane: daemon-manager
+    spec:
+      containers:
+      - args:
+        - --cloud-config=/azure/config/azure-cloud-config.json
+        {{- if hasKey .Values.gatewayDaemonManager "metricsBindPort" }}
+        - --metrics-bind-port={{ .Values.gatewayDaemonManager.metricsBindPort }}
+        {{- end }}
+        {{- if hasKey .Values.gatewayDaemonManager "healthProbeBindPort" }}
+        - --health-probe-bind-port={{ .Values.gatewayDaemonManager.healthProbeBindPort }}
+        {{- end }}
+        command:
+        - /kube-egress-gateway-daemon
+        env:
+        - name: MY_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: MY_POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        image: {{ template "image.gatewayDaemonManager" . }}
+        imagePullPolicy: {{ .Values.gatewayDaemonManager.imagePullPolicy }}
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: {{ .Values.gatewayDaemonManager.healthProbeBindPort }}
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        name: daemon
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: {{ .Values.gatewayDaemonManager.healthProbeBindPort }}
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 500m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - mountPath: /run/netns
+          mountPropagation: Bidirectional
+          name: hostpath-run
+        - mountPath: /var/run/netns
+          mountPropagation: Bidirectional
+          name: hostpath-var
+        - mountPath: /azure/config
+          name: azure-cloud-config
+          readOnly: true
+      hostNetwork: true
+      hostPID: true
+      nodeSelector:
+        todo.kubernetes.azure.com/mode: Gateway
+      serviceAccountName: kube-egress-gateway-daemon-manager
+      terminationGracePeriodSeconds: 10
+      tolerations:
+      - effect: NoSchedule
+        key: mode
+        operator: Equal
+        value: gateway
+      volumes:
+      - hostPath:
+          path: /run/netns
+        name: hostpath-run
+      - hostPath:
+          path: /var/run/netns
+        name: hostpath-var
+      - name: azure-cloud-config
+        secret:
+          secretName: azure-cloud-config
+{{- end }}

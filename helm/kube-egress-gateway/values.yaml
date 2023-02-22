@@ -1,0 +1,66 @@
+multus:
+  enabled: false
+
+cert-manager:
+  enabled: false
+  namespace: "cert-manager"
+
+common:
+  imageRepository: "local"
+  imageTag: "test"
+
+gatewayControllerManager:
+  enabled: true
+  # imageRepository: "local"
+  imageName: "kube-egress-gateway-controller"
+  # imageTag: ""
+  imagePullPolicy: "IfNotPresent"
+  replicas: 1
+  leaderElect: "true"
+  metricsBindPort: 8080
+  healthProbeBindPort: 8081
+
+gatewayCNIManager:
+  enabled: true
+  # imageRepository: "local"
+  imageName: "kube-egress-gateway-cnimanager"
+  # imageTag: ""
+  imagePullPolicy: "IfNotPresent"
+
+gatewayDaemonManager:
+  enabled: true
+  # imageRepository: "local"
+  imageName: "kube-egress-gateway-daemon"
+  # imageTag: ""
+  imagePullPolicy: "IfNotPresent"
+  healthProbeBindPort: 8081
+
+gatewayCNI:
+  # imageRepository: "local"
+  imageName: "kube-egress-gateway-cni"
+  # imageTag: ""
+  imagePullPolicy: "IfNotPresent"
+
+gatewayCNIIpam:
+  # imageRepository: "local"
+  imageName: "kube-egress-gateway-cni-ipam"
+  # imageTag: ""
+  imagePullPolicy: "IfNotPresent"
+
+config:
+  azureCloudConfig:
+    cloud: "AzurePublicCloud"
+    tenantId: "00000000-0000-0000-0000-000000000000"
+    subscriptionId: "00000000-0000-0000-0000-000000000000"
+    useUserAssignedIdentity: false
+    userAssignedIdentityID: "00000000-0000-0000-0000-000000000000"
+    aadClientId: "00000000-0000-0000-0000-000000000000"
+    aadClientSecret: ""
+    userAgent: "kube-egress-gateway-controller"
+    resourceGroup: ""
+    location: ""
+    loadBalancerName: "gateway-ilb"
+    loadBalancerResourceGroup: ""
+    vnetName: ""
+    vnetResourceGroup: ""
+    subnetName: ""

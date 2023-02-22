@@ -1,0 +1,147 @@
+{{- if .Values.gatewayCNIManager.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-egress-gateway-cni-manager
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: kube-egress-gateway-cni-manager-role
+rules:
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - podwireguardendpoints
+  verbs:
+  - create
+  - delete
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - staticgatewayconfigurations
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - staticgatewayconfigurations/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kube-egress-gateway-cni-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kube-egress-gateway-cni-manager-role
+subjects:
+- kind: ServiceAccount
+  name: kube-egress-gateway-cni-manager
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    control-plane: cni-manager
+  name: kube-egress-gateway-cni-manager
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      control-plane: cni-manager
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: cni-manager
+      labels:
+        control-plane: cni-manager
+    spec:
+      containers:
+      - args:
+        - serve
+        command:
+        - /kube-egress-gateway-cnimanager
+        image: {{ template "image.gatewayCNIManager" . }}
+        imagePullPolicy: {{ .Values.gatewayCNIManager.imagePullPolicy }}
+        livenessProbe:
+          exec:
+            command:
+            - /usr/local/bin/grpc_health_probe
+            - -addr=unix:///var/run/egressgateway.sock
+          initialDelaySeconds: 20
+          periodSeconds: 5
+        name: cnimanager
+        readinessProbe:
+          exec:
+            command:
+            - /usr/local/bin/grpc_health_probe
+            - -addr=unix:///var/run/egressgateway.sock
+          initialDelaySeconds: 20
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 500m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - mountPath: /proc
+          mountPropagation: Bidirectional
+          name: hostpath-proc
+        - mountPath: /run
+          mountPropagation: Bidirectional
+          name: hostpath-run
+        - mountPath: /var
+          mountPropagation: Bidirectional
+          name: hostpath-var
+      initContainers:
+      - image: {{ template "image.gatewayCNI" . }}
+        imagePullPolicy: {{ .Values.gatewayCNI.imagePullPolicy }}
+        name: cni-install
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - mountPath: /opt/cni/bin
+          name: cni-bin
+      - image: {{ template "image.gatewayCNIIpam" . }}
+        imagePullPolicy: {{ .Values.gatewayCNIIpam.imagePullPolicy }}
+        name: cni-ipam-install
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - mountPath: /opt/cni/bin
+          name: cni-bin
+      nodeSelector:
+        kubernetes.io/os: linux
+        kubernetes.io/arch: amd64
+      serviceAccountName: kube-egress-gateway-cni-manager
+      terminationGracePeriodSeconds: 10
+      volumes:
+      - hostPath:
+          path: /proc
+        name: hostpath-proc
+      - hostPath:
+          path: /run
+        name: hostpath-run
+      - hostPath:
+          path: /var
+        name: hostpath-var
+      - hostPath:
+          path: /opt/cni/bin/
+        name: cni-bin
+{{- end }}
