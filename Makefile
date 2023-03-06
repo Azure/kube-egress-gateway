@@ -80,11 +80,21 @@ IMAGE_REGISTRY ?= local
 IMAGE_TAG ?= $(shell git rev-parse --short=7 HEAD)
 
 .PHONY: build
-build: generate fmt vet ## Build manager binary.
+build: generate fmt vet bin/kube-egress-gateway-controller bin/kube-egress-gateway-daemon bin/kube-egress-cni bin/kube-egress-cni-ipam bin/kube-egress-gateway-cnimanager ## Build manager binary.
+
+bin/kube-egress-gateway-controller:
 	CGO_ENABLED=0 go build -o bin/manager ./cmd/kube-egress-gateway-controller/main.go
+
+bin/kube-egress-gateway-daemon:
 	CGO_ENABLED=0 go build -o bin/daemon ./cmd/kube-egress-gateway-daemon/main.go
+
+bin/kube-egress-cni:
 	CGO_ENABLED=0 go build -o bin/cni ./cmd/kube-egress-cni/main.go
+
+bin/kube-egress-cni-ipam:
 	CGO_ENABLED=0 go build -o bin/cni-ipam ./cmd/kube-egress-cni-ipam/main.go
+
+bin/kube-egress-gateway-cnimanager:
 	CGO_ENABLED=0 go build -o bin/cnimanager ./cmd/kube-egress-gateway-cnimanager/main.go
 
 AZURE_CONFIG_FILE ?= ./tests/deploy/azure.json

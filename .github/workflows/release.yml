@@ -1,0 +1,197 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+jobs:
+  build-kube-egress-gateway-controller:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+          # TODO: multi-arch not supported yet
+          # - os: linux
+          #   arch: arm
+          # - os: linux
+          #   arch: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Golang
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: go.mod
+      - name: Build binary
+        run: |
+          rm -rf ./bin
+          ARCH=${{ matrix.arch }} make bin/kube-egress-gateway-controller
+          mv bin/manager bin/kube-egress-gateway-controller-manager-${{ matrix.os }}-${{ matrix.arch }}
+      - uses: actions/upload-artifact@v3
+        with:
+          name: kube-egress-gateway-controller-manager-${{ matrix.os }}-${{ matrix.arch }}
+          path: bin/kube-egress-gateway-controller-manager-${{ matrix.os }}-${{ matrix.arch }}
+          if-no-files-found: error
+
+  build-kube-egress-gateway-daemon:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+          # TODO: multi-arch not supported yet
+          # - os: linux
+          #   arch: arm
+          # - os: linux
+          #   arch: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Golang
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: go.mod
+      - name: Build binary
+        run: |
+          rm -rf ./bin
+          ARCH=${{ matrix.arch }} make bin/kube-egress-gateway-daemon
+          mv bin/daemon bin/kube-egress-gateway-daemon-manager-${{ matrix.os }}-${{ matrix.arch }}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: kube-egress-gateway-daemon-manager-${{ matrix.os }}-${{ matrix.arch }}
+          path: bin/kube-egress-gateway-daemon-manager-${{ matrix.os }}-${{ matrix.arch }}
+
+  build-kube-egress-cni:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+          # TODO: multi-arch not supported yet
+          # - os: linux
+          #   arch: arm
+          # - os: linux
+          #   arch: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Golang
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: go.mod
+      - name: Build binary
+        run: |
+          rm -rf ./bin
+          ARCH=${{ matrix.arch }} make bin/kube-egress-cni
+          mv bin/cni bin/kube-egress-cni-${{ matrix.os }}-${{ matrix.arch }}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: kube-egress-cni-${{ matrix.os }}-${{ matrix.arch }}
+          path: bin/kube-egress-cni-${{ matrix.os }}-${{ matrix.arch }}
+
+  build-kube-egress-cni-ipam:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+          # TODO: multi-arch not supported yet
+          # - os: linux
+          #   arch: arm
+          # - os: linux
+          #   arch: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Golang
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: go.mod
+      - name: Build binary
+        run: |
+          rm -rf ./bin
+          ARCH=${{ matrix.arch }} make bin/kube-egress-cni-ipam
+          mv bin/cni-ipam bin/kube-egress-cni-ipam-${{ matrix.os }}-${{ matrix.arch }}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: kube-egress-cni-ipam-${{ matrix.os }}-${{ matrix.arch }}
+          path: bin/kube-egress-cni-ipam-${{ matrix.os }}-${{ matrix.arch }}
+
+  build-kube-egress-gateway-cnimanager:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+          # TODO: multi-arch not supported yet
+          # - os: linux
+          #   arch: arm
+          # - os: linux
+          #   arch: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Golang
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: go.mod
+      - name: Build binary
+        run: |
+          rm -rf ./bin
+          ARCH=${{ matrix.arch }} make bin/kube-egress-gateway-cnimanager
+          mv bin/cnimanager bin/kube-egress-gateway-cnimanager-${{ matrix.os }}-${{ matrix.arch }}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: kube-egress-gateway-cnimanager-${{ matrix.os }}-${{ matrix.arch }}
+          path: bin/kube-egress-gateway-cnimanager-${{ matrix.os }}-${{ matrix.arch }}
+  
+  publish:
+    runs-on: ubuntu-latest
+    needs:
+      - build-kube-egress-gateway-controller
+      - build-kube-egress-gateway-daemon
+      - build-kube-egress-cni
+      - build-kube-egress-cni-ipam
+      - build-kube-egress-gateway-cnimanager
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: master
+          fetch-depth: 0
+      - name: Setup Golang
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: go.mod
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: ./artifacts
+      - name: Publish release
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: true
+          generate_release_notes: true
+          files: |
+            ./artifacts/kube-egress-gateway-controller-manager-*-*/*
+            ./artifacts/kube-egress-gateway-daemon-manager-*-*/*
+            ./artifacts/kube-egress-cni-*-*/*
+            ./artifacts/kube-egress-cni-ipam-*-*/*
+            ./artifacts/kube-egress-gateway-cnimanager-*-*/*
