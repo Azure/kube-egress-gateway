@@ -272,8 +272,12 @@ var cniRawTemplate = `
 			{{- end}}
 			"gatewayName": "{{.Name}}"
 		},
-		{"type": "sbr"},
-		{"type": "tuning","sysctl": {"net.ipv4.conf.all.arp_filter": "2"}}
+		{	"type": "tuning",
+			"sysctl": {
+				"net.ipv4.conf.all.rp_filter": "2",
+				"net.ipv4.conf.eth0.rp_filter": "2"
+			}
+		}
 	]
 }`
 
