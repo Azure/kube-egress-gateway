@@ -267,8 +267,12 @@ var cniRawTemplate = `
 		{
 			"type": "kube-egress-cni",
 			"ipam": {"type": "kube-egress-cni-ipam"},
-			{{if .Spec.ExcludeCIDRs}}
-			"excludedCIDRs": [{{range $i, $a := .Spec.ExcludeCIDRs}}{{$a}}{{- end}}],
+			{{if .Spec.ExcludeCIDRs -}}
+			"excludedCIDRs": [
+			{{- range $i, $e := .Spec.ExcludeCIDRs}}
+        		{{- if $i}},{{end -}}
+        		"{{$e}}"
+    		{{- end}}],
 			{{- end}}
 			"gatewayName": "{{.Name}}"
 		},
@@ -295,11 +299,12 @@ func (r *StaticGatewayConfigurationReconciler) reconcileCNINicConfig(ctx context
 	if _, err := controllerutil.CreateOrUpdate(ctx, r, networkattachement, func() error {
 		raw := &bytes.Buffer{}
 		if err := cniTemplate.Execute(raw, gwConfig); err != nil {
-			return err
+			return fmt.Errorf("failed to execute cni template: %w", err)
 		}
 		w := &bytes.Buffer{}
+		log.Info("config string", "str", raw.String())
 		if err := json.Compact(w, raw.Bytes()); err != nil {
-			return err
+			return fmt.Errorf("failed to compact json template: %w", err)
 		}
 		networkattachement.Spec.Config = w.String()
 		return controllerutil.SetControllerReference(gwConfig, networkattachement, r.Client.Scheme())

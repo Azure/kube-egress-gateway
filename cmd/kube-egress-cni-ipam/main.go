@@ -26,6 +26,8 @@ package main
 
 import (
 	"errors"
+	"net"
+
 	"github.com/Azure/kube-egress-gateway/pkg/cni/conf"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/logger"
@@ -37,7 +39,6 @@ import (
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
-	"net"
 )
 
 func main() {
@@ -70,59 +71,58 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer podNetNS.Close()
 
-	var address net.IPNet
-	ipv6AddrFound := false
+	var v4Address, v6Address net.IPNet
+	var ipv4AddrFound, ipv6AddrFound bool
 	var extraRoutes []*types.Route
 	err = podNetNS.Do(func(netNS ns.NetNS) error {
 		eth0Link, err := netlink.LinkByName("eth0")
 		if err != nil {
 			return err
 		}
+
 		addrList, err := netlink.AddrList(eth0Link, netlink.FAMILY_V6)
 		if err != nil {
 			return err
 		}
 		for _, item := range addrList {
 			if item.Scope == unix.RT_SCOPE_LINK {
-				address = *item.IPNet
+				v6Address = *item.IPNet
 				ipv6AddrFound = true
 			}
 		}
-		routes, err := netlink.RouteList(eth0Link, netlink.FAMILY_V4)
+
+		addrList, err = netlink.AddrList(eth0Link, netlink.FAMILY_V4)
 		if err != nil {
 			return err
 		}
-
-		for _, route := range routes {
-			if route.Dst == nil {
-				for _, item := range config.ExcludedCIDRs {
-					_, cidr, err := net.ParseCIDR(item)
-					if err != nil {
-						return err
-					}
-					extraRoutes = append(extraRoutes, &types.Route{
-						Dst: *cidr,
-						GW:  route.Gw,
-					})
-				}
-				break
+		for _, item := range addrList {
+			if item.Scope == unix.RT_SCOPE_UNIVERSE {
+				v4Address = *item.IPNet
+				ipv4AddrFound = true
 			}
 		}
-
 		return nil
 	})
+
 	if err != nil {
 		return err
+	}
+	if !ipv4AddrFound {
+		return errors.New("these is no enough ipv4 addr allocated for this pod")
 	}
 	if !ipv6AddrFound {
 		return errors.New("there is no enough ipv6 addr allocated for this pod")
 	}
+
 	result := &type100.Result{
 		CNIVersion: type100.ImplementedSpecVersion,
 		IPs: []*type100.IPConfig{
 			{
-				Address: address,
+				Address: v6Address,
 				Gateway: net.ParseIP(consts.GatewayIP),
+			},
+			{
+				Address: v4Address,
 			},
 		},
 		Routes: extraRoutes,
