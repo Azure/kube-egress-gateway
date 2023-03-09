@@ -794,7 +794,7 @@ func getTestGwConfigStatus() egressgatewayv1alpha1.StaticGatewayConfigurationSta
 }
 
 func getIPNet(ipCidr string) *net.IPNet {
-	ipNet, _ := netlink.ParseIPNet(ipCidr)
+	_, ipNet, _ := net.ParseCIDR(ipCidr)
 	return ipNet
 }
 

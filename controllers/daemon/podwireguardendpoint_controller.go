@@ -155,7 +155,7 @@ func (r *PodWireguardEndpointReconciler) reconcile(
 			return fmt.Errorf("failed to parse pod wireguard public key: %w", err)
 		}
 
-		podIPNet, err := netlink.ParseIPNet(podEndpoint.Spec.PodIpAddress)
+		_, podIPNet, err := net.ParseCIDR(podEndpoint.Spec.PodIpAddress)
 		if err != nil {
 			return fmt.Errorf("failed to parse pod IPv4 address: %w", err)
 		}
@@ -317,7 +317,7 @@ func (r *PodWireguardEndpointReconciler) addWireguardPeerRoutes(
 		return fmt.Errorf("failed to retrive wireguard device: %w", err)
 	}
 
-	dst, err := netlink.ParseIPNet(podEndpoint.Spec.PodIpAddress)
+	_, dst, err := net.ParseCIDR(podEndpoint.Spec.PodIpAddress)
 	if err != nil {
 		return fmt.Errorf("failed to parse pod ip net %s: %w", podEndpoint.Spec.PodIpAddress, err)
 	}

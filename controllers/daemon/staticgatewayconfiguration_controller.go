@@ -428,7 +428,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcileIlbIPOnHost(ctx context.
 	}
 
 	ilbIpCidr := fmt.Sprintf("%s/%d", ilbIP, prefix)
-	ilbIpNet, err := netlink.ParseIPNet(ilbIpCidr)
+	_, ilbIpNet, err := net.ParseCIDR(ilbIpCidr)
 	if err != nil {
 		return fmt.Errorf("failed to parse ILB IP address: %s", ilbIpCidr)
 	}
@@ -571,7 +571,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcileWireguardLink(
 		if err != nil {
 			return fmt.Errorf("failed to get wireguard link in gateway namespace after creation: %w", err)
 		}
-		gwIP, _ := netlink.ParseIPNet(consts.GatewayIP)
+		_, gwIP, _ := net.ParseCIDR(consts.GatewayIP)
 		gwLinkAddr := netlink.Addr{
 			IPNet: gwIP,
 		}
@@ -677,7 +677,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcileVethPair(
 			return fmt.Errorf("failed to get host link in gateway namespace: %w", err)
 		}
 
-		snatIPNet, err := netlink.ParseIPNet(vmSecondaryIP + "/32")
+		_, snatIPNet, err := net.ParseCIDR(vmSecondaryIP + "/32")
 		if err != nil {
 			return fmt.Errorf("failed to parse SNAT IP(%s) for host interface: %w", vmSecondaryIP+"/32", err)
 		}
@@ -710,7 +710,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcileVethPair(
 			return fmt.Errorf("failed to set host link up: %w", err)
 		}
 
-		vmSnatCidr, err := netlink.ParseIPNet(vmPrimaryIP + "/32")
+		_, vmSnatCidr, err := net.ParseCIDR(vmPrimaryIP + "/32")
 		if err != nil {
 			return fmt.Errorf("failed to parse CIDR %s/32: %w", vmPrimaryIP+"/32", err)
 		}
@@ -778,7 +778,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcileVethPairInHost(
 		return fmt.Errorf("failed to set veth link in host namespace up: %w", err)
 	}
 
-	snatIPNet, err := netlink.ParseIPNet(snatIP + "/32")
+	_, snatIPNet, err := net.ParseCIDR(snatIP + "/32")
 	if err != nil {
 		return fmt.Errorf("failed to parse SNAT IP %s: %w", snatIP+"/32", err)
 	}

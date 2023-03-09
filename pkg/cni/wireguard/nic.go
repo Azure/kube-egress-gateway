@@ -163,7 +163,10 @@ func WithWireGuardNic(containerID string, podNSPath string, ifName string, ipWra
 				},
 			}
 			for _, item := range ipamResult.IPs {
-				item.Interface = current.Int(0)
+				if item.Address.IP.To4() == nil {
+					// only configure ipv6 ip on wg interface
+					item.Interface = current.Int(0)
+				}
 			}
 			return cniipam.ConfigureIface(ifName, ipamResult)
 		})

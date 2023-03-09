@@ -27,12 +27,14 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
+
+	"github.com/Azure/kube-egress-gateway/pkg/cni/routes"
 
 	"github.com/Azure/kube-egress-gateway/pkg/cni/conf"
 	"github.com/Azure/kube-egress-gateway/pkg/cni/ipam"
 	"github.com/Azure/kube-egress-gateway/pkg/cni/wireguard"
-	cniprotocol "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
 	v1 "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/containernetworking/cni/pkg/skel"
@@ -59,13 +61,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 	// get cni config
 	config, err := conf.ParseCNIConfig(args.StdinData)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to parse CNI config: %w", err)
 	}
 
 	// get k8s metadata
 	k8sInfo, err := conf.LoadK8sInfo(args.Args)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load k8s metadata: %w", err)
 	}
 
 	// exchange public key with daemon
@@ -79,12 +81,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 		grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
 			d := net.Dialer{}
 			return d.DialContext(ctx, "unix", addr)
-		}))
+		}),
+	)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to contact cni manager daemon: %w", err)
 	}
 	defer conn.Close()
-	client := cniprotocol.NewNicServiceClient(conn)
+	client := v1.NewNicServiceClient(conn)
 
 	// allocate ip
 	if config == nil || config.IPAM.Type == "" {
@@ -97,18 +100,18 @@ func cmdAdd(args *skel.CmdArgs) error {
 		//generate private key
 		privateKey, err := wgtypes.GeneratePrivateKey()
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to generate wg private key: %w", err)
 		}
 		var wgDevice *wgtypes.Device
 		err = podNs.Do(func(nn ns.NetNS) error {
 			wgclient, err := wgctrl.New()
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to create wg client: %w", err)
 			}
 			defer wgclient.Close()
 			wgDevice, err = wgclient.Device(args.IfName)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to find wg device (%s): %w", args.IfName, err)
 			}
 			return nil
 		})
@@ -117,10 +120,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 
 		var allowedIPs string
-		if len(ipamResult.IPs) != 1 {
-			return errors.New("ipam result is more than 1")
+		for _, item := range ipamResult.IPs {
+			// set pod's IPv4 address as allowed ip
+			if item.Address.IP.To4() != nil {
+				allowedIPs = fmt.Sprintf("%s/32", item.Address.IP.String())
+			}
 		}
-		allowedIPs = ipamResult.IPs[0].Address.String()
 		result = ipamResult
 		resp, err := client.NicAdd(context.Background(), &v1.NicAddRequest{
 			PodConfig: &v1.PodInfo{
@@ -133,21 +138,21 @@ func cmdAdd(args *skel.CmdArgs) error {
 			GatewayName: config.GatewayName,
 		})
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to send nicAdd request: %w", err)
 		}
 
 		gwPublicKey, err := wgtypes.ParseKey(resp.PublicKey)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to parse gateway public key: %w", err)
 		}
 
 		return podNs.Do(func(nn ns.NetNS) error {
 			wgclient, err := wgctrl.New()
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to create wg client: %w", err)
 			}
 			defer wgclient.Close()
-			return wgclient.ConfigureDevice(args.IfName, wgtypes.Config{
+			err = wgclient.ConfigureDevice(args.IfName, wgtypes.Config{
 				PrivateKey: &privateKey,
 				Peers: []wgtypes.PeerConfig{
 					{
@@ -169,8 +174,18 @@ func cmdAdd(args *skel.CmdArgs) error {
 					},
 				},
 			})
+			if err != nil {
+				return fmt.Errorf("failed to configure wg device: %w", err)
+
+			}
+
+			if err := routes.SetPodRoutes(args.IfName, config.ExcludedCIDRs); err != nil {
+				return fmt.Errorf("failed to setup pod routes: %w", err)
+			}
+			return nil
 		})
 	})
+
 	if err != nil {
 		return err
 	}
@@ -205,7 +220,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 	defer conn.Close()
-	client := cniprotocol.NewNicServiceClient(conn)
+	client := v1.NewNicServiceClient(conn)
 
 	podNs, err := ns.GetNS(args.Netns)
 	if err != nil {
@@ -214,7 +229,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	defer podNs.Close()
 	err = podNs.Do(func(nn ns.NetNS) error {
 
-		_, err = client.NicDel(context.Background(), &cniprotocol.NicDelRequest{
+		_, err = client.NicDel(context.Background(), &v1.NicDelRequest{
 			PodConfig: &v1.PodInfo{
 				PodName:      string(k8sInfo.K8S_POD_NAME),
 				PodNamespace: string(k8sInfo.K8S_POD_NAMESPACE),
