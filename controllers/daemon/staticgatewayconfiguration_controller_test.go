@@ -244,7 +244,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
 			mnl.EXPECT().LinkByName("eth0").Return(eth0, nil)
 			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{}, nil)
-			mnl.EXPECT().AddrAdd(eth0, &netlink.Addr{IPNet: getIPNet(ilbIPCidr)}).Return(nil)
+			mnl.EXPECT().AddrAdd(eth0, &netlink.Addr{IPNet: getIPNetWithActualIP(ilbIPCidr)}).Return(nil)
 			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig.Status.GatewayWireguardProfile.WireguardServerIP, false)
 			Expect(err).To(BeNil())
 		})
@@ -253,7 +253,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
 			mnl.EXPECT().LinkByName("eth0").Return(eth0, nil)
-			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNet(ilbIPCidr)}}, nil)
+			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(ilbIPCidr)}}, nil)
 			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig.Status.GatewayWireguardProfile.WireguardServerIP, false)
 			Expect(err).To(BeNil())
 		})
@@ -262,8 +262,8 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
 			mnl.EXPECT().LinkByName("eth0").Return(eth0, nil)
-			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNet(ilbIPCidr)}}, nil)
-			mnl.EXPECT().AddrDel(eth0, &netlink.Addr{IPNet: getIPNet(ilbIPCidr)}).Return(nil)
+			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(ilbIPCidr)}}, nil)
+			mnl.EXPECT().AddrDel(eth0, &netlink.Addr{IPNet: getIPNetWithActualIP(ilbIPCidr)}).Return(nil)
 			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig.Status.GatewayWireguardProfile.WireguardServerIP, true)
 			Expect(err).To(BeNil())
 		})
@@ -303,7 +303,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
 			mnl.EXPECT().LinkByName("eth0").Return(eth0, nil)
-			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNet(ilbIPCidr)}}, nil)
+			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(ilbIPCidr)}}, nil)
 			mockVMSSVMClient := r.AzureManager.VmssVMClient.(*mockvmssvmclient.MockInterface)
 			mockVMSSVMClient.EXPECT().Get(gomock.Any(), vmssRG, vmssName, "0", gomock.Any()).Return(nil, fmt.Errorf("failed"))
 			_, reconcileErr = r.Reconcile(context.TODO(), req)
@@ -314,8 +314,8 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
 			mnl.EXPECT().LinkByName("eth0").Return(eth0, nil)
-			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNet(ilbIPCidr)}}, nil)
-			mnl.EXPECT().AddrDel(eth0, &netlink.Addr{IPNet: getIPNet(ilbIPCidr)}).Return(nil)
+			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(ilbIPCidr)}}, nil)
+			mnl.EXPECT().AddrDel(eth0, &netlink.Addr{IPNet: getIPNetWithActualIP(ilbIPCidr)}).Return(nil)
 			err := r.removeSecondaryIpFromHost(context.TODO(), "10.0.0.4")
 			Expect(err).To(BeNil())
 		})
@@ -337,7 +337,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			mockInterfaceClient := r.AzureManager.InterfaceClient.(*mockinterfaceclient.MockInterface)
 			gomock.InOrder(
 				mnl.EXPECT().LinkByName("eth0").Return(eth0, nil),
-				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNet(ilbIPCidr)}}, nil),
+				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(ilbIPCidr)}}, nil),
 				mockVMSSVMClient.EXPECT().Get(gomock.Any(), vmssRG, vmssName, "0", gomock.Any()).Return(vm, nil),
 				mockInterfaceClient.EXPECT().
 					GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "primary", gomock.Any()).
@@ -358,7 +358,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			mockInterfaceClient := r.AzureManager.InterfaceClient.(*mockinterfaceclient.MockInterface)
 			gomock.InOrder(
 				mnl.EXPECT().LinkByName("eth0").Return(eth0, nil),
-				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNet(ilbIPCidr)}}, nil),
+				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(ilbIPCidr)}}, nil),
 				mockVMSSVMClient.EXPECT().Get(gomock.Any(), vmssRG, vmssName, "0", gomock.Any()).Return(vm, nil),
 				mockInterfaceClient.EXPECT().
 					GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "primary", gomock.Any()).
@@ -405,7 +405,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 				// add address to wg0
 				mnl.EXPECT().LinkByName("wg0").Return(wg0, nil),
 				mnl.EXPECT().AddrList(wg0, nl.FAMILY_ALL).Return([]netlink.Addr{}, nil),
-				mnl.EXPECT().AddrAdd(wg0, &netlink.Addr{IPNet: getIPNet(consts.GatewayIP)}),
+				mnl.EXPECT().AddrAdd(wg0, &netlink.Addr{IPNet: getIPNetWithActualIP(consts.GatewayIP)}),
 				mnl.EXPECT().LinkSetUp(wg0).Return(nil),
 				mwg.EXPECT().New().Return(mclient, nil),
 				mclient.EXPECT().Device("wg0").Return(device, nil),
@@ -461,7 +461,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 				mnl.EXPECT().LinkByName("wg0").Return(wg0, nil),
 				// check address and wg config for wg0
 				mnl.EXPECT().LinkByName("wg0").Return(wg0, nil),
-				mnl.EXPECT().AddrList(wg0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNet(consts.GatewayIP)}}, nil),
+				mnl.EXPECT().AddrList(wg0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(consts.GatewayIP)}}, nil),
 				mnl.EXPECT().LinkSetUp(wg0).Return(nil),
 				mwg.EXPECT().New().Return(mclient, nil),
 				mclient.EXPECT().Device("wg0").Return(device, nil),
@@ -534,7 +534,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 				mnl.EXPECT().LinkByName("wg0").Return(wg0, nil),
 				// check address and wg config for wg0
 				mnl.EXPECT().LinkByName("wg0").Return(wg0, nil),
-				mnl.EXPECT().AddrList(wg0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNet(consts.GatewayIP)}}, nil),
+				mnl.EXPECT().AddrList(wg0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(consts.GatewayIP)}}, nil),
 				mnl.EXPECT().LinkSetUp(wg0).Return(nil),
 				mwg.EXPECT().New().Return(mclient, nil),
 				mclient.EXPECT().Device("wg0").Return(device, nil),
@@ -727,7 +727,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 				mns.EXPECT().ListNS().Return([]string{nsName, nsToDel}, nil),
 				mnl.EXPECT().LinkByName("eth0").Return(eth0, nil),
 				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNet("10.0.0.6/31")}}, nil),
-				mnl.EXPECT().AddrDel(eth0, &netlink.Addr{IPNet: getIPNet("10.0.0.6/31")}).Return(nil),
+				mnl.EXPECT().AddrDel(eth0, &netlink.Addr{IPNet: getIPNetWithActualIP("10.0.0.6/31")}).Return(nil),
 				mipt.EXPECT().New().Return(mtable, nil),
 				mtable.EXPECT().List("nat", "POSTROUTING").Return([]string{"-s 10.0.0.7/32 --comment no SNAT for traffic from netns gw-ns-10_0_0_6"}, nil),
 				mtable.EXPECT().Delete(
@@ -795,6 +795,11 @@ func getTestGwConfigStatus() egressgatewayv1alpha1.StaticGatewayConfigurationSta
 
 func getIPNet(ipCidr string) *net.IPNet {
 	_, ipNet, _ := net.ParseCIDR(ipCidr)
+	return ipNet
+}
+
+func getIPNetWithActualIP(ipCidr string) *net.IPNet {
+	ipNet, _ := netlink.ParseIPNet(ipCidr)
 	return ipNet
 }
 
