@@ -428,7 +428,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcileIlbIPOnHost(ctx context.
 	}
 
 	ilbIpCidr := fmt.Sprintf("%s/%d", ilbIP, prefix)
-	_, ilbIpNet, err := net.ParseCIDR(ilbIpCidr)
+	ilbIpNet, err := netlink.ParseIPNet(ilbIpCidr)
 	if err != nil {
 		return fmt.Errorf("failed to parse ILB IP address: %s", ilbIpCidr)
 	}
@@ -571,7 +571,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcileWireguardLink(
 		if err != nil {
 			return fmt.Errorf("failed to get wireguard link in gateway namespace after creation: %w", err)
 		}
-		_, gwIP, _ := net.ParseCIDR(consts.GatewayIP)
+		gwIP, _ := netlink.ParseIPNet(consts.GatewayIP)
 		gwLinkAddr := netlink.Addr{
 			IPNet: gwIP,
 		}
