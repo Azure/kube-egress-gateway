@@ -204,3 +204,17 @@ func (mr *MockInterfaceMockRecorder) RouteReplace(route interface{}) *gomock.Cal
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RouteReplace", reflect.TypeOf((*MockInterface)(nil).RouteReplace), route)
 }
+
+// RuleAdd mocks base method.
+func (m *MockInterface) RuleAdd(rule *netlink.Rule) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RuleAdd", rule)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RuleAdd indicates an expected call of RuleAdd.
+func (mr *MockInterfaceMockRecorder) RuleAdd(rule interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RuleAdd", reflect.TypeOf((*MockInterface)(nil).RuleAdd), rule)
+}
