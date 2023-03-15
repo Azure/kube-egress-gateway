@@ -7,7 +7,7 @@ AKS_ID_NAME=${AKS_ID_NAME:-"gateway-aks-id"}
 AKS_CLUSTER_NAME=${AKS_CLUSTER_NAME:-"aks"}
 NETWORK_PLUGIN=${NETWORK_PLUGIN:-"kubenet"}
 DNS_SERVER_IP=${DNS_SERVER_IP:-"10.245.0.10"}
-KUBENET_POD_CIDR=${KUBENET_POD_CIRD:-"10.244.0.0/16"}
+POD_CIDR=${POD_CIRD:-"10.244.0.0/16"}
 SERVICE_CIDR=${SERVICE_CIDR:-"10.245.0.0/16"}
 LB_NAME=${LB_NAME:-"gateway-ilb"}
 
@@ -49,13 +49,25 @@ Role=$(az role assignment create --role "Network Contributor" --assignee-princip
 
 # Create aks cluster
 if [ "$NETWORK_PLUGIN" == "kubenet" ]; then
-    NETWORK_PROFILE="--network-plugin kubenet --pod-cidr ${KUBENET_POD_CIDR}"
+    NETWORK_PROFILE="--network-plugin kubenet --pod-cidr ${POD_CIDR}"
     NODEPOOL_PROFILE="--max-pods 250"
 elif [ "$NETWORK_PLUGIN" == "azure" ]; then
     NETWORK_PROFILE="--network-plugin azure"
+    NODEPOOL_PROFILE="--max-pods 30"
+elif [ "$NETWORK_PLUGIN" == "azure-podsubnet" ]; then
+    NETWORK_PROFILE="--network-plugin azure"
     NODEPOOL_PROFILE="--pod-subnet-id ${SUBNET_POD_ID}"
+elif [ "$NETWORK_PLUGIN" == "overlay" ]; then
+    NETWORK_PROFILE="--network-plugin azure --network-plugin-mode overlay --pod-cidr ${POD_CIDR}"
+    NODEPOOL_PROFILE="--max-pods 250"
+elif [ "$NETWORK_PLUGIN" == "cilium" ]; then
+    NETWORK_PROFILE="--network-plugin azure --network-plugin-mode overlay --pod-cidr ${POD_CIDR} --enable-cilium-dataplane"
+    NODEPOOL_PROFILE="--max-pods 250"
+elif [ "$NETWORK_PLUGIN" == "calico" ]; then
+    NETWORK_PROFILE="--network-plugin azure --network-policy calico"
+    NODEPOOL_PROFILE="--max-pods 30"
 else
-    echo "Network plugin ${NETWORK_PLUGIN} is not supported, should be kubenet or azure"
+    echo "Network plugin ${NETWORK_PLUGIN} is not supported, should be kubenet/azure/azure-podsubnet/overlay/cilium/calico"
 fi
 
 echo "Creating AKS cluster: ${AKS_CLUSTER_NAME}"
