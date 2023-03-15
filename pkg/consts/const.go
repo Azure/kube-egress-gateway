@@ -68,8 +68,17 @@ const (
 	// post routing chain name
 	PostRoutingChain = "POSTROUTING"
 
+	// pre routing chain name
+	PreRoutingChain = "PREROUTING"
+
+	// output chain name
+	OutputChain = "OUTPUT"
+
 	// nat table name
 	NatTable = "nat"
+
+	// mangle table name
+	MangleTable = "mangle"
 
 	// environment variable name for pod namespace
 	PodNamespaceEnvKey = "MY_POD_NAMESPACE"
@@ -79,6 +88,9 @@ const (
 
 	// iptables rule comment
 	IPTablesRuleComment = "no SNAT for traffic from netns "
+
+	// mark for traffic from eth0 in pod namespace - 0x2222
+	Eth0Mark int = 8738
 )
 
 const (

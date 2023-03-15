@@ -34,6 +34,25 @@ func (m *MockIpTables) EXPECT() *MockIpTablesMockRecorder {
 	return m.recorder
 }
 
+// AppendUnique mocks base method.
+func (m *MockIpTables) AppendUnique(table, chain string, rulespec ...string) error {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{table, chain}
+	for _, a := range rulespec {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "AppendUnique", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AppendUnique indicates an expected call of AppendUnique.
+func (mr *MockIpTablesMockRecorder) AppendUnique(table, chain interface{}, rulespec ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{table, chain}, rulespec...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AppendUnique", reflect.TypeOf((*MockIpTables)(nil).AppendUnique), varargs...)
+}
+
 // Delete mocks base method.
 func (m *MockIpTables) Delete(table, chain string, rulespec ...string) error {
 	m.ctrl.T.Helper()

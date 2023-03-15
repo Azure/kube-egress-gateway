@@ -50,6 +50,8 @@ type Interface interface {
 	RouteDel(route *netlink.Route) error
 	// RouteList gets a list of routes in the system
 	RouteList(link netlink.Link, family int) ([]netlink.Route, error)
+	// RuleAdd adds a rule
+	RuleAdd(rule *netlink.Rule) error
 }
 
 type nl struct{}
@@ -104,4 +106,8 @@ func (*nl) RouteDel(route *netlink.Route) error {
 
 func (*nl) RouteList(link netlink.Link, family int) ([]netlink.Route, error) {
 	return netlink.RouteList(link, family)
+}
+
+func (*nl) RuleAdd(rule *netlink.Rule) error {
+	return netlink.RuleAdd(rule)
 }
