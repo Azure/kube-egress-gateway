@@ -26,6 +26,7 @@ package conf
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/version"
 )
