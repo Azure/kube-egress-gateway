@@ -37,16 +37,6 @@ SUBNET_AKS_ID=$(echo ${SUBNET_AKS} | jq -r '. | .id')
 SUBNET_POD_ID=$(echo ${SUBNET_POD} | jq -r '. | .id')
 SUBNET_GATEWAY_ID=$(echo ${SUBNET_GATEWAY} | jq -r '. | .id')
 
-# Create user assigned managed identity for AKS and role assignment
-echo "Creating managed identity: ${AKS_ID_NAME}"
-UMI=$(az identity create -g ${RESOURCE_GROUP} -n ${AKS_ID_NAME})
-
-UMI_RESOURCE_ID=$(echo ${UMI} | jq -r '. | .id')
-UMI_PRINCIPAL_ID=$(echo ${UMI} | jq -r '. | .principalId')
-
-# Assign "Network Contributor" role to AKS identity
-Role=$(az role assignment create --role "Network Contributor" --assignee-principal-type ServicePrincipal --assignee-object-id ${UMI_PRINCIPAL_ID})
-
 # Create aks cluster
 if [ "$NETWORK_PLUGIN" == "kubenet" ]; then
     NETWORK_PROFILE="--network-plugin kubenet --pod-cidr ${POD_CIDR}"
@@ -71,8 +61,7 @@ else
 fi
 
 echo "Creating AKS cluster: ${AKS_CLUSTER_NAME}"
-AKS=$(az aks create -n ${AKS_CLUSTER_NAME} -g ${RESOURCE_GROUP} -l ${LOCATION} \
-    --enable-managed-identity --assign-identity ${UMI_RESOURCE_ID} \
+AKS=$(az aks create -n ${AKS_CLUSTER_NAME} -g ${RESOURCE_GROUP} -l ${LOCATION} --enable-managed-identity \
     --dns-name-prefix ${AKS_CLUSTER_NAME} --admin-username "azureuser" --generate-ssh-keys \
     --dns-service-ip ${DNS_SERVER_IP} --service-cidr ${SERVICE_CIDR} ${NETWORK_PROFILE} \
     --node-count 1 --vnet-subnet-id ${SUBNET_AKS_ID} ${NODEPOOL_PROFILE})
