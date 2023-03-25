@@ -36,11 +36,15 @@ spec:
             - /kube-egress-gateway-cnimanager
           args:
             - serve
+            # - --exception-cidrs=
+            - --cni-conf-file=01-egressgateway.conflist
           image: cnimanager:latest
           name: cnimanager
           securityContext:
             privileged: true
           volumeMounts:
+            - mountPath: /etc/cni/net.d
+              name: cni-conf
             - mountPath: /proc
               name: hostpath-proc
               mountPropagation: Bidirectional
@@ -76,6 +80,7 @@ spec:
       nodeSelector:
         kubernetes.io/os: linux
         kubernetes.io/arch: amd64
+      hostNetwork: true
       serviceAccountName: cni-manager
       terminationGracePeriodSeconds: 10
       volumes:
@@ -91,3 +96,6 @@ spec:
         - name: cni-bin
           hostPath:
             path: /opt/cni/bin/
+        - name: cni-conf
+          hostPath:
+            path: /etc/cni/net.d/

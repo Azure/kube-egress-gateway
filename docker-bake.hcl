@@ -49,12 +49,14 @@ target "cnimanager" {
     GRPC_HEALTH_PROBE_VERSION = "v0.4.14"
   }
 }
+
 target "cni-compile" {
   inherits = ["base"]
   args = {
     MAIN_ENTRY = "kube-egress-cni",
   }
 }
+
 target "cni" {
   inherits = ["cni-tags"]
   dockerfile = "cni.Dockerfile"
@@ -69,6 +71,7 @@ target "cni-ipam-compile" {
     MAIN_ENTRY = "kube-egress-cni-ipam",
   }
 }
+
 target "cni-ipam" {
   inherits = ["cni-ipam-tags"]
   dockerfile = "cni.Dockerfile"

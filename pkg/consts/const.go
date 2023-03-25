@@ -95,6 +95,8 @@ const (
 
 const (
 	CNISocketPath = "/var/run/egressgateway.sock"
+
+	CNIConfDir = "/etc/cni/net.d"
 )
 
 const (

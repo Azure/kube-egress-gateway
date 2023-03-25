@@ -30,6 +30,7 @@ import (
 
 	current "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/controllers/cnimanager"
+	cniconf "github.com/Azure/kube-egress-gateway/pkg/cni/conf"
 	cniprotocol "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/logger"
@@ -65,6 +66,11 @@ var serveCmd = &cobra.Command{
 	Run:   ServiceLauncher,
 }
 
+var (
+	confFileName   string
+	exceptionCidrs string
+)
+
 func init() {
 	rootCmd.AddCommand(serveCmd)
 
@@ -77,6 +83,8 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// serveCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	serveCmd.Flags().StringVar(&exceptionCidrs, "exception-cidrs", "", "Cidrs that should bypass egress gateway, e.g. intra-cluster traffic")
+	serveCmd.Flags().StringVar(&confFileName, "cni-conf-file", "01-egressgateway.conflist", "Name of the new cni configuration file")
 }
 
 func ServiceLauncher(cmd *cobra.Command, args []string) {
@@ -87,6 +95,19 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 	}
 	logger.SetDefaultLogger(zapr.NewLogger(zapLog))
 	logger := logger.GetLogger()
+
+	cniConfMgr, err := cniconf.NewCNIConfManager(consts.CNIConfDir, confFileName, exceptionCidrs)
+	if err != nil {
+		logger.Error(err, "failed to create cni config manager")
+		os.Exit(1)
+	}
+	go func() {
+		if err := cniConfMgr.Start(ctx); err != nil {
+			logger.Error(err, "failed to start cni config manager monitoring")
+			os.Exit(1)
+		}
+	}()
+
 	apischeme := runtime.NewScheme()
 	utilruntime.Must(current.AddToScheme(apischeme))
 	k8sCluster, err := cluster.New(config.GetConfigOrDie(), func(options *cluster.Options) {
