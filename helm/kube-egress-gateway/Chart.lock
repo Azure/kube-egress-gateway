@@ -2,8 +2,5 @@ dependencies:
 - name: cert-manager
   repository: https://charts.jetstack.io
   version: v1.11.0
-- name: multus
-  repository: file://charts/multus
-  version: 0.1.2
-digest: sha256:a96973ad6def7966d2a42f30395ce1ab623ec366c779a65f9ebba1dbda04677b
-generated: "2023-02-23T08:08:02.666033564Z"
+digest: sha256:8553ce072bd5d93fd12b2af54593106f62d90e00c07f3b4ad47f6ae06823d23e
+generated: "2023-03-29T07:58:57.202600443Z"
