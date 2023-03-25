@@ -17,7 +17,3 @@ dependencies:
     repository: https://charts.jetstack.io
     alias: cert-manager
     condition: cert-manager.enabled
-  - name: multus
-    version: 0.1.2
-    repository: file://charts/multus
-    condition: multus.enabled

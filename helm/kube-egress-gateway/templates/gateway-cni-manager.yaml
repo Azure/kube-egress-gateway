@@ -71,6 +71,8 @@ spec:
       containers:
       - args:
         - serve
+        - --exception-cidrs={{- range $i, $cidr := .Values.gatewayCNIManager.exceptionCidrs }}{{- if $i }},{{- end }}{{ $cidr }}{{- end }}
+        - --cni-conf-file={{- .Values.gatewayCNIManager.cniConfigFileName }}
         command:
         - /kube-egress-gateway-cnimanager
         image: {{ template "image.gatewayCNIManager" . }}
@@ -100,6 +102,8 @@ spec:
         securityContext:
           privileged: true
         volumeMounts:
+        - mountPath: /etc/cni/net.d
+          name: cni-conf
         - mountPath: /proc
           mountPropagation: Bidirectional
           name: hostpath-proc
@@ -126,6 +130,7 @@ spec:
         volumeMounts:
         - mountPath: /opt/cni/bin
           name: cni-bin
+      hostNetwork: true
       nodeSelector:
         kubernetes.io/os: linux
         kubernetes.io/arch: amd64
@@ -144,4 +149,7 @@ spec:
       - hostPath:
           path: /opt/cni/bin/
         name: cni-bin
+      - hostPath:
+          path: /etc/cni/net.d/
+        name: cni-conf
 {{- end }}

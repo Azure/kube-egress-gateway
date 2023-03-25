@@ -1,6 +1,3 @@
-multus:
-  enabled: false
-
 cert-manager:
   enabled: false
   namespace: "cert-manager"
@@ -26,6 +23,9 @@ gatewayCNIManager:
   imageName: "kube-egress-gateway-cnimanager"
   # imageTag: ""
   imagePullPolicy: "IfNotPresent"
+  exceptionCidrs:
+    - ""
+  cniConfigFileName: "01-egressgateway.conflist"
 
 gatewayDaemonManager:
   enabled: true

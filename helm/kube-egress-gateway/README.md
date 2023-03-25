@@ -10,11 +10,11 @@ A Helm repo is maintained at the following URI:
 
 - https://raw.githubusercontent.com/Azure/kube-egress-gateway/main/helm/repo
 
-The `kube-egress-gateway` project relies on [multus](https://github.com/k8snetworkplumbingwg/multus-cni) to provide support for multuple network interfaces inside a pod and [cert-manager](https://cert-manager.io/) to provide webhook certificate issuance and rotation. You can install them separately (recommended) or install them as subcharts included in this Helm chart.
+The `kube-egress-gateway` project relies on [cert-manager](https://cert-manager.io/) to provide webhook certificate issuance and rotation. You can install it separately (recommended) or install it as a subchart included in this Helm chart.
 
 ### Option 1 (RECOMMENDED)
 
-We recommend users to install cert-manager and multus before installing this chart. 
+We recommend users to install cert-manager before installing this chart. 
 
 To manually install cert-manager, you can follow [cert-manager official doc](https://cert-manager.io/docs/installation/helm/#option-1-installing-crds-with-kubectl).
 
@@ -34,11 +34,6 @@ $ helm install \
   # --set installCRDs=true
 ```
 
-To manually install multus, you can apply the manifest with `kubectl`:
-```bash
-$ kubectl apply -f https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset-thick.yml
-```
-
 Then to install `kube-egress-gateway`, you may run below `helm` command:
 
 ```bash
@@ -49,7 +44,7 @@ See more details about azure_config.yaml in [azure cloud configurations](#azure-
 
 ### Option 2
 
-You may also install cert-manager and multus altogether as subcharts with `enabled` set to `true`:
+You may also install cert-manager as a subchart with `enabled` set to `true`:
 
 ```bash
 $ helm install \
@@ -58,7 +53,6 @@ $ helm install \
   --set common.imageTag=<TBD> \
   --set cert-manager.enabled=true \ # to enable cert-manager installation
   --set cert-manager.namespace=<your desired namespace> \ # to install cert-manager components in specified namespace, default to cert-manager
-  --set multus.enabled=true \ # to enable multus installation, components are installed in kube-system namespace
   -f azure_config.yaml
 ```
 ## Uninstallation
@@ -156,6 +150,8 @@ The Helm chart installs 5 components with different images: gateway-controller-m
 | `gatewayCNIManager.imageName` | `kube-egress-gateway-cni` | Name of gatewayCNIManager image. |
 | `gatewayCNIManager.imageTag` | | Tag of gatewayCNIManager image. |
 | `gatewayCNIManager.imagePullPolicy` | `IfNotPresent` | Image pull policy for gatewayCNIManager's image. |
+| `gatewayCNIManager.exceptionCidrs` | `[""]` | A list of cidrs that should be exempted from all egress gateways, e.g. intra-cluster traffic. |
+| `gatewayCNIManager.cniConfigFileName` | `01-egressgateway.conflist` | Name of the newly generated cni configuration list file. |
 
 ## gateway-CNI and gateway-CNI-Ipam configurations
 
@@ -173,7 +169,3 @@ The Helm chart installs 5 components with different images: gateway-controller-m
 ## cert-manager configurations
 
 `kube-egress-gateway` relies on `cert-manager` to provide webhook certificate issuance and renewal. For configurations to cert-manager itself, please refer to [cert-manager official website](https://cert-manager.io/docs/installation/helm/). By default cert-manager subchart is disabled. To enable, add `--set cert-manager.enabled=true` in your `helm install` command. To deploy cert-manager components in a specific namespace, add `--set cert-manager.namespace=<your desired namespace>` in your `helm install` command. The default namespace is `cert-manager`.
-
-## multus configurations
-
-`kube-egress-gateway` depends on [multus CNI](https://github.com/k8snetworkplumbingwg/multus-cni) to maintain multiple network interfaces inside pods. By default, multus installation is disabled. If you want to enable multus subchart installation, add `--set multus.enabled=true` in your `helm install` command. Multus components are installed in `kube-system` namespace.
