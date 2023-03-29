@@ -25,15 +25,11 @@
 package manager
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"text/template"
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
-	networkattachmentv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -57,7 +53,6 @@ type StaticGatewayConfigurationReconciler struct {
 // +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=k8s.cni.cncf.io,resources=network-attachment-definitions,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -89,7 +84,6 @@ func (r *StaticGatewayConfigurationReconciler) SetupWithManager(mgr ctrl.Manager
 		For(&egressgatewayv1alpha1.StaticGatewayConfiguration{}).
 		Owns(&corev1.Secret{}).
 		Owns(&egressgatewayv1alpha1.GatewayLBConfiguration{}).
-		Owns(&networkattachmentv1.NetworkAttachmentDefinition{}).
 		Complete(r)
 }
 
@@ -113,11 +107,6 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 			return err
 		}
 
-		// reconcile CNI nic config
-		if err := r.reconcileCNINicConfig(ctx, gwConfig); err != nil {
-			log.Error(err, "failed to reconcile nic networkattachment")
-			return err
-		}
 		return nil
 	})
 
@@ -156,20 +145,6 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 	if err := r.Delete(ctx, lbConfig); err != nil {
 		if !apierrors.IsNotFound(err) {
 			log.Error(err, "failed to delete existing gateway LB configuration")
-			return err
-		}
-	}
-
-	log.Info("Deleting nic networkattachement")
-	networkattachment := &networkattachmentv1.NetworkAttachmentDefinition{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      gwConfig.Name,
-			Namespace: gwConfig.Namespace,
-		},
-	}
-	if err := r.Delete(ctx, networkattachment); err != nil {
-		if !apierrors.IsNotFound(err) {
-			log.Error(err, "failed to delete existing egress cni configuration")
 			return err
 		}
 	}
@@ -256,61 +231,5 @@ func (r *StaticGatewayConfigurationReconciler) reconcileGatewayLBConfig(
 		gwConfig.Status.PublicIpPrefix = lbConfig.Status.PublicIpPrefix
 	}
 
-	return nil
-}
-
-var cniRawTemplate = `
-{
-	"cniVersion": "1.0.0",
-	"name": "mynet",
-	"plugins": [
-		{
-			"type": "kube-egress-cni",
-			"ipam": {"type": "kube-egress-cni-ipam"},
-			{{if .Spec.ExcludeCIDRs -}}
-			"excludedCIDRs": [
-			{{- range $i, $e := .Spec.ExcludeCIDRs}}
-        		{{- if $i}},{{end -}}
-        		"{{$e}}"
-    		{{- end}}],
-			{{- end}}
-			"gatewayName": "{{.Name}}"
-		},
-		{	"type": "tuning",
-			"sysctl": {
-				"net.ipv4.conf.all.rp_filter": "2",
-				"net.ipv4.conf.eth0.rp_filter": "2"
-			}
-		}
-	]
-}`
-
-var cniTemplate = template.Must(template.New("cniTemplate").Parse(cniRawTemplate))
-
-func (r *StaticGatewayConfigurationReconciler) reconcileCNINicConfig(ctx context.Context, gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) error {
-	log := log.FromContext(ctx)
-
-	networkattachement := &networkattachmentv1.NetworkAttachmentDefinition{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      gwConfig.Name,
-			Namespace: gwConfig.Namespace,
-		},
-	}
-	if _, err := controllerutil.CreateOrUpdate(ctx, r, networkattachement, func() error {
-		raw := &bytes.Buffer{}
-		if err := cniTemplate.Execute(raw, gwConfig); err != nil {
-			return fmt.Errorf("failed to execute cni template: %w", err)
-		}
-		w := &bytes.Buffer{}
-		log.Info("config string", "str", raw.String())
-		if err := json.Compact(w, raw.Bytes()); err != nil {
-			return fmt.Errorf("failed to compact json template: %w", err)
-		}
-		networkattachement.Spec.Config = w.String()
-		return controllerutil.SetControllerReference(gwConfig, networkattachement, r.Client.Scheme())
-	}); err != nil {
-		log.Error(err, "failed to reconcile nic networkattachementconfiguration")
-		return err
-	}
 	return nil
 }

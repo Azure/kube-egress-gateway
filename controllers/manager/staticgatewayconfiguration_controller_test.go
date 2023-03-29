@@ -31,7 +31,6 @@ import (
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
-	networkattachmentv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
@@ -430,16 +429,6 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 			}, timeout, interval).ShouldNot(HaveOccurred())
 			Expect(lbConfig.Spec.VMSSName).To(BeEquivalentTo("vmss"))
 		})
-
-		It("should create a new nic networkattachment config", func() {
-			networkattachment := &networkattachmentv1.NetworkAttachmentDefinition{}
-			objKey := client.ObjectKeyFromObject(gwConfig)
-			objKey.Name = gwConfig.Name
-			Eventually(func() error {
-				return k8sClient.Get(ctx, objKey, networkattachment)
-			}, timeout, interval).ShouldNot(HaveOccurred())
-			Expect(len(networkattachment.Spec.Config) > 0).To(BeTrue())
-		})
 	})
 
 	Context("gateway profile config is deleted", func() {
@@ -463,13 +452,6 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 			lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{}
 			Eventually(func() bool {
 				return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: testName}, lbConfig))
-			}, timeout, interval).Should(BeTrue())
-		})
-
-		It("should delete a new nic networkattachment config", func() {
-			networkattachment := &networkattachmentv1.NetworkAttachmentDefinition{}
-			Eventually(func() bool {
-				return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: testName}, networkattachment))
 			}, timeout, interval).Should(BeTrue())
 		})
 	})

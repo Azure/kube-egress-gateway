@@ -42,7 +42,6 @@ import (
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
-	networkattachmentv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -106,7 +105,6 @@ func init() {
 	rootCmd.Flags().AddGoFlagSet(goflag.CommandLine)
 
 	utilruntime.Must(egressgatewayv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(networkattachmentv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
