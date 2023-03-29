@@ -25,7 +25,6 @@
 package manager
 
 import (
-	networkattachmentv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	"path/filepath"
 	"testing"
 
@@ -74,8 +73,6 @@ var _ = BeforeSuite(func() {
 	err = scheme.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = egressgatewayv1alpha1.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-	err = networkattachmentv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 	//+kubebuilder:scaffold:scheme
 
