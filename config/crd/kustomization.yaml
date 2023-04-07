@@ -7,7 +7,6 @@ resources:
 - bases/egressgateway.kubernetes.azure.com_gatewaylbconfigurations.yaml
 - bases/egressgateway.kubernetes.azure.com_gatewayvmconfigurations.yaml
 - bases/egressgateway.kubernetes.azure.com_gatewaystatuses.yaml
-- bases/networks-crd.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:

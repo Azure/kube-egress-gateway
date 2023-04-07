@@ -26,8 +26,11 @@ package wireguard
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/Azure/kube-egress-gateway/pkg/cni/ipam"
+	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper"
+	"github.com/Azure/kube-egress-gateway/pkg/netnswrapper"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	cniipam "github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -35,10 +38,22 @@ import (
 	"go.uber.org/multierr"
 )
 
-func WithWireGuardNic(containerID string, podNSPath string, ifName string, ipWrapper ipam.IPProvider, exludedRoute []string, configFunc func(podNs ns.NetNS, ipamResult *current.Result) error) (err error) {
-	// Lock the thread so we don't hop goroutines and namespaces
+type runner struct {
+	netlink netlinkwrapper.Interface
+	netns   netnswrapper.Interface
+}
 
-	podNetNS, err := ns.GetNS(podNSPath)
+var nicRunner runner
+
+func init() {
+	nicRunner = runner{
+		netlink: netlinkwrapper.NewNetLink(),
+		netns:   netnswrapper.NewNetNS(),
+	}
+}
+
+func WithWireGuardNic(containerID string, podNSPath string, ifName string, ipWrapper ipam.IPProvider, exludedRoute []string, result *current.Result, configFunc func(podNs ns.NetNS, allowedIPNet string) error) (err error) {
+	podNetNS, err := nicRunner.netns.GetNS(podNSPath)
 	if err != nil {
 		return err
 	}
@@ -48,7 +63,7 @@ func WithWireGuardNic(containerID string, podNSPath string, ifName string, ipWra
 
 	// get existing interface in target ns
 	err = podNetNS.Do(func(nn ns.NetNS) error {
-		wgLink, err = netlink.LinkByName(ifName)
+		wgLink, err = nicRunner.netlink.LinkByName(ifName)
 		if err != nil {
 			if _, ok := err.(netlink.LinkNotFoundError); !ok {
 				return fmt.Errorf("failed to retrieve new WireGuard link: %w", err)
@@ -60,78 +75,39 @@ func WithWireGuardNic(containerID string, podNSPath string, ifName string, ipWra
 		return err
 	}
 
-	//if not found create one and move to pod ns
+	// if not found create one and move to pod ns
 	if wgLink == nil {
-		wgNameInMain := "wg" + containerID[0:8] //avoid name conflict in main ns
+		wgNameInMain := "wg" + containerID[0:8] // avoid name conflict in main ns
 		linkAttributes := netlink.NewLinkAttrs()
 		linkAttributes.Name = wgNameInMain
 		wireguardInterface := &netlink.Wireguard{
 			LinkAttrs: linkAttributes,
 		}
 
-		err = netlink.LinkAdd(wireguardInterface)
-		if err != nil {
-			return fmt.Errorf("failed to add WireGuard link: %w", err)
-		}
-		wgLink, err = netlink.LinkByName(wgNameInMain)
-		if err != nil {
-			return err
-		}
-		err = netlink.LinkSetNsFd(wgLink, int(podNetNS.Fd()))
-		if err != nil {
-			return fmt.Errorf("failed to move wireguard link to pod namespace: %w", err)
-		}
-		err = podNetNS.Do(func(nn ns.NetNS) error {
-			wgLink, err = netlink.LinkByName(wgNameInMain)
-			if err != nil {
-				return fmt.Errorf("failed to find %q: %v", wgNameInMain, err)
-			}
-			// Devices can be renamed only when down
-			if err = netlink.LinkSetDown(wgLink); err != nil {
-				return fmt.Errorf("failed to set %q down: %v", wgLink.Attrs().Name, err)
-			}
-			// Save host device name into the container device's alias property
-			if err := netlink.LinkSetAlias(wgLink, wgLink.Attrs().Name); err != nil {
-				return fmt.Errorf("failed to set alias to %q: %v", wgLink.Attrs().Name, err)
-			}
-			// Rename container device to respect args.IfName
-			if err := netlink.LinkSetName(wgLink, ifName); err != nil {
-				return fmt.Errorf("failed to rename device %q to %q: %v", wgLink.Attrs().Name, ifName, err)
-			}
-			// Bring container device up
-			if err = netlink.LinkSetUp(wgLink); err != nil {
-				return fmt.Errorf("failed to set %q up: %v", ifName, err)
-			}
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-
 		defer func() {
 			if err != nil {
-				if wgLink, recoverErr := netlink.LinkByName(wgNameInMain); recoverErr != nil {
+				if wgLink, recoverErr := nicRunner.netlink.LinkByName(wgNameInMain); recoverErr != nil {
 					if _, ok := recoverErr.(netlink.LinkNotFoundError); !ok {
 						err = multierr.Append(err, recoverErr)
 					}
-				} else if recoverErr := netlink.LinkDel(wgLink); recoverErr != nil {
+				} else if recoverErr := nicRunner.netlink.LinkDel(wgLink); recoverErr != nil {
 					err = multierr.Append(err, recoverErr)
 				}
 
 				recoverErr := podNetNS.Do(func(nn ns.NetNS) error {
 					var err error
-					if wgLink, recoverErr := netlink.LinkByName(wgNameInMain); recoverErr != nil {
+					if wgLink, recoverErr := nicRunner.netlink.LinkByName(wgNameInMain); recoverErr != nil {
 						if _, ok := recoverErr.(netlink.LinkNotFoundError); !ok {
 							err = multierr.Append(err, recoverErr)
 						}
-					} else if recoverErr := netlink.LinkDel(wgLink); recoverErr != nil {
+					} else if recoverErr := nicRunner.netlink.LinkDel(wgLink); recoverErr != nil {
 						err = multierr.Append(err, recoverErr)
 					}
-					if wgLink, recoverErr := netlink.LinkByName(wgNameInMain); recoverErr != nil {
+					if wgLink, recoverErr := nicRunner.netlink.LinkByName(ifName); recoverErr != nil {
 						if _, ok := recoverErr.(netlink.LinkNotFoundError); !ok {
 							err = multierr.Append(err, recoverErr)
 						}
-					} else if recoverErr := netlink.LinkDel(wgLink); recoverErr != nil {
+					} else if recoverErr := nicRunner.netlink.LinkDel(wgLink); recoverErr != nil {
 						err = multierr.Append(err, recoverErr)
 					}
 					return err
@@ -142,6 +118,45 @@ func WithWireGuardNic(containerID string, podNSPath string, ifName string, ipWra
 				}
 			}
 		}()
+
+		err = nicRunner.netlink.LinkAdd(wireguardInterface)
+		if err != nil {
+			return fmt.Errorf("failed to add WireGuard link: %w", err)
+		}
+		wgLink, err = nicRunner.netlink.LinkByName(wgNameInMain)
+		if err != nil {
+			return err
+		}
+		err = nicRunner.netlink.LinkSetNsFd(wgLink, int(podNetNS.Fd()))
+		if err != nil {
+			return fmt.Errorf("failed to move wireguard link to pod namespace: %w", err)
+		}
+		err = podNetNS.Do(func(nn ns.NetNS) error {
+			wgLink, err = nicRunner.netlink.LinkByName(wgNameInMain)
+			if err != nil {
+				return fmt.Errorf("failed to find %q: %v", wgNameInMain, err)
+			}
+			// Devices can be renamed only when down
+			if err = nicRunner.netlink.LinkSetDown(wgLink); err != nil {
+				return fmt.Errorf("failed to set %q down: %v", wgLink.Attrs().Name, err)
+			}
+			// Save host device name into the container device's alias property
+			if err := nicRunner.netlink.LinkSetAlias(wgLink, wgLink.Attrs().Name); err != nil {
+				return fmt.Errorf("failed to set alias to %q: %v", wgLink.Attrs().Name, err)
+			}
+			// Rename container device to respect args.IfName
+			if err := nicRunner.netlink.LinkSetName(wgLink, ifName); err != nil {
+				return fmt.Errorf("failed to rename device %q to %q: %v", wgLink.Attrs().Name, ifName, err)
+			}
+			// Bring container device up
+			if err = nicRunner.netlink.LinkSetUp(wgLink); err != nil {
+				return fmt.Errorf("failed to set %q up: %v", ifName, err)
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	return ipWrapper.WithIP(func(ipamResult *current.Result) error {
@@ -149,12 +164,14 @@ func WithWireGuardNic(containerID string, podNSPath string, ifName string, ipWra
 			return errors.New("ipam result is empty")
 		}
 
+		allowedIPNet := ""
 		err = podNetNS.Do(func(nn ns.NetNS) error {
 			// Retrieve link again to get up-to-date name and attributes
-			wgLink, err = netlink.LinkByName(ifName)
+			wgLink, err = nicRunner.netlink.LinkByName(ifName)
 			if err != nil {
 				return fmt.Errorf("failed to find %q: %v", ifName, err)
 			}
+
 			ipamResult.Interfaces = []*current.Interface{
 				{
 					Mac:     wgLink.Attrs().HardwareAddr.String(),
@@ -162,20 +179,36 @@ func WithWireGuardNic(containerID string, podNSPath string, ifName string, ipWra
 					Sandbox: podNSPath,
 				},
 			}
+			result.Interfaces = append(result.Interfaces, ipamResult.Interfaces[0])
 			for _, item := range ipamResult.IPs {
 				if item.Address.IP.To4() == nil {
-					// only configure ipv6 ip on wg interface
+					// add ipv6 ip to result
 					item.Interface = current.Int(0)
+					result.IPs = append(result.IPs, &current.IPConfig{
+						Interface: current.Int(len(result.Interfaces) - 1),
+						Address:   item.Address,
+					})
+				} else {
+					// pod ipv4 ip should be added in wireguard configuration as allowed ip
+					allowedIPNet = fmt.Sprintf("%s/32", item.Address.IP.String())
 				}
 			}
-			return cniipam.ConfigureIface(ifName, ipamResult)
+			if os.Getenv("IS_UNIT_TEST_ENV") != "true" {
+				return cniipam.ConfigureIface(ifName, ipamResult)
+			} else {
+				return nil
+			}
 		})
 		if err != nil {
 			return err
 		}
 
+		if allowedIPNet == "" {
+			return fmt.Errorf("failed to find pod ipv4 ip")
+		}
+
 		if configFunc != nil {
-			return configFunc(podNetNS, ipamResult)
+			return configFunc(podNetNS, allowedIPNet)
 		}
 		return nil
 	})

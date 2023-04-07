@@ -26,6 +26,8 @@ type NicServiceClient interface {
 	NicAdd(ctx context.Context, in *NicAddRequest, opts ...grpc.CallOption) (*NicAddResponse, error)
 	// NicDel: delete pod endpoint resource
 	NicDel(ctx context.Context, in *NicDelRequest, opts ...grpc.CallOption) (*NicDelResponse, error)
+	// PodRetrieve: send pod information and return pod information
+	PodRetrieve(ctx context.Context, in *PodRetrieveRequest, opts ...grpc.CallOption) (*PodRetrieveResponse, error)
 }
 
 type nicServiceClient struct {
@@ -54,6 +56,15 @@ func (c *nicServiceClient) NicDel(ctx context.Context, in *NicDelRequest, opts .
 	return out, nil
 }
 
+func (c *nicServiceClient) PodRetrieve(ctx context.Context, in *PodRetrieveRequest, opts ...grpc.CallOption) (*PodRetrieveResponse, error) {
+	out := new(PodRetrieveResponse)
+	err := c.cc.Invoke(ctx, "/pkg.cniprotocol.v1.NicService/PodRetrieve", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // NicServiceServer is the server API for NicService service.
 // All implementations must embed UnimplementedNicServiceServer
 // for forward compatibility
@@ -62,6 +73,8 @@ type NicServiceServer interface {
 	NicAdd(context.Context, *NicAddRequest) (*NicAddResponse, error)
 	// NicDel: delete pod endpoint resource
 	NicDel(context.Context, *NicDelRequest) (*NicDelResponse, error)
+	// PodRetrieve: send pod information and return pod information
+	PodRetrieve(context.Context, *PodRetrieveRequest) (*PodRetrieveResponse, error)
 	mustEmbedUnimplementedNicServiceServer()
 }
 
@@ -74,6 +87,9 @@ func (UnimplementedNicServiceServer) NicAdd(context.Context, *NicAddRequest) (*N
 }
 func (UnimplementedNicServiceServer) NicDel(context.Context, *NicDelRequest) (*NicDelResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method NicDel not implemented")
+}
+func (UnimplementedNicServiceServer) PodRetrieve(context.Context, *PodRetrieveRequest) (*PodRetrieveResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PodRetrieve not implemented")
 }
 func (UnimplementedNicServiceServer) mustEmbedUnimplementedNicServiceServer() {}
 
@@ -124,6 +140,24 @@ func _NicService_NicDel_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NicService_PodRetrieve_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PodRetrieveRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NicServiceServer).PodRetrieve(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pkg.cniprotocol.v1.NicService/PodRetrieve",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NicServiceServer).PodRetrieve(ctx, req.(*PodRetrieveRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // NicService_ServiceDesc is the grpc.ServiceDesc for NicService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -138,6 +172,10 @@ var NicService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "NicDel",
 			Handler:    _NicService_NicDel_Handler,
+		},
+		{
+			MethodName: "PodRetrieve",
+			Handler:    _NicService_PodRetrieve_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

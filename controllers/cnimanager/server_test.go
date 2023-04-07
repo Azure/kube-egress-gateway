@@ -31,9 +31,11 @@ import (
 	cniprotocol "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -43,10 +45,13 @@ var _ = Describe("Server", func() {
 	var fakeClient client.Client
 	var nicAddInputRequest *cniprotocol.NicAddRequest
 	var nicDelInputRequest *cniprotocol.NicDelRequest
+	var podRetrieveRequest *cniprotocol.PodRetrieveRequest
 	var gatewayProfile *current.StaticGatewayConfiguration
+	var pod *corev1.Pod
 	BeforeEach(func() {
 		fakeClientBuilder := fake.NewClientBuilder()
 		apischeme := runtime.NewScheme()
+		utilruntime.Must(clientgoscheme.AddToScheme(apischeme))
 		utilruntime.Must(current.AddToScheme(apischeme))
 		fakeClientBuilder.WithScheme(apischeme)
 		gatewayProfile = &current.StaticGatewayConfiguration{
@@ -59,6 +64,16 @@ var _ = Describe("Server", func() {
 					WireguardServerIP:   "192.168.1.1/32",
 					WireguardPublicKey:  "somerandompublickey",
 					WireguardServerPort: 54321,
+				},
+			},
+		}
+		pod = &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test",
+				Namespace: "default",
+				Annotations: map[string]string{
+					"key1": "value1",
+					"key2": "value2",
 				},
 			},
 		}
@@ -75,10 +90,14 @@ var _ = Describe("Server", func() {
 		nicDelInputRequest = &cniprotocol.NicDelRequest{
 			PodConfig: nicAddInputRequest.PodConfig,
 		}
-		fakeClientBuilder.WithRuntimeObjects(gatewayProfile)
+		podRetrieveRequest = &cniprotocol.PodRetrieveRequest{
+			PodConfig: nicAddInputRequest.PodConfig,
+		}
+		fakeClientBuilder.WithRuntimeObjects(gatewayProfile, pod)
 		fakeClient = fakeClientBuilder.Build()
 		service = cnimanager.NewNicService(fakeClient)
 	})
+
 	Context("when gateway is not ready", func() {
 		BeforeEach(func() {
 			gatewayProfile = &current.StaticGatewayConfiguration{
@@ -107,6 +126,7 @@ var _ = Describe("Server", func() {
 			})
 		})
 	})
+
 	Context("when nic is created", func() {
 		When("gateway is found", func() {
 			It("should fetch gateway and create pod endpoint", func() {
@@ -148,6 +168,23 @@ var _ = Describe("Server", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
+	})
 
+	Context("requesting pod metadata", func() {
+		When("pod is found", func() {
+			It("should return pods'annotations", func() {
+				resp, err := service.PodRetrieve(context.Background(), podRetrieveRequest)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.GetAnnotations()).To(Equal(pod.Annotations))
+			})
+		})
+
+		When("pod is not found", func() {
+			It("should return error", func() {
+				fakeClient.Delete(context.Background(), pod) //nolint:errcheck
+				_, err := service.PodRetrieve(context.Background(), podRetrieveRequest)
+				Expect(err).To(HaveOccurred())
+			})
+		})
 	})
 })

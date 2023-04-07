@@ -134,6 +134,48 @@ func (mr *MockInterfaceMockRecorder) LinkDel(link interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkDel", reflect.TypeOf((*MockInterface)(nil).LinkDel), link)
 }
 
+// LinkSetAlias mocks base method.
+func (m *MockInterface) LinkSetAlias(link netlink.Link, name string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LinkSetAlias", link, name)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LinkSetAlias indicates an expected call of LinkSetAlias.
+func (mr *MockInterfaceMockRecorder) LinkSetAlias(link, name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkSetAlias", reflect.TypeOf((*MockInterface)(nil).LinkSetAlias), link, name)
+}
+
+// LinkSetDown mocks base method.
+func (m *MockInterface) LinkSetDown(link netlink.Link) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LinkSetDown", link)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LinkSetDown indicates an expected call of LinkSetDown.
+func (mr *MockInterfaceMockRecorder) LinkSetDown(link interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkSetDown", reflect.TypeOf((*MockInterface)(nil).LinkSetDown), link)
+}
+
+// LinkSetName mocks base method.
+func (m *MockInterface) LinkSetName(link netlink.Link, name string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LinkSetName", link, name)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LinkSetName indicates an expected call of LinkSetName.
+func (mr *MockInterfaceMockRecorder) LinkSetName(link, name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkSetName", reflect.TypeOf((*MockInterface)(nil).LinkSetName), link, name)
+}
+
 // LinkSetNsFd mocks base method.
 func (m *MockInterface) LinkSetNsFd(link netlink.Link, fd int) error {
 	m.ctrl.T.Helper()

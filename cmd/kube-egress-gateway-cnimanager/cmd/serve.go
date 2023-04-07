@@ -48,6 +48,7 @@ import (
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
@@ -109,6 +110,7 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 	}()
 
 	apischeme := runtime.NewScheme()
+	utilruntime.Must(clientgoscheme.AddToScheme(apischeme))
 	utilruntime.Must(current.AddToScheme(apischeme))
 	k8sCluster, err := cluster.New(config.GetConfigOrDie(), func(options *cluster.Options) {
 		options.Scheme = apischeme
