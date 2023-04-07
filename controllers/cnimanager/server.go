@@ -26,6 +26,7 @@ package cnimanager
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations,verbs=get;list;watch
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations/status,verbs=get;
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=podwireguardendpoints,verbs=list;watch;create;update;patch;delete;
+//+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 
 import (
 	"context"
@@ -34,6 +35,7 @@ import (
 	cniprotocol "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -72,9 +74,10 @@ func (s *NicService) NicAdd(ctx context.Context, in *cniprotocol.NicAddRequest) 
 		return nil, status.Errorf(codes.Unknown, "failed to update staticgatewayconfiguration %s/%s: %s", in.GetPodConfig().GetPodNamespace(), in.GetPodConfig().GetPodName(), err)
 	}
 	return &cniprotocol.NicAddResponse{
-		EndpointIp: gwConfig.Status.WireguardServerIP,
-		ListenPort: gwConfig.Status.WireguardServerPort,
-		PublicKey:  gwConfig.Status.WireguardPublicKey,
+		EndpointIp:     gwConfig.Status.WireguardServerIP,
+		ListenPort:     gwConfig.Status.WireguardServerPort,
+		PublicKey:      gwConfig.Status.WireguardPublicKey,
+		ExceptionCidrs: gwConfig.Spec.ExcludeCIDRs,
 	}, nil
 }
 
@@ -86,4 +89,14 @@ func (s *NicService) NicDel(ctx context.Context, in *cniprotocol.NicDelRequest) 
 		}
 	}
 	return &cniprotocol.NicDelResponse{}, nil
+}
+
+func (s *NicService) PodRetrieve(ctx context.Context, in *cniprotocol.PodRetrieveRequest) (*cniprotocol.PodRetrieveResponse, error) {
+	pod := &corev1.Pod{}
+	if err := s.k8sClient.Get(ctx, client.ObjectKey{Name: in.GetPodConfig().GetPodName(), Namespace: in.GetPodConfig().GetPodNamespace()}, pod); err != nil {
+		return nil, status.Errorf(codes.Unknown, "failed to retrieve pod %s/%s: %s", in.GetPodConfig().GetPodNamespace(), in.GetPodConfig().GetPodName(), err)
+	}
+	return &cniprotocol.PodRetrieveResponse{
+		Annotations: pod.ObjectMeta.GetAnnotations(),
+	}, nil
 }

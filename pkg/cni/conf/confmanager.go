@@ -157,7 +157,7 @@ func (mgr *Manager) managePluginFromConf(file string) (map[string]interface{}, e
 	}
 	rawConf, rawList := make(map[string]interface{}), make(map[string]interface{})
 	if err = json.Unmarshal(bytes, &rawConf); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal cni config: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal cni config from file %s: %w", file, err)
 	}
 
 	networkName, ok := rawConf["name"]
@@ -195,7 +195,7 @@ func (mgr *Manager) managePluginFromConfList(file string) (map[string]interface{
 	}
 	rawList := make(map[string]interface{})
 	if err = json.Unmarshal(bytes, &rawList); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal cni config: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal cni config from file %s: %w", file, err)
 	}
 	var plugins []interface{}
 	plug, ok := rawList["plugins"]

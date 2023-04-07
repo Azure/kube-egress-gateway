@@ -70,6 +70,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to load k8s metadata: %w", err)
 	}
 
+	// get prevResult
+	result, err := type100.NewResultFromResult(config.PrevResult)
+	if err != nil {
+		return fmt.Errorf("failed to convert result to current version: %w", err)
+	}
+
 	// exchange public key with daemon
 	conn, err := grpc.DialContext(context.Background(),
 		consts.CNISocketPath,
@@ -89,13 +95,29 @@ func cmdAdd(args *skel.CmdArgs) error {
 	defer conn.Close()
 	client := v1.NewNicServiceClient(conn)
 
+	// check if pod does not have gateway annotation, then skip the whole process
+	resp, err := client.PodRetrieve(context.Background(), &v1.PodRetrieveRequest{
+		PodConfig: &v1.PodInfo{
+			PodName:      string(k8sInfo.K8S_POD_NAME),
+			PodNamespace: string(k8sInfo.K8S_POD_NAMESPACE),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get pod (%s/%s) annotations: %w", string(k8sInfo.K8S_POD_NAME), string(k8sInfo.K8S_POD_NAMESPACE), err)
+	}
+	annotations := resp.GetAnnotations()
+	gwName, ok := annotations[consts.CNIGatewayAnnotationKey]
+	if !ok {
+		// pod does not use egress gateway, nothing else to do
+		return types.PrintResult(result, config.CNIVersion)
+	}
+
 	// allocate ip
 	if config == nil || config.IPAM.Type == "" {
 		return errors.New("ipam should not be empty")
 	}
 
-	var result *type100.Result
-	err = wireguard.WithWireGuardNic(args.ContainerID, args.Netns, args.IfName, ipam.New(config.IPAM.Type, args.StdinData), config.ExcludedCIDRs, func(podNs ns.NetNS, ipamResult *type100.Result) error {
+	err = wireguard.WithWireGuardNic(args.ContainerID, args.Netns, consts.WireguardLinkName, ipam.New(config.IPAM.Type, args.StdinData), config.ExcludedCIDRs, result, func(podNs ns.NetNS, allowedIPNet string) error {
 
 		//generate private key
 		privateKey, err := wgtypes.GeneratePrivateKey()
@@ -109,9 +131,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 				return fmt.Errorf("failed to create wg client: %w", err)
 			}
 			defer wgclient.Close()
-			wgDevice, err = wgclient.Device(args.IfName)
+			wgDevice, err = wgclient.Device(consts.WireguardLinkName)
 			if err != nil {
-				return fmt.Errorf("failed to find wg device (%s): %w", args.IfName, err)
+				return fmt.Errorf("failed to find wg device (%s): %w", consts.WireguardLinkName, err)
 			}
 			return nil
 		})
@@ -119,14 +141,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return err
 		}
 
-		var allowedIPs string
-		for _, item := range ipamResult.IPs {
-			// set pod's IPv4 address as allowed ip
-			if item.Address.IP.To4() != nil {
-				allowedIPs = fmt.Sprintf("%s/32", item.Address.IP.String())
-			}
-		}
-		result = ipamResult
 		resp, err := client.NicAdd(context.Background(), &v1.NicAddRequest{
 			PodConfig: &v1.PodInfo{
 				PodName:      string(k8sInfo.K8S_POD_NAME),
@@ -134,8 +148,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 			},
 			PublicKey:   privateKey.PublicKey().String(),
 			ListenPort:  int32(wgDevice.ListenPort),
-			AllowedIp:   allowedIPs,
-			GatewayName: config.GatewayName,
+			AllowedIp:   allowedIPNet,
+			GatewayName: gwName,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to send nicAdd request: %w", err)
@@ -152,7 +166,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				return fmt.Errorf("failed to create wg client: %w", err)
 			}
 			defer wgclient.Close()
-			err = wgclient.ConfigureDevice(args.IfName, wgtypes.Config{
+			err = wgclient.ConfigureDevice(consts.WireguardLinkName, wgtypes.Config{
 				PrivateKey: &privateKey,
 				Peers: []wgtypes.PeerConfig{
 					{
@@ -179,7 +193,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 			}
 
-			if err := routes.SetPodRoutes(args.IfName, config.ExcludedCIDRs); err != nil {
+			exceptionsCidrs := append(resp.GetExceptionCidrs(), config.ExcludedCIDRs...)
+			if err := routes.SetPodRoutes(consts.WireguardLinkName, exceptionsCidrs, "/proc/sys", result); err != nil {
 				return fmt.Errorf("failed to setup pod routes: %w", err)
 			}
 			return nil
@@ -244,9 +259,9 @@ func cmdDel(args *skel.CmdArgs) error {
 			return err
 		}
 
-		ifHandle, err := netlink.LinkByName(args.IfName)
+		ifHandle, err := netlink.LinkByName(consts.WireguardLinkName)
 		if err != nil {
-			//ignore error because cni delete may be invoked more than onece.
+			//ignore error because cni delete may be invoked more than once.
 			return nil
 		}
 		return netlink.LinkDel(ifHandle)

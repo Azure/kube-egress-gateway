@@ -34,8 +34,14 @@ type Interface interface {
 	LinkDel(link netlink.Link) error
 	// LinkSetUp enables the link device
 	LinkSetUp(link netlink.Link) error
+	// LinkSetDown disables the link device
+	LinkSetDown(link netlink.Link) error
 	// LinkSetNsFd puts the device into a new network namespace
 	LinkSetNsFd(link netlink.Link, fd int) error
+	// LinkSetName sets the name of the link device
+	LinkSetName(link netlink.Link, name string) error
+	// LinkSetAlias sets the alias of the link device
+	LinkSetAlias(link netlink.Link, name string) error
 	// AddrList gets a list of IP addresses in the system
 	AddrList(link netlink.Link, family int) ([]netlink.Addr, error)
 	// AddrAdd adds an IP address to a link device
@@ -76,8 +82,20 @@ func (*nl) LinkSetUp(link netlink.Link) error {
 	return netlink.LinkSetUp(link)
 }
 
+func (*nl) LinkSetDown(link netlink.Link) error {
+	return netlink.LinkSetDown(link)
+}
+
 func (*nl) LinkSetNsFd(link netlink.Link, fd int) error {
 	return netlink.LinkSetNsFd(link, fd)
+}
+
+func (*nl) LinkSetName(link netlink.Link, name string) error {
+	return netlink.LinkSetName(link, name)
+}
+
+func (*nl) LinkSetAlias(link netlink.Link, name string) error {
+	return netlink.LinkSetAlias(link, name)
 }
 
 func (*nl) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {

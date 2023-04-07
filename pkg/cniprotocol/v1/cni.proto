@@ -46,15 +46,26 @@ message NicAddResponse {
   string endpoint_ip = 1;
   int32  listen_port = 2;
   string public_key = 3;
+  repeated string exception_cidrs = 4;
 }
 
 // CNIDeleteRequest is the request for cni del function.
 message NicDelRequest {
-  PodInfo pod_config =1;
+  PodInfo pod_config = 1;
 }
 
 // CNIDeleteResponse is the response for cni del function.
 message NicDelResponse {
+}
+
+// PodRetrieveRequest is the request for retrieving pod function.
+message PodRetrieveRequest {
+  PodInfo pod_config = 1;
+}
+
+// PodRetrieveResponse is the response for retrieving pod function.
+message PodRetrieveResponse {
+  map<string, string> annotations = 1;
 }
 
 // NicService is the nic management service.
@@ -64,5 +75,8 @@ service NicService {
 
   // NicDel: delete pod endpoint resource
   rpc NicDel(NicDelRequest) returns (NicDelResponse) ;
+
+  // PodRetrieve: send pod information and return pod information
+  rpc PodRetrieve(PodRetrieveRequest) returns (PodRetrieveResponse) ;
 }
 

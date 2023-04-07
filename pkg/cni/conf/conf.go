@@ -35,7 +35,6 @@ type CNIConfig struct {
 	types.NetConf
 
 	ExcludedCIDRs []string `json:"excludedCIDRs"`
-	GatewayName   string   `json:"gatewayName"`
 }
 
 func ParseCNIConfig(stdin []byte) (*CNIConfig, error) {

@@ -45,7 +45,6 @@ func TestParseCNIConfig(t *testing.T) {
 					IPAM:       types.IPAM{Type: "kube-egress-cni-ipam"},
 				},
 				ExcludedCIDRs: []string{"1.2.3.4/32", "10.1.0.0/16"},
-				GatewayName:   "test",
 			},
 		},
 		"test cni config with preResult": {
@@ -58,7 +57,6 @@ func TestParseCNIConfig(t *testing.T) {
 					IPAM:       types.IPAM{Type: "kube-egress-cni-ipam"},
 				},
 				ExcludedCIDRs: []string{},
-				GatewayName:   "test",
 			},
 		},
 	}
@@ -70,7 +68,6 @@ func TestParseCNIConfig(t *testing.T) {
 				t.Fatalf("failed to parse CNI config: %v", err)
 			}
 			if !reflect.DeepEqual(test.Expected.ExcludedCIDRs, res.ExcludedCIDRs) ||
-				test.Expected.GatewayName != res.GatewayName ||
 				test.Expected.CNIVersion != res.CNIVersion ||
 				test.Expected.Name != res.Name ||
 				test.Expected.Type != res.Type ||

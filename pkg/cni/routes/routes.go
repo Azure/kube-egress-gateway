@@ -27,19 +27,19 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/iptableswrapper"
 	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper"
+	"github.com/containernetworking/cni/pkg/types"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netlink/nl"
 	"golang.org/x/sys/unix"
 )
-
-type Interface interface {
-	SetPodRoutes(ifName string, exceptionCidrs []string) error
-}
 
 type runner struct {
 	netlink  netlinkwrapper.Interface
@@ -55,7 +55,7 @@ func init() {
 	}
 }
 
-func SetPodRoutes(ifName string, exceptionCidrs []string) error {
+func SetPodRoutes(ifName string, exceptionCidrs []string, sysctlDir string, result *current.Result) error {
 	// 1. removes existing routes
 	// 2. add original default route gateway to eth0
 	// 3. routes exceptional cidrs (traffic avoiding gateway) to base interface (eth0)
@@ -80,19 +80,22 @@ func SetPodRoutes(ifName string, exceptionCidrs []string) error {
 			return fmt.Errorf("failed to delete route (%s): %w", route, err)
 		}
 	}
+	result.Routes = nil
 
 	if defaultRoute == nil {
 		return errors.New("failed to find default route")
 	}
 
+	gatewayDestination := net.IPNet{IP: defaultRoute.Gw, Mask: net.CIDRMask(32, 32)}
 	err = routesRunner.netlink.RouteReplace(&netlink.Route{
-		Dst:       &net.IPNet{IP: defaultRoute.Gw, Mask: net.CIDRMask(32, 32)},
+		Dst:       &gatewayDestination,
 		LinkIndex: eth0Link.Attrs().Index,
 		Scope:     netlink.SCOPE_LINK,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to add original gateway route: %w", err)
 	}
+	result.Routes = append(result.Routes, &types.Route{Dst: gatewayDestination})
 
 	for _, exception := range exceptionCidrs {
 		_, cidr, err := net.ParseCIDR(exception)
@@ -109,6 +112,7 @@ func SetPodRoutes(ifName string, exceptionCidrs []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to add route (%s): %w", gatewayRoute, err)
 		}
+		result.Routes = append(result.Routes, &types.Route{Dst: *cidr, GW: defaultRoute.Gw})
 	}
 
 	wgLink, err := routesRunner.netlink.LinkByName(ifName)
@@ -116,9 +120,9 @@ func SetPodRoutes(ifName string, exceptionCidrs []string) error {
 		return fmt.Errorf("failed to retrieve wireguard interface: %w", err)
 	}
 
-	_, default_route_cidr, _ := net.ParseCIDR("0.0.0.0/0")
-	wg_default_route := netlink.Route{
-		Dst: default_route_cidr,
+	_, defaultRouteCidr, _ := net.ParseCIDR("0.0.0.0/0")
+	wgDefaultRoute := netlink.Route{
+		Dst: defaultRouteCidr,
 		Gw:  nil,
 		Via: &netlink.Via{
 			Addr:       net.ParseIP("fe80::1"),
@@ -128,35 +132,33 @@ func SetPodRoutes(ifName string, exceptionCidrs []string) error {
 		Scope:     netlink.SCOPE_UNIVERSE,
 		Family:    nl.FAMILY_V4,
 	}
+	result.Routes = append(result.Routes, &types.Route{Dst: *defaultRouteCidr, GW: net.ParseIP("fe80::1")})
 
-	err = routesRunner.netlink.RouteReplace(&wg_default_route)
+	err = routesRunner.netlink.RouteReplace(&wgDefaultRoute)
 	if err != nil {
-		return fmt.Errorf("failed to add default wireguard route (%s): %w", wg_default_route, err)
+		return fmt.Errorf("failed to add default wireguard route (%s): %w", wgDefaultRoute, err)
 	}
 
-	err = addRoutingForIngress(eth0Link, *defaultRoute)
+	err = addRoutingForIngress(eth0Link, *defaultRoute, sysctlDir)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func addRoutingForIngress(eth0Link netlink.Link, defaultRoute netlink.Route) error {
+func addRoutingForIngress(eth0Link netlink.Link, defaultRoute netlink.Route, sysctlDir string) error {
 	// add iptables rule to mark traffic from eth0
 	ipt, err := routesRunner.iptables.New()
 	if err != nil {
 		return fmt.Errorf("failed to create iptable: %w", err)
 	}
-	err = ipt.AppendUnique(consts.MangleTable, consts.PreRoutingChain, "-i", "eth0", "-j", "MARK", "--set-mark", strconv.Itoa(consts.Eth0Mark))
-	if err != nil {
+	if err := ipt.AppendUnique(consts.MangleTable, consts.PreRoutingChain, "-i", "eth0", "-j", "MARK", "--set-mark", strconv.Itoa(consts.Eth0Mark)); err != nil {
 		return fmt.Errorf("failed to append iptables set-mark rule: %w", err)
 	}
-	err = ipt.AppendUnique(consts.MangleTable, consts.PreRoutingChain, "-j", "CONNMARK", "--save-mark")
-	if err != nil {
+	if err := ipt.AppendUnique(consts.MangleTable, consts.PreRoutingChain, "-j", "CONNMARK", "--save-mark"); err != nil {
 		return fmt.Errorf("failed to append iptables save-mark rule: %w", err)
 	}
-	err = ipt.AppendUnique(consts.MangleTable, consts.OutputChain, "-m", "connmark", "--mark", strconv.Itoa(consts.Eth0Mark), "-j", "CONNMARK", "--restore-mark")
-	if err != nil {
+	if err := ipt.AppendUnique(consts.MangleTable, consts.OutputChain, "-m", "connmark", "--mark", strconv.Itoa(consts.Eth0Mark), "-j", "CONNMARK", "--restore-mark"); err != nil {
 		return fmt.Errorf("failed to append iptables restore-mark rule: %w", err)
 	}
 
@@ -164,16 +166,22 @@ func addRoutingForIngress(eth0Link netlink.Link, defaultRoute netlink.Route) err
 	rule := netlink.NewRule()
 	rule.Mark = consts.Eth0Mark
 	rule.Table = consts.Eth0Mark
-	err = routesRunner.netlink.RuleAdd(rule)
-	if err != nil {
+	if err := routesRunner.netlink.RuleAdd(rule); err != nil {
 		return fmt.Errorf("failed to add routing rule: %w", err)
 	}
 
 	// add route
 	defaultRoute.Table = consts.Eth0Mark
-	err = routesRunner.netlink.RouteReplace(&defaultRoute)
-	if err != nil {
+	if err := routesRunner.netlink.RouteReplace(&defaultRoute); err != nil {
 		return fmt.Errorf("failed to add default route via eth0: %w", err)
+	}
+
+	// update rp_filter flag
+	if err := os.WriteFile(filepath.Join(sysctlDir, "net/ipv4/conf/all/rp_filter"), []byte("2"), 0644); err != nil {
+		return fmt.Errorf("failed to write net.ipv4.conf.all.rp_filter: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(sysctlDir, "net/ipv4/conf/eth0/rp_filter"), []byte("2"), 0644); err != nil {
+		return fmt.Errorf("failed to write net.ipv4.conf.eth0.rp_filter: %w", err)
 	}
 	return nil
 }

@@ -97,6 +97,8 @@ const (
 	CNISocketPath = "/var/run/egressgateway.sock"
 
 	CNIConfDir = "/etc/cni/net.d"
+
+	CNIGatewayAnnotationKey = "kubernetes.azure.com/static-gateway-configuration"
 )
 
 const (

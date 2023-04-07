@@ -25,15 +25,26 @@ package routes
 
 import (
 	"net"
+	"os"
+	"reflect"
 	"testing"
-
-	"github.com/vishvananda/netlink/nl"
-	"golang.org/x/sys/unix"
 
 	"github.com/Azure/kube-egress-gateway/pkg/iptableswrapper/mockiptableswrapper"
 	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper/mocknetlinkwrapper"
+	"github.com/containernetworking/cni/pkg/types"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/golang/mock/gomock"
 	"github.com/vishvananda/netlink"
+	"github.com/vishvananda/netlink/nl"
+	"golang.org/x/sys/unix"
+)
+
+const (
+	testDir  = "./testdata"
+	allDir   = "testdata/net/ipv4/conf/all"
+	eth0Dir  = "testdata/net/ipv4/conf/eth0"
+	allFile  = allDir + "/rp_filter"
+	eth0File = eth0Dir + "/rp_filter"
 )
 
 func TestSetPodRoutes(t *testing.T) {
@@ -73,6 +84,12 @@ func TestSetPodRoutes(t *testing.T) {
 		Gw:        defaultGw,
 		LinkIndex: 1,
 		Table:     8738,
+	}
+	expectedRouteResult := []*types.Route{
+		{Dst: net.IPNet{IP: defaultGw, Mask: net.CIDRMask(32, 32)}},
+		{Dst: *net1, GW: defaultGw},
+		{Dst: *net2, GW: defaultGw},
+		{Dst: *dnet, GW: net.ParseIP("fe80::1")},
 	}
 	gomock.InOrder(
 		// retrieve eth0 link
@@ -124,8 +141,45 @@ func TestSetPodRoutes(t *testing.T) {
 		// add route in 8738 table
 		mnl.EXPECT().RouteReplace(&defaultRoute).Return(nil),
 	)
-	err := SetPodRoutes("wg0", []string{"1.2.3.4/32", "172.17.0.4/16"})
+
+	if err := os.MkdirAll(allDir, os.ModePerm); err != nil {
+		t.Fatalf("Failed to mkdir %s: %v", allDir, err)
+	}
+	defer func() {
+		_ = os.RemoveAll(testDir)
+	}()
+	if err := os.MkdirAll(eth0Dir, os.ModePerm); err != nil {
+		t.Fatalf("Failed to mkdir %s: %v", eth0Dir, err)
+	}
+	if _, err := os.Create(allFile); err != nil {
+		t.Fatalf("Failed to create file %s: %v", allFile, err)
+	}
+	if _, err := os.Create(eth0File); err != nil {
+		t.Fatalf("Failed to create file %s: %v", eth0File, err)
+	}
+
+	result := &current.Result{}
+	err := SetPodRoutes("wg0", []string{"1.2.3.4/32", "172.17.0.4/16"}, testDir, result)
 	if err != nil {
 		t.Fatalf("SetPodRoutes returns unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(result.Routes, expectedRouteResult) {
+		t.Fatalf("Got unexpected routes in result: %v, expected: %v", result.Routes, expectedRouteResult)
+	}
+
+	bytes, err := os.ReadFile(allFile)
+	if err != nil {
+		t.Fatalf("Failed to read file %s: %v", allFile, err)
+	}
+	if string(bytes) != "2" {
+		t.Fatalf("Got unexpected data in file %s: %s", allFile, string(bytes))
+	}
+	bytes, err = os.ReadFile(eth0File)
+	if err != nil {
+		t.Fatalf("Failed to read file %s: %v", eth0File, err)
+	}
+	if string(bytes) != "2" {
+		t.Fatalf("Got unexpected data in file %s: %s", eth0File, string(bytes))
 	}
 }
