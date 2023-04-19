@@ -117,7 +117,7 @@ jobs:
             type=sha,enable=true,priority=100,prefix=sha-,suffix=,format=short
           bake-target: cni-ipam-tags
       - name: Build and push
-        uses: docker/bake-action@v2
+        uses: docker/bake-action@v3
         with:
           push: ${{ github.event_name != 'pull_request' }}
           files: |
