@@ -3,13 +3,15 @@ name: Build
 # Controls when the workflow will run
 on:
   push:
-    branches:
-      - 'main'
     tags:
       - 'v*.*.*'
   pull_request:
     branches:
       - 'main'
+
+env:
+  # `public` indicates images to MCR wil be publicly available, and will be removed in the final MCR images
+  REGISTRY_REPO: public/aks
 
 jobs:
   build:
@@ -18,6 +20,7 @@ jobs:
       packages: write
       actions: read
       contents: read
+      id-token: write
     steps:
       # Get the repository's code
       - name: Checkout
@@ -29,28 +32,27 @@ jobs:
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v2
-      - name: Login to GHCR
+      - name: OIDC Login to Azure Public Cloud
+        # subject in JWT: repo:Azure/kube-egress-gateway:workflow:Build:event_name:push:ref_type:tag
+        # to view/edit: https://docs.github.com/en/rest/actions/oidc#set-the-customization-template-for-an-oidc-subject-claim-for-a-repository
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v2
+        uses: azure/login@v1
         with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Login the ACR
+        if: github.event_name != 'pull_request'
+        run: az acr login -n ${{ secrets.AZURE_REGISTRY }}
       - name: Docker meta
         id: daemon # you'll use this in the next step
         uses: docker/metadata-action@v4
         with:
           # list of Docker images to use as base name for tags
           images: |
-            ghcr.io/azure/kube-egress-gateway-daemon
+            ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO }}/kube-egress-gateway-daemon
           tags: |
-            type=schedule
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,enable=true,priority=100,prefix=sha-,suffix=,format=short
+            type=semver,pattern={{raw}}
           bake-target: daemon-tags
       - name: Docker meta
         id: controller # you'll use this in the next step
@@ -58,15 +60,9 @@ jobs:
         with:
           # list of Docker images to use as base name for tags
           images: |
-            ghcr.io/azure/kube-egress-gateway-controller
+            ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO }}/kube-egress-gateway-controller
           tags: |
-            type=schedule
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,enable=true,priority=100,prefix=sha-,suffix=,format=short
+            type=semver,pattern={{raw}}
           bake-target: controller-tags
       - name: Docker meta
         id: cnimanager # you'll use this in the next step
@@ -74,15 +70,9 @@ jobs:
         with:
           # list of Docker images to use as base name for tags
           images: |
-            ghcr.io/azure/kube-egress-gateway-cnimanager
+            ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO }}/kube-egress-gateway-cnimanager
           tags: |
-            type=schedule
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,enable=true,priority=100,prefix=sha-,suffix=,format=short
+            type=semver,pattern={{raw}}
           bake-target: cnimanager-tags
       - name: Docker meta
         id: cniplugin # you'll use this in the next step
@@ -90,15 +80,9 @@ jobs:
         with:
           # list of Docker images to use as base name for tags
           images: |
-            ghcr.io/azure/kube-egress-gateway-cni
+            ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO }}/kube-egress-gateway-cni
           tags: |
-            type=schedule
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,enable=true,priority=100,prefix=sha-,suffix=,format=short
+            type=semver,pattern={{raw}}
           bake-target: cni-tags
       - name: Docker meta
         id: cniipamplugin # you'll use this in the next step
@@ -106,15 +90,9 @@ jobs:
         with:
           # list of Docker images to use as base name for tags
           images: |
-            ghcr.io/azure/kube-egress-gateway-cni
+            ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO }}/kube-egress-gateway-cni-ipam
           tags: |
-            type=schedule
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,enable=true,priority=100,prefix=sha-,suffix=,format=short
+            type=semver,pattern={{raw}}
           bake-target: cni-ipam-tags
       - name: Build and push
         uses: docker/bake-action@v3
