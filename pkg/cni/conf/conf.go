@@ -35,6 +35,7 @@ type CNIConfig struct {
 	types.NetConf
 
 	ExcludedCIDRs []string `json:"excludedCIDRs"`
+	SocketPath    string   `json:"socketPath"`
 }
 
 func ParseCNIConfig(stdin []byte) (*CNIConfig, error) {

@@ -36,7 +36,7 @@ func TestParseCNIConfig(t *testing.T) {
 		Expected  *CNIConfig
 	}{
 		"test cni config without prevResult": {
-			StdinData: `{"cniVersion":"1.0.0","excludedCIDRs":["1.2.3.4/32","10.1.0.0/16"],"gatewayName":"test","ipam":{"type":"kube-egress-cni-ipam"},"name":"mynet","type":"kube-egress-cni"}`,
+			StdinData: `{"cniVersion":"1.0.0","excludedCIDRs":["1.2.3.4/32","10.1.0.0/16"],"socketPath":"testPath","gatewayName":"test","ipam":{"type":"kube-egress-cni-ipam"},"name":"mynet","type":"kube-egress-cni"}`,
 			Expected: &CNIConfig{
 				NetConf: types.NetConf{
 					CNIVersion: "1.0.0",
@@ -45,10 +45,11 @@ func TestParseCNIConfig(t *testing.T) {
 					IPAM:       types.IPAM{Type: "kube-egress-cni-ipam"},
 				},
 				ExcludedCIDRs: []string{"1.2.3.4/32", "10.1.0.0/16"},
+				SocketPath:    "testPath",
 			},
 		},
 		"test cni config with preResult": {
-			StdinData: `{"cniVersion":"1.0.0","excludedCIDRs":[],"gatewayName":"test","ipam":{"type":"kube-egress-cni-ipam"},"name":"mynet","prevResult":{"cniVersion":"1.0.0","interfaces":[{"name":"wg0","sandbox":"somepath"}],"ips":[{"interface":0,"address":"fe80::1/64"},{"address":"10.2.0.1/24"}],"dns":{}},"type":"kube-egress-cni"}`,
+			StdinData: `{"cniVersion":"1.0.0","excludedCIDRs":[],"socketPath":"testPath","gatewayName":"test","ipam":{"type":"kube-egress-cni-ipam"},"name":"mynet","prevResult":{"cniVersion":"1.0.0","interfaces":[{"name":"wg0","sandbox":"somepath"}],"ips":[{"interface":0,"address":"fe80::1/64"},{"address":"10.2.0.1/24"}],"dns":{}},"type":"kube-egress-cni"}`,
 			Expected: &CNIConfig{
 				NetConf: types.NetConf{
 					CNIVersion: "1.0.0",
@@ -57,6 +58,7 @@ func TestParseCNIConfig(t *testing.T) {
 					IPAM:       types.IPAM{Type: "kube-egress-cni-ipam"},
 				},
 				ExcludedCIDRs: []string{},
+				SocketPath:    "testPath",
 			},
 		},
 	}

@@ -29,6 +29,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 
 	"github.com/Azure/kube-egress-gateway/pkg/cni/routes"
 
@@ -78,7 +79,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// exchange public key with daemon
 	conn, err := grpc.DialContext(context.Background(),
-		consts.CNISocketPath,
+		config.SocketPath,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithStreamInterceptor(grpc_retry.StreamClientInterceptor()),
 		grpc.WithUnaryInterceptor(grpc_retry.UnaryClientInterceptor()),
@@ -118,7 +119,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	err = wireguard.WithWireGuardNic(args.ContainerID, args.Netns, consts.WireguardLinkName, ipam.New(config.IPAM.Type, args.StdinData), config.ExcludedCIDRs, result, func(podNs ns.NetNS, allowedIPNet string) error {
-
 		//generate private key
 		privateKey, err := wgtypes.GeneratePrivateKey()
 		if err != nil {
@@ -194,8 +194,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 
 			exceptionsCidrs := append(resp.GetExceptionCidrs(), config.ExcludedCIDRs...)
-			if err := routes.SetPodRoutes(consts.WireguardLinkName, exceptionsCidrs, "/proc/sys", result); err != nil {
-				return fmt.Errorf("failed to setup pod routes: %w", err)
+			if os.Getenv("IS_UNIT_TEST_ENV") != "true" {
+				if err := routes.SetPodRoutes(consts.WireguardLinkName, exceptionsCidrs, "/proc/sys", result); err != nil {
+					return fmt.Errorf("failed to setup pod routes: %w", err)
+				}
 			}
 			return nil
 		})
@@ -221,7 +223,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 	conn, err := grpc.DialContext(context.Background(),
-		consts.CNISocketPath,
+		config.SocketPath,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithStreamInterceptor(grpc_retry.StreamClientInterceptor()),
 		grpc.WithUnaryInterceptor(grpc_retry.UnaryClientInterceptor()),

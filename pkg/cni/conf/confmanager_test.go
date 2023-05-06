@@ -162,7 +162,7 @@ func TestInsertCNIPluginConf(t *testing.T) {
 		expected    string
 		expectedErr bool
 	}{
-		"insertCNIPluginConf should insert new cni plugin configuration i conflist file as expected": {
+		"insertCNIPluginConf should insert new cni plugin configuration in conflist file as expected": {
 			confFile: "10-test.conflist",
 			testFile: testConfList,
 			expected: `{
@@ -202,6 +202,7 @@ func TestInsertCNIPluginConf(t *testing.T) {
       "ipam": {
         "type": "kube-egress-cni-ipam"
       },
+      "socketPath": "/var/run/egressgateway.sock",
       "type": "kube-egress-cni"
     },
     {
@@ -254,6 +255,7 @@ func TestInsertCNIPluginConf(t *testing.T) {
       "ipam": {
         "type": "kube-egress-cni-ipam"
       },
+      "socketPath": "/var/run/egressgateway.sock",
       "type": "kube-egress-cni"
     }
   ]
