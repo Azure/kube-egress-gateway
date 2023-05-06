@@ -53,7 +53,7 @@ func init() {
 }
 
 func WithWireGuardNic(containerID string, podNSPath string, ifName string, ipWrapper ipam.IPProvider, exludedRoute []string, result *current.Result, configFunc func(podNs ns.NetNS, allowedIPNet string) error) (err error) {
-	podNetNS, err := nicRunner.netns.GetNS(podNSPath)
+	podNetNS, err := nicRunner.netns.GetNSByPath(podNSPath)
 	if err != nil {
 		return err
 	}

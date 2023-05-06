@@ -74,7 +74,7 @@ var _ = Describe("test WithWireGuardNic", func() {
 
 	It("should return error when pod network namespace is not found", func() {
 		mns := nicRunner.netns.(*mocknetnswrapper.MockInterface)
-		mns.EXPECT().GetNS(podNSPath).Return(nil, os.ErrNotExist)
+		mns.EXPECT().GetNSByPath(podNSPath).Return(nil, os.ErrNotExist)
 		err := WithWireGuardNic(containerID, podNSPath, ifName, ipam.NewFakeIPProvider(&ipamResult), []string{}, nil, fakeConfigFunc)
 		Expect(err).To(HaveOccurred())
 	})
@@ -84,7 +84,7 @@ var _ = Describe("test WithWireGuardNic", func() {
 		mlink := nicRunner.netlink.(*mocknetlinkwrapper.MockInterface)
 		gwns := &mocknetnswrapper.MockNetNS{Name: nsName}
 		gomock.InOrder(
-			mns.EXPECT().GetNS(podNSPath).Return(gwns, nil),
+			mns.EXPECT().GetNSByPath(podNSPath).Return(gwns, nil),
 			mlink.EXPECT().LinkByName(ifName).Return(nil, errors.New("error")),
 		)
 		err := WithWireGuardNic(containerID, podNSPath, ifName, ipam.NewFakeIPProvider(&ipamResult), []string{}, nil, fakeConfigFunc)
@@ -98,7 +98,7 @@ var _ = Describe("test WithWireGuardNic", func() {
 		wgMain := &netlink.Wireguard{LinkAttrs: netlink.LinkAttrs{Name: ifNameInMain}}
 		wg0 := &netlink.Wireguard{LinkAttrs: netlink.LinkAttrs{Name: ifName}}
 		gomock.InOrder(
-			mns.EXPECT().GetNS(podNSPath).Return(gwns, nil),
+			mns.EXPECT().GetNSByPath(podNSPath).Return(gwns, nil),
 			mlink.EXPECT().LinkByName(ifName).Return(nil, netlink.LinkNotFoundError{}),
 			mlink.EXPECT().LinkAdd(&netlink.Wireguard{LinkAttrs: netlink.LinkAttrs{
 				NetNsID: -1,
@@ -140,7 +140,7 @@ var _ = Describe("test WithWireGuardNic", func() {
 		gwns := &mocknetnswrapper.MockNetNS{Name: nsName}
 		wg0 := &netlink.Wireguard{LinkAttrs: netlink.LinkAttrs{Name: ifName}}
 		gomock.InOrder(
-			mns.EXPECT().GetNS(podNSPath).Return(gwns, nil),
+			mns.EXPECT().GetNSByPath(podNSPath).Return(gwns, nil),
 			mlink.EXPECT().LinkByName(ifName).Return(wg0, nil),
 			mlink.EXPECT().LinkByName(ifName).Return(wg0, nil),
 		)
@@ -171,7 +171,7 @@ var _ = Describe("test WithWireGuardNic", func() {
 		wgMain := &netlink.Wireguard{LinkAttrs: netlink.LinkAttrs{Name: ifNameInMain}}
 		wg0 := &netlink.Wireguard{LinkAttrs: netlink.LinkAttrs{Name: ifName}}
 		gomock.InOrder(
-			mns.EXPECT().GetNS(podNSPath).Return(gwns, nil),
+			mns.EXPECT().GetNSByPath(podNSPath).Return(gwns, nil),
 			mlink.EXPECT().LinkByName(ifName).Return(nil, netlink.LinkNotFoundError{}),
 			mlink.EXPECT().LinkAdd(&netlink.Wireguard{LinkAttrs: netlink.LinkAttrs{
 				NetNsID: -1,
@@ -197,7 +197,7 @@ var _ = Describe("test WithWireGuardNic", func() {
 		gwns := &mocknetnswrapper.MockNetNS{Name: nsName}
 		wg0 := &netlink.Wireguard{LinkAttrs: netlink.LinkAttrs{Name: ifName}}
 		gomock.InOrder(
-			mns.EXPECT().GetNS(podNSPath).Return(gwns, nil),
+			mns.EXPECT().GetNSByPath(podNSPath).Return(gwns, nil),
 			mlink.EXPECT().LinkByName(ifName).Return(wg0, nil),
 			mlink.EXPECT().LinkByName(ifName).Return(wg0, nil),
 		)

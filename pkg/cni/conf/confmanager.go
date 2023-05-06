@@ -183,6 +183,7 @@ func (mgr *Manager) managePluginFromConf(file string) (map[string]interface{}, e
 		"type":          consts.KubeEgressCNIName,
 		"ipam":          map[string]interface{}{"type": consts.KubeEgressIPAMCNIName},
 		"excludedCIDRs": mgr.exceptionCidrs,
+		"socketPath":    consts.CNISocketPath,
 	})
 	rawList["plugins"] = plugins
 	return rawList, nil
@@ -232,6 +233,7 @@ func (mgr *Manager) managePluginFromConfList(file string) (map[string]interface{
 		"type":          consts.KubeEgressCNIName,
 		"ipam":          map[string]interface{}{"type": consts.KubeEgressIPAMCNIName},
 		"excludedCIDRs": mgr.exceptionCidrs,
+		"socketPath":    consts.CNISocketPath,
 	}}, plugins[1:]...)...)
 
 	rawList["plugins"] = plugins

@@ -46,6 +46,8 @@ type Interface interface {
 	NewNS(nsName string) (ns.NetNS, error)
 	// GetNS gets a named network namespace
 	GetNS(nsName string) (ns.NetNS, error)
+	// GetNSByPath gets a network namespace by whole path
+	GetNSByPath(nsPath string) (ns.NetNS, error)
 	// UnmountNS deletes a named network namespace
 	UnmountNS(nsName string) error
 	// ListNS lists all network namespaces
@@ -129,6 +131,10 @@ func (*netns) NewNS(nsName string) (ns.NetNS, error) {
 
 func (*netns) GetNS(nsName string) (ns.NetNS, error) {
 	nsPath := path.Join(nsBaseDir, nsName)
+	return ns.GetNS(nsPath)
+}
+
+func (*netns) GetNSByPath(nsPath string) (ns.NetNS, error) {
 	return ns.GetNS(nsPath)
 }
 

@@ -108,7 +108,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 	if !ipv4AddrFound {
-		return errors.New("these is no enough ipv4 addr allocated for this pod")
+		return errors.New("there is no enough ipv4 addr allocated for this pod")
 	}
 	if !ipv6AddrFound {
 		return errors.New("there is no enough ipv6 addr allocated for this pod")
