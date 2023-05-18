@@ -1,0 +1,62 @@
+name: $(Date:yyyyMMdd)$(Rev:.r)_e2e
+
+pr:
+  branches:
+    include:
+    - main
+
+variables:
+- group: pod-egress-e2e
+- group: aks-ci
+
+pool:
+  vmImage: ubuntu-latest
+
+jobs:
+- job: Run_KubeEgressGateway_E2E
+  steps:
+  - task: GoTool@0
+    inputs:
+      version: '1.19'
+  - bash: |
+      echo $(registry.password) | docker login $(registry.url) -u $(registry.username) --password-stdin
+    displayName: docker login
+  - bash: |
+      az extension add -n aks-preview
+      az login --service-principal -u $(AZURE_CLIENT_ID) -p $(AZURE_CLIENT_SECRET) --tenant $(AZURE_TENANT_ID)
+      az account set -s $(AZURE_SUBSCRIPTION_ID)
+    displayName: az login
+  - bash: |
+      export RESOURCE_GROUP="pod-egress-e2e-$(head /dev/urandom | LC_ALL=C tr -dc a-z0-9 | head -c 6 ; echo '')"
+      echo "##vso[task.setvariable variable=resource_group]${RESOURCE_GROUP}"
+      .pipeline/scripts/deploy-testenv.sh
+      export KUBECONFIG=$(pwd)/${KUBECONFIG_FILE}
+      echo "##vso[task.setvariable variable=kubeconfig]${KUBECONFIG}"
+      kubectl get nodes
+    displayName: create aks cluster
+    env:
+      AZURE_SUBSCRIPTION_ID: $(AZURE_SUBSCRIPTION_ID)
+      AZURE_CLIENT_ID: $(AZURE_CLIENT_ID)
+      AZURE_CLIENT_SECRET: $(AZURE_CLIENT_SECRET)
+      AZURE_TENANT_ID: $(AZURE_TENANT_ID)
+      KUBECONFIG_FILE: e2e-kubeconfig
+  - bash: |
+      kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.11.0/cert-manager.crds.yaml
+      helm repo add jetstack https://charts.jetstack.io
+      helm repo update
+      helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --version v1.11.0
+      kubectl get all -n cert-manager
+    displayName: install cert-manager
+    env:
+      KUBECONFIG: $(kubeconfig)
+  - bash: |
+      mv $(pwd)/azure.json $(pwd)/config/azureconfig/azure.json
+      IMAGE_REGISTRY=$(registry.url) make install
+      kubectl get all -n kube-egress-gateway-system
+    displayName: build and install kube-egress-gateway components
+    env:
+      KUBECONFIG: $(kubeconfig)
+  - bash: |
+      az group delete -n $(resource_group) --yes
+    displayName: clean up resources
+

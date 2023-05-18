@@ -82,8 +82,8 @@ GW_VMSS_NAME=${VMSS_INFO[1]}
 GW_VMSS=$(az vmss update --name ${GW_VMSS_NAME} -g ${AKS_NODE_RESOURCE_GROUP} --set tags.aks-managed-gatewayIPPrefixSize=31)
 
 # Creating azure configuration file for the controllers
-echo "Generating azure configuration file"
-cat << EOF > ./azure.json
+echo "Generating azure configuration file:" $(pwd)/azure.json
+cat << EOF > $(pwd)/azure.json
 {
     "cloud": "AzurePublicCloud",
     "tenantId": "${AZURE_TENANT_ID}",
@@ -99,5 +99,12 @@ cat << EOF > ./azure.json
     "subnetName": "gateway"
 }
 EOF
+
+if [[ ! -z "${KUBECONFIG_FILE}" ]]; then
+  echo "Retrieving cluster kubeconfig"
+  az aks get-credentials -g $RESOURCE_GROUP -n $AKS_CLUSTER_NAME --file ${KUBECONFIG_FILE} --overwrite-existing
+  echo "Kubeconfig is saved at:" $(pwd)/${KUBECONFIG_FILE}
+fi
+
 
 echo "Test environment setup completed."
