@@ -34,9 +34,7 @@ import (
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/subnetclient/mocksubnetclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssclient/mockvmssclient"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
@@ -48,6 +46,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -160,7 +160,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			})
 
 			It("should return error when listing vmss fails", func() {
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return(nil, fmt.Errorf("failed to list vmss"))
 				vmss, err := r.getGatewayVMSS(lbConfig)
 				Expect(vmss).To(BeNil())
@@ -168,7 +168,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			})
 
 			It("should return error when vmss in list does not have expected tag", func() {
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{
 					&compute.VirtualMachineScaleSet{ID: to.Ptr("test")},
 				}, nil)
@@ -179,7 +179,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 
 			It("should return expected vmss in list", func() {
 				vmss := &compute.VirtualMachineScaleSet{Tags: map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")}}
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{
 					&compute.VirtualMachineScaleSet{ID: to.Ptr("dummy")},
 					vmss,
@@ -191,8 +191,8 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 
 			It("should return error when getting vmss fails", func() {
 				lbConfig.Spec.GatewayNodepoolName = ""
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
-				mockVMSSClient.EXPECT().Get(gomock.Any(), "vmssRG", "vmss", gomock.Any()).Return(nil, fmt.Errorf("vmss not found"))
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().Get(gomock.Any(), "vmssRG", "vmss").Return(nil, fmt.Errorf("vmss not found"))
 				vmss, err := r.getGatewayVMSS(lbConfig)
 				Expect(vmss).To(BeNil())
 				Expect(err).To(Equal(fmt.Errorf("vmss not found")))
@@ -201,8 +201,8 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			It("should return expected vmss from get", func() {
 				lbConfig.Spec.GatewayNodepoolName = ""
 				vmss := &compute.VirtualMachineScaleSet{ID: to.Ptr("test")}
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
-				mockVMSSClient.EXPECT().Get(gomock.Any(), "vmssRG", "vmss", gomock.Any()).Return(vmss, nil)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().Get(gomock.Any(), "vmssRG", "vmss").Return(vmss, nil)
 				foundVMSS, err := r.getGatewayVMSS(lbConfig)
 				Expect(err).To(BeNil())
 				Expect(to.Val(foundVMSS)).To(Equal(to.Val(vmss)))
@@ -218,16 +218,16 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			})
 
 			It("should report error if gateway LB is not found", func() {
-				mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 				mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(nil, fmt.Errorf("lb not found"))
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(Equal(fmt.Errorf("lb not found")))
 			})
 
 			It("should report error if gateway VMSS is not found", func() {
-				mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 				mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(&network.LoadBalancer{}, nil)
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return(nil, fmt.Errorf("failed to list vmss"))
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(Equal(fmt.Errorf("failed to list vmss")))
@@ -235,9 +235,9 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 
 			It("should report error if gateway VMSS does not have UID", func() {
 				vmss := &compute.VirtualMachineScaleSet{Tags: map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")}}
-				mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 				mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(&network.LoadBalancer{}, nil)
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(Equal(fmt.Errorf("gateway vmss does not have UID")))
@@ -248,9 +248,9 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					Properties: &compute.VirtualMachineScaleSetProperties{UniqueID: to.Ptr(testVMSSUID)},
 					Tags:       map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")},
 				}
-				mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 				mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(&network.LoadBalancer{}, nil)
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(Equal(fmt.Errorf("lb property is empty")))
@@ -272,9 +272,9 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 						Name: to.Ptr(testVMSSUID),
 						ID:   r.GetLBFrontendIPConfigurationID(testVMSSUID),
 					})
-					mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+					mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 					mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(lb, nil)
-					mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+					mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 					mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
 				})
 
@@ -312,7 +312,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					Tags:       map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")},
 				}
 				requestedLB, expectedLB := getExpectedLB(), getExpectedLB()
-				mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 				mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(nil, &azcore.ResponseError{
 					StatusCode: http.StatusNotFound,
 				})
@@ -328,7 +328,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				mockSubnetClient.EXPECT().Get(gomock.Any(), testVnetRG, testVnetName, testSubnetName, gomock.Any()).Return(&network.Subnet{
 					ID: to.Ptr("testSubnet"),
 				}, nil)
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(BeNil())
@@ -340,14 +340,14 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 						Properties: &compute.VirtualMachineScaleSetProperties{UniqueID: to.Ptr(testVMSSUID)},
 						Tags:       map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")},
 					}
-					mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+					mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 					mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil).AnyTimes()
 				})
 
 				It("should create new lbRule and lbProbe", func() {
 					lb := getEmptyLB()
 					expectedLB := getExpectedLB()
-					mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+					mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 					mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(lb, nil)
 					mockLoadBalancerClient.EXPECT().CreateOrUpdate(gomock.Any(), testLBRG, testLBName, gomock.Any()).DoAndReturn(func(ctx context.Context, resourceGroupName string, loadBalancerName string, loadBalancer network.LoadBalancer) (*network.LoadBalancer, error) {
 						Expect(equality.Semantic.DeepEqual(loadBalancer, *expectedLB)).To(BeTrue())
@@ -365,7 +365,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 
 				It("should not update LB when lb rule and probe are expected", func() {
 					expectedLB := getExpectedLB()
-					mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+					mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 					mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(expectedLB, nil)
 					res, reconcileErr = r.Reconcile(context.TODO(), req)
 					Expect(reconcileErr).To(BeNil())
@@ -377,7 +377,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				It("should drop incorrect lbRule and create new one", func() {
 					existingLB, expectedLB := getExpectedLB(), getExpectedLB()
 					existingLB.Properties.LoadBalancingRules[0].Properties.Protocol = to.Ptr(network.TransportProtocolTCP)
-					mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+					mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 					mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(existingLB, nil)
 					mockLoadBalancerClient.EXPECT().CreateOrUpdate(gomock.Any(), testLBRG, testLBName, gomock.Any()).DoAndReturn(func(ctx context.Context, resourceGroupName string, loadBalancerName string, loadBalancer network.LoadBalancer) (*network.LoadBalancer, error) {
 						Expect(equality.Semantic.DeepEqual(loadBalancer, *expectedLB)).To(BeTrue())
@@ -413,7 +413,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 						},
 					} {
 						existingLB.Properties.Probes[0].Properties = prop
-						mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+						mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 						mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(existingLB, nil)
 						mockLoadBalancerClient.EXPECT().CreateOrUpdate(gomock.Any(), testLBRG, testLBName, gomock.Any()).DoAndReturn(func(ctx context.Context, resourceGroupName string, loadBalancerName string, loadBalancer network.LoadBalancer) (*network.LoadBalancer, error) {
 							Expect(equality.Semantic.DeepEqual(loadBalancer, *expectedLB)).To(BeTrue())
@@ -439,7 +439,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					expectedLB.Properties.LoadBalancingRules[1].Properties.FrontendPort = to.Ptr(int32(6001))
 					expectedLB.Properties.LoadBalancingRules[1].Properties.BackendPort = to.Ptr(int32(6001))
 
-					mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+					mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 					mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(existingLB, nil)
 					mockLoadBalancerClient.EXPECT().CreateOrUpdate(gomock.Any(), testLBRG, testLBName, gomock.Any()).DoAndReturn(func(ctx context.Context, resourceGroupName string, loadBalancerName string, loadBalancer network.LoadBalancer) (*network.LoadBalancer, error) {
 						Expect(equality.Semantic.DeepEqual(loadBalancer, *expectedLB)).To(BeTrue())
@@ -462,13 +462,13 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				expectedLB := getExpectedLB()
-				mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 				mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(expectedLB, nil)
 				vmss := &compute.VirtualMachineScaleSet{
 					Properties: &compute.VirtualMachineScaleSetProperties{UniqueID: to.Ptr(testVMSSUID)},
 					Tags:       map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")},
 				}
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil).AnyTimes()
 			})
 
@@ -625,13 +625,13 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					Properties: &compute.VirtualMachineScaleSetProperties{UniqueID: to.Ptr(testVMSSUID)},
 					Tags:       map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")},
 				}
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
 			})
 
 			It("should delete lb and lbConfig if lb does not need cleanup", func() {
 				lb := getEmptyLB()
-				mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 				mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(lb, nil)
 				mockLoadBalancerClient.EXPECT().Delete(gomock.Any(), testLBRG, testLBName).Return(nil)
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
@@ -642,7 +642,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 
 			It("should delete lb and delete lbConfig", func() {
 				lb := getExpectedLB()
-				mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 				mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(lb, nil)
 				mockLoadBalancerClient.EXPECT().Delete(gomock.Any(), testLBRG, testLBName).Return(nil)
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
@@ -653,7 +653,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 
 			It("should return error and not delete lbConfig if reconcile() returns error", func() {
 				lb := getExpectedLB()
-				mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 				mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(lb, nil)
 				mockLoadBalancerClient.EXPECT().Delete(gomock.Any(), testLBRG, testLBName).Return(fmt.Errorf("failed to delete lb"))
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
@@ -677,7 +677,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					},
 				}
 				lb.Properties.LoadBalancingRules = append(lb.Properties.LoadBalancingRules, additionalRule)
-				mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+				mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 				mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(lb, nil)
 				mockLoadBalancerClient.EXPECT().CreateOrUpdate(gomock.Any(), testLBRG, testLBName, gomock.Any()).DoAndReturn(
 					func(ctx context.Context, resourceGroupName string, loadBalancerName string, loadBalancer network.LoadBalancer) (*network.LoadBalancer, error) {

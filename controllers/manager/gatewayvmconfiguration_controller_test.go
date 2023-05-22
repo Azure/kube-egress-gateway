@@ -35,7 +35,6 @@ import (
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/publicipprefixclient/mockpublicipprefixclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssclient/mockvmssclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssvmclient/mockvmssvmclient"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
@@ -47,6 +46,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -195,10 +195,10 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				for i, c := range tests {
 					az = getMockAzureManager(gomock.NewController(GinkgoT()))
 					r = &GatewayVMConfigurationReconciler{AzureManager: az}
-					mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+					mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 					if c.expectGet {
 						vmConfig.Spec.GatewayNodepoolName = ""
-						mockVMSSClient.EXPECT().Get(gomock.Any(), vmssRG, vmssName, gomock.Any()).Return(c.vmss, c.returnedErr)
+						mockVMSSClient.EXPECT().Get(gomock.Any(), vmssRG, vmssName).Return(c.vmss, c.returnedErr)
 					} else {
 						vmConfig.Spec.GatewayNodepoolName = "testgw"
 						mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{
@@ -551,7 +551,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 
 			It("should return error if updating vmss fails", func() {
 				existingVMSS := getEmptyVMSS()
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, vmssName, gomock.Any()).Return(nil, fmt.Errorf("failed"))
 				err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(errors.Unwrap(err)).To(Equal(fmt.Errorf("failed")))
@@ -560,7 +560,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			It("should return error if listing vmss instances fails", func() {
 				existingVMSS := getEmptyVMSS()
 				expectedVMSS := getConfiguredVMSS()
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, vmssName, gomock.Any()).Return(expectedVMSS, nil)
 				mockVMSSVMClient := az.VmssVMClient.(*mockvmssvmclient.MockInterface)
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), testRG, vmssName).Return(nil, fmt.Errorf("failed"))
@@ -571,7 +571,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			It("should return error if vmss instance has empty properties", func() {
 				existingVMSS := getEmptyVMSS()
 				expectedVMSS := getConfiguredVMSS()
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, vmssName, gomock.Any()).Return(expectedVMSS, nil)
 				mockVMSSVMClient := az.VmssVMClient.(*mockvmssvmclient.MockInterface)
 				vms := []*compute.VirtualMachineScaleSetVM{&compute.VirtualMachineScaleSetVM{InstanceID: to.Ptr("0")}}
@@ -583,7 +583,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			It("should return error if vmss instance does not have primary nic", func() {
 				existingVMSS := getEmptyVMSS()
 				expectedVMSS := getConfiguredVMSS()
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, vmssName, gomock.Any()).Return(expectedVMSS, nil)
 				mockVMSSVMClient := az.VmssVMClient.(*mockvmssvmclient.MockInterface)
 				vms := []*compute.VirtualMachineScaleSetVM{&compute.VirtualMachineScaleSetVM{
@@ -602,7 +602,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			It("should return error if updating vmss instances fails", func() {
 				existingVMSS := getEmptyVMSS()
 				expectedVMSS := getConfiguredVMSS()
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, vmssName, gomock.Any()).Return(expectedVMSS, nil)
 				mockVMSSVMClient := az.VmssVMClient.(*mockvmssvmclient.MockInterface)
 				vms := []*compute.VirtualMachineScaleSetVM{getEmptyVMSSVM()}
@@ -615,7 +615,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			It("should create new ipConfig and update lb backend for vmss and vms", func() {
 				existingVMSS := getEmptyVMSS()
 				expectedVMSS := getConfiguredVMSS()
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, vmssName, gomock.Any()).
 					DoAndReturn(func(ctx context.Context, rg, vmssName string, vmss compute.VirtualMachineScaleSet) (*compute.VirtualMachineScaleSet, error) {
 						Expect(vmss).To(Equal(to.Val(expectedVMSS)))
@@ -651,7 +651,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				existingVMSS, expectedVMSS := getConfiguredVMSSWithNameAndUID(), getConfiguredVMSS()
 				existingVMSS.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations[0].
 					Properties.IPConfigurations[1].Properties.PrivateIPAddressVersion = to.Ptr(compute.IPVersionIPv6)
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, vmssName, gomock.Any()).
 					DoAndReturn(func(ctx context.Context, rg, vmssName string, vmss compute.VirtualMachineScaleSet) (*compute.VirtualMachineScaleSet, error) {
 						Expect(vmss).To(Equal(to.Val(expectedVMSS)))
@@ -679,7 +679,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				existingVMSS, expectedVMSS := getConfiguredVMSSWithNameAndUID(), getEmptyVMSS()
 				expectedVMSS.Name = nil
 				expectedVMSS.Properties.UniqueID = nil
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, vmssName, gomock.Any()).
 					DoAndReturn(func(ctx context.Context, rg, vmssName string, vmss compute.VirtualMachineScaleSet) (*compute.VirtualMachineScaleSet, error) {
 						Expect(vmss).To(Equal(to.Val(expectedVMSS)))
@@ -720,7 +720,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			})
 
 			It("should report error when getGatewayVMSS fails", func() {
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return(nil, fmt.Errorf("failed"))
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(Equal(fmt.Errorf("failed")))
@@ -733,7 +733,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					consts.AKSNodepoolTagKey:             to.Ptr("testgw"),
 					consts.AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
 				}
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
 				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), "rg", "prefix", gomock.Any()).Return(nil, fmt.Errorf("failed"))
@@ -755,7 +755,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						IPPrefix:     to.Ptr("1.2.3.4/31"),
 					},
 				}
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
 				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), "rg", "prefix", gomock.Any()).Return(ipPrefix, nil)
@@ -779,7 +779,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						IPPrefix:     to.Ptr("1.2.3.4/31"),
 					},
 				}
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
 				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), "rg", "prefix", gomock.Any()).Return(ipPrefix, nil)
@@ -804,7 +804,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						IPPrefix:     to.Ptr("1.2.3.4/31"),
 					},
 				}
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
 				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), "rg", "prefix", gomock.Any()).Return(ipPrefix, nil)
@@ -844,7 +844,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			})
 
 			It("should report error when getGatewayVMSS fails", func() {
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return(nil, fmt.Errorf("failed"))
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(Equal(fmt.Errorf("failed")))
@@ -858,7 +858,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					consts.AKSNodepoolTagKey:             to.Ptr("testgw"),
 					consts.AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
 				}
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
 				mockVMSSVMClient := az.VmssVMClient.(*mockvmssvmclient.MockInterface)
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), testRG, vmssName).Return(nil, fmt.Errorf("failed"))
@@ -872,7 +872,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					consts.AKSNodepoolTagKey:             to.Ptr("testgw"),
 					consts.AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
 				}
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
 				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), testRG, "testns_test", gomock.Any()).Return(nil, fmt.Errorf("failed"))
@@ -888,7 +888,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					consts.AKSNodepoolTagKey:             to.Ptr("testgw"),
 					consts.AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
 				}
-				mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
 				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), testRG, "testns_test", gomock.Any()).Return(nil, &azcore.ResponseError{StatusCode: http.StatusNotFound})
