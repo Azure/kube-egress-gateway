@@ -31,8 +31,6 @@ package cnimanager
 import (
 	"context"
 
-	current "github.com/Azure/kube-egress-gateway/api/v1alpha1"
-	cniprotocol "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	corev1 "k8s.io/api/core/v1"
@@ -40,6 +38,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	current "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	cniprotocol "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
 )
 
 type NicService struct {

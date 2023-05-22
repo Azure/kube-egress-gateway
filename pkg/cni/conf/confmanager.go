@@ -33,9 +33,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/fsnotify/fsnotify"
+
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/logger"
-	"github.com/fsnotify/fsnotify"
 )
 
 type Manager struct {

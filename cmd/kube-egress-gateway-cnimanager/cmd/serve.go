@@ -28,12 +28,6 @@ import (
 	"net"
 	"os"
 
-	current "github.com/Azure/kube-egress-gateway/api/v1alpha1"
-	"github.com/Azure/kube-egress-gateway/controllers/cnimanager"
-	cniconf "github.com/Azure/kube-egress-gateway/pkg/cni/conf"
-	cniprotocol "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
-	"github.com/Azure/kube-egress-gateway/pkg/consts"
-	"github.com/Azure/kube-egress-gateway/pkg/logger"
 	"github.com/go-logr/zapr"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
@@ -52,6 +46,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+
+	current "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	"github.com/Azure/kube-egress-gateway/controllers/cnimanager"
+	cniconf "github.com/Azure/kube-egress-gateway/pkg/cni/conf"
+	cniprotocol "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
+	"github.com/Azure/kube-egress-gateway/pkg/consts"
+	"github.com/Azure/kube-egress-gateway/pkg/logger"
 )
 
 const (

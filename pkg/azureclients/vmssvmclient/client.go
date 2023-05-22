@@ -31,6 +31,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
+
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/utils"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 )

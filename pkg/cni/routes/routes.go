@@ -31,14 +31,15 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/Azure/kube-egress-gateway/pkg/consts"
-	"github.com/Azure/kube-egress-gateway/pkg/iptableswrapper"
-	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper"
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netlink/nl"
 	"golang.org/x/sys/unix"
+
+	"github.com/Azure/kube-egress-gateway/pkg/consts"
+	"github.com/Azure/kube-egress-gateway/pkg/iptableswrapper"
+	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper"
 )
 
 type runner struct {

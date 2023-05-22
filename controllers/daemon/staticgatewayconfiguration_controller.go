@@ -33,21 +33,10 @@ import (
 	"strconv"
 	"strings"
 
-	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
-	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
-	"github.com/Azure/kube-egress-gateway/pkg/consts"
-	"github.com/Azure/kube-egress-gateway/pkg/healthprobe"
-	"github.com/Azure/kube-egress-gateway/pkg/imds"
-	"github.com/Azure/kube-egress-gateway/pkg/iptableswrapper"
-	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper"
-	"github.com/Azure/kube-egress-gateway/pkg/netnswrapper"
-	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
-	"github.com/Azure/kube-egress-gateway/pkg/wgctrlwrapper"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netlink/nl"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
-
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -60,6 +49,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
+	"github.com/Azure/kube-egress-gateway/pkg/consts"
+	"github.com/Azure/kube-egress-gateway/pkg/healthprobe"
+	"github.com/Azure/kube-egress-gateway/pkg/imds"
+	"github.com/Azure/kube-egress-gateway/pkg/iptableswrapper"
+	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper"
+	"github.com/Azure/kube-egress-gateway/pkg/netnswrapper"
+	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
+	"github.com/Azure/kube-egress-gateway/pkg/wgctrlwrapper"
 )
 
 var _ reconcile.Reconciler = &StaticGatewayConfigurationReconciler{}

@@ -29,14 +29,15 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Azure/kube-egress-gateway/pkg/iptableswrapper/mockiptableswrapper"
-	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper/mocknetlinkwrapper"
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/golang/mock/gomock"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netlink/nl"
 	"golang.org/x/sys/unix"
+
+	"github.com/Azure/kube-egress-gateway/pkg/iptableswrapper/mockiptableswrapper"
+	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper/mocknetlinkwrapper"
 )
 
 const (

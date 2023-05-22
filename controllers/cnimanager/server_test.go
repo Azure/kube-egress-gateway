@@ -26,9 +26,6 @@ package cnimanager_test
 import (
 	"context"
 
-	current "github.com/Azure/kube-egress-gateway/api/v1alpha1"
-	"github.com/Azure/kube-egress-gateway/controllers/cnimanager"
-	cniprotocol "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -38,6 +35,10 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	current "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	"github.com/Azure/kube-egress-gateway/controllers/cnimanager"
+	cniprotocol "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
 )
 
 var _ = Describe("Server", func() {
