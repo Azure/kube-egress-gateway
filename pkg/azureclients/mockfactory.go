@@ -27,17 +27,17 @@ package azureclients
 import (
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient/mockinterfaceclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/loadbalancerclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/publicipprefixclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/publicipprefixclient/mockpublicipprefixclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/subnetclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/subnetclient/mocksubnetclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssclient/mockvmssclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssvmclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssvmclient/mockvmssvmclient"
 	"github.com/golang/mock/gomock"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 )
 
 type MockAzureClientsFactory struct {
@@ -49,11 +49,11 @@ func NewMockAzureClientsFactory(ctrl *gomock.Controller) AzureClientsFactory {
 }
 
 func (factory *MockAzureClientsFactory) GetLoadBalancersClient() (loadbalancerclient.Interface, error) {
-	return mockloadbalancerclient.NewMockInterface(factory.ctrl), nil
+	return mock_loadbalancerclient.NewMockInterface(factory.ctrl), nil
 }
 
-func (factory *MockAzureClientsFactory) GetVirtualMachineScaleSetsClient() (vmssclient.Interface, error) {
-	return mockvmssclient.NewMockInterface(factory.ctrl), nil
+func (factory *MockAzureClientsFactory) GetVirtualMachineScaleSetsClient() (virtualmachinescalesetclient.Interface, error) {
+	return mock_virtualmachinescalesetclient.NewMockInterface(factory.ctrl), nil
 }
 
 func (factory *MockAzureClientsFactory) GetVirtualMachineScaleSetVMsClient() (vmssvmclient.Interface, error) {

@@ -31,12 +31,12 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
 
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/loadbalancerclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/publicipprefixclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/subnetclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssvmclient"
 )
 
@@ -45,7 +45,7 @@ type AzureClientsFactory interface {
 	GetLoadBalancersClient() (loadbalancerclient.Interface, error)
 
 	// get virtual machine scale sets client
-	GetVirtualMachineScaleSetsClient() (vmssclient.Interface, error)
+	GetVirtualMachineScaleSetsClient() (virtualmachinescalesetclient.Interface, error)
 
 	// get virtual machine scale set vms client
 	GetVirtualMachineScaleSetVMsClient() (vmssvmclient.Interface, error)
@@ -99,15 +99,15 @@ func NewAzureClientsFactoryWithManagedIdentity(cloud, subscriptionID, managedIde
 }
 
 func (factory *azureClientsFactory) GetLoadBalancersClient() (loadbalancerclient.Interface, error) {
-	client, err := loadbalancerclient.NewLoadBalancersClient(factory.subscriptionID, factory.credentials, factory.clientOptions)
+	client, err := loadbalancerclient.New(factory.subscriptionID, factory.credentials, factory.clientOptions)
 	if err != nil {
 		return nil, err
 	}
 	return client, nil
 }
 
-func (factory *azureClientsFactory) GetVirtualMachineScaleSetsClient() (vmssclient.Interface, error) {
-	client, err := vmssclient.NewVirtualMachineScaleSetsClient(factory.subscriptionID, factory.credentials, factory.clientOptions)
+func (factory *azureClientsFactory) GetVirtualMachineScaleSetsClient() (virtualmachinescalesetclient.Interface, error) {
+	client, err := virtualmachinescalesetclient.New(factory.subscriptionID, factory.credentials, factory.clientOptions)
 	if err != nil {
 		return nil, err
 	}

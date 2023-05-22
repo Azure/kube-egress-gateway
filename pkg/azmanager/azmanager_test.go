@@ -31,15 +31,15 @@ import (
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient/mockinterfaceclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/loadbalancerclient/mockloadbalancerclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/publicipprefixclient/mockpublicipprefixclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/subnetclient/mocksubnetclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssclient/mockvmssclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssvmclient/mockvmssvmclient"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 )
 
 func TestCreateAzureManager(t *testing.T) {
@@ -123,7 +123,7 @@ func TestGetLB(t *testing.T) {
 		config := getTestCloudConfig("", "", "")
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
-		mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+		mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 		mockLoadBalancerClient.EXPECT().Get(gomock.Any(), "testRG", "testLB", gomock.Any()).Return(test.lb, test.testErr)
 		lb, err := az.GetLB()
 		assert.Equal(t, to.Val(lb), to.Val(test.lb), "TestCase[%d]: %s", i, test.desc)
@@ -153,7 +153,7 @@ func TestCreateOrUpdateLB(t *testing.T) {
 		config := getTestCloudConfig("", "", "")
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
-		mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+		mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 		mockLoadBalancerClient.EXPECT().CreateOrUpdate(gomock.Any(), "testRG", "testLB", to.Val(test.lb)).Return(test.lb, test.testErr)
 		ret, err := az.CreateOrUpdateLB(to.Val(test.lb))
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
@@ -182,7 +182,7 @@ func TestDeleteLB(t *testing.T) {
 		config := getTestCloudConfig("", "", "")
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
-		mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
+		mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 		mockLoadBalancerClient.EXPECT().Delete(gomock.Any(), "testRG", "testLB").Return(test.testErr)
 		err := az.DeleteLB()
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
@@ -210,7 +210,7 @@ func TestListVMSS(t *testing.T) {
 		config := getTestCloudConfig("", "", "")
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
-		mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+		mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), "testRG").Return(test.vmssList, test.testErr)
 		vmssList, err := az.ListVMSS()
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
@@ -266,8 +266,8 @@ func TestGetVMSS(t *testing.T) {
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		if test.expectedCall {
-			mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
-			mockVMSSClient.EXPECT().Get(gomock.Any(), test.expectedRG, test.vmssName, gomock.Any()).Return(test.vmss, test.testErr)
+			mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
+			mockVMSSClient.EXPECT().Get(gomock.Any(), test.expectedRG, test.vmssName).Return(test.vmss, test.testErr)
 		}
 		vmss, err := az.GetVMSS(test.rg, test.vmssName)
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
@@ -320,7 +320,7 @@ func TestCreateOrUpdateVMSS(t *testing.T) {
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		if test.expectedCall {
-			mockVMSSClient := az.VmssClient.(*mockvmssclient.MockInterface)
+			mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 			mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), test.expectedRG, test.vmssName, to.Val(test.vmss)).Return(test.vmss, test.testErr)
 		}
 		vmss, err := az.CreateOrUpdateVMSS(test.rg, test.vmssName, to.Val(test.vmss))

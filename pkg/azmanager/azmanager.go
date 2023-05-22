@@ -143,7 +143,7 @@ func (az *AzureManager) GetLBProbeID(name string) *string {
 }
 
 func (az *AzureManager) GetLB() (*network.LoadBalancer, error) {
-	lb, err := az.LoadBalancerClient.Get(context.Background(), az.LoadBalancerResourceGroup, az.LoadBalancerName(), "")
+	lb, err := az.LoadBalancerClient.Get(context.Background(), az.LoadBalancerResourceGroup, az.LoadBalancerName(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +180,7 @@ func (az *AzureManager) GetVMSS(resourceGroup, vmssName string) (*compute.Virtua
 	if vmssName == "" {
 		return nil, fmt.Errorf("vmss name is empty")
 	}
-	vmss, err := az.VmssClient.Get(context.Background(), resourceGroup, vmssName, "")
+	vmss, err := az.VmssClient.Get(context.Background(), resourceGroup, vmssName)
 	if err != nil {
 		return nil, err
 	}
