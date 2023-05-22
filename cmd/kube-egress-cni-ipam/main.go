@@ -28,9 +28,6 @@ import (
 	"errors"
 	"net"
 
-	"github.com/Azure/kube-egress-gateway/pkg/cni/conf"
-	"github.com/Azure/kube-egress-gateway/pkg/consts"
-	"github.com/Azure/kube-egress-gateway/pkg/logger"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	type100 "github.com/containernetworking/cni/pkg/types/100"
@@ -39,6 +36,10 @@ import (
 	bv "github.com/containernetworking/plugins/pkg/utils/buildversion"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
+
+	"github.com/Azure/kube-egress-gateway/pkg/cni/conf"
+	"github.com/Azure/kube-egress-gateway/pkg/consts"
+	"github.com/Azure/kube-egress-gateway/pkg/logger"
 )
 
 func main() {

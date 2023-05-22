@@ -63,8 +63,8 @@ generate-protogo: install-dependencies ## Generate code containing golang protob
 	$(LOCALBIN)/buf lint
 
 .PHONY: fmt
-fmt: ## Run go fmt against code.
-	go fmt ./...
+fmt: goimports ## Run go fmt against code.
+	${GOIMPORTS} -local github.com/Azure/kube-egress-gateway -w .
 
 .PHONY: vet
 vet: golangci-lint ## Run go vet against code.
@@ -123,7 +123,7 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 ##@ Build Dependencies
 
 .PHONY: install-dependencies
-install-dependencies: kustomize controller-gen envtest cobra-cli kubebuilder golangci-lint protoc-gen-go protoc-gen-go-grpc protoc buf ## Install all build dependencies.
+install-dependencies: kustomize controller-gen envtest cobra-cli kubebuilder golangci-lint protoc-gen-go protoc-gen-go-grpc protoc buf goimports ## Install all build dependencies.
 	export PATH=$$PATH:$(LOCALBIN)
 
 ## Location to install dependencies to
@@ -131,6 +131,11 @@ LOCALBIN ?= $(shell pwd)/bin
 $(LOCALBIN):
 	mkdir -p $(LOCALBIN)
 
+GOIMPORTS ?= $(LOCALBIN)/goimports
+.PHONY: goimports
+goimports: $(GOIMPORTS) ## Download goimports locally if necessary.
+$(GOIMPORTS): $(LOCALBIN)
+	test -s $(LOCALBIN)/goimports || GOBIN=$(LOCALBIN) go install golang.org/x/tools/cmd/goimports@latest
 
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 KUSTOMIZE_VERSION ?= v4.5.7

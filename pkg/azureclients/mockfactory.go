@@ -25,6 +25,13 @@
 package azureclients
 
 import (
+	"github.com/golang/mock/gomock"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
+
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/publicipprefixclient"
@@ -33,11 +40,6 @@ import (
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/subnetclient/mocksubnetclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssvmclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssvmclient/mockvmssvmclient"
-	"github.com/golang/mock/gomock"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 )
 
 type MockAzureClientsFactory struct {

@@ -28,14 +28,15 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Azure/kube-egress-gateway/pkg/cni/ipam"
-	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper"
-	"github.com/Azure/kube-egress-gateway/pkg/netnswrapper"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	cniipam "github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
 	"go.uber.org/multierr"
+
+	"github.com/Azure/kube-egress-gateway/pkg/cni/ipam"
+	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper"
+	"github.com/Azure/kube-egress-gateway/pkg/netnswrapper"
 )
 
 type runner struct {

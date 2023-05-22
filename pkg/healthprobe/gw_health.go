@@ -33,8 +33,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	"github.com/Azure/kube-egress-gateway/pkg/consts"
 )
 
 var (

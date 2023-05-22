@@ -7,8 +7,9 @@ package mockiptableswrapper
 import (
 	reflect "reflect"
 
-	iptableswrapper "github.com/Azure/kube-egress-gateway/pkg/iptableswrapper"
 	gomock "github.com/golang/mock/gomock"
+
+	iptableswrapper "github.com/Azure/kube-egress-gateway/pkg/iptableswrapper"
 )
 
 // MockIpTables is a mock of IpTables interface.

@@ -30,11 +30,6 @@ import (
 	"net"
 	"os"
 
-	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
-	"github.com/Azure/kube-egress-gateway/pkg/consts"
-	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper"
-	"github.com/Azure/kube-egress-gateway/pkg/netnswrapper"
-	"github.com/Azure/kube-egress-gateway/pkg/wgctrlwrapper"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
@@ -50,6 +45,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	"github.com/Azure/kube-egress-gateway/pkg/consts"
+	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper"
+	"github.com/Azure/kube-egress-gateway/pkg/netnswrapper"
+	"github.com/Azure/kube-egress-gateway/pkg/wgctrlwrapper"
 )
 
 var _ reconcile.Reconciler = &PodWireguardEndpointReconciler{}

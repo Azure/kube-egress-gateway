@@ -28,16 +28,16 @@ import (
 	"net"
 	"os"
 
-	"github.com/Azure/kube-egress-gateway/pkg/consts"
-	"github.com/vishvananda/netlink"
-
-	cniprotocol "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
 	"github.com/containernetworking/cni/pkg/skel"
 	type100 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/vishvananda/netlink"
+
+	cniprotocol "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
+	"github.com/Azure/kube-egress-gateway/pkg/consts"
 )
 
 const (

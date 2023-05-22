@@ -31,26 +31,25 @@ import (
 	"strconv"
 	"time"
 
-	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
-	controllers "github.com/Azure/kube-egress-gateway/controllers/daemon"
-	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
-	"github.com/Azure/kube-egress-gateway/pkg/config"
-	"github.com/Azure/kube-egress-gateway/pkg/healthprobe"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	controllers "github.com/Azure/kube-egress-gateway/controllers/daemon"
+	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
+	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
+	"github.com/Azure/kube-egress-gateway/pkg/config"
+	"github.com/Azure/kube-egress-gateway/pkg/healthprobe"
 )
 
 // rootCmd represents the base command when called without any subcommands
