@@ -29,13 +29,13 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient/mock_publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient/mockinterfaceclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/publicipprefixclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/publicipprefixclient/mockpublicipprefixclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/subnetclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/subnetclient/mocksubnetclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssvmclient"
@@ -63,7 +63,7 @@ func (factory *MockAzureClientsFactory) GetVirtualMachineScaleSetVMsClient() (vm
 }
 
 func (factory *MockAzureClientsFactory) GetPublicIPPrefixesClient() (publicipprefixclient.Interface, error) {
-	return mockpublicipprefixclient.NewMockInterface(factory.ctrl), nil
+	return mock_publicipprefixclient.NewMockInterface(factory.ctrl), nil
 }
 
 func (factory *MockAzureClientsFactory) GetInterfacesClient() (interfaceclient.Interface, error) {

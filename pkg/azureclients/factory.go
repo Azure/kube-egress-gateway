@@ -32,10 +32,10 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
 
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/publicipprefixclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/subnetclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssvmclient"
 )
@@ -123,7 +123,7 @@ func (factory *azureClientsFactory) GetVirtualMachineScaleSetVMsClient() (vmssvm
 }
 
 func (factory *azureClientsFactory) GetPublicIPPrefixesClient() (publicipprefixclient.Interface, error) {
-	client, err := publicipprefixclient.NewPublicIPPrefixesClient(factory.subscriptionID, factory.credentials, factory.clientOptions)
+	client, err := publicipprefixclient.New(factory.subscriptionID, factory.credentials, factory.clientOptions)
 	if err != nil {
 		return nil, err
 	}
