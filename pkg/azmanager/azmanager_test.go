@@ -28,16 +28,16 @@ import (
 	"testing"
 
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
-	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
+	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient/mock_publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient/mockinterfaceclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/publicipprefixclient/mockpublicipprefixclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/subnetclient/mocksubnetclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssvmclient/mockvmssvmclient"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
@@ -561,7 +561,7 @@ func TestGetPublicIPPrefix(t *testing.T) {
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		if test.expectedCall {
-			mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+			mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 			mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), test.expectedRG, test.prefixName, gomock.Any()).Return(test.prefix, test.testErr)
 		}
 		prefix, err := az.GetPublicIPPrefix(test.rg, test.prefixName)
@@ -615,7 +615,7 @@ func TestCreateOrUpdatePublicIPPrefix(t *testing.T) {
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		if test.expectedCall {
-			mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+			mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 			mockPublicIPPrefixClient.EXPECT().CreateOrUpdate(gomock.Any(), test.expectedRG, test.prefixName, to.Val(test.prefix)).Return(test.prefix, test.testErr)
 		}
 		prefix, err := az.CreateOrUpdatePublicIPPrefix(test.rg, test.prefixName, to.Val(test.prefix))
@@ -666,7 +666,7 @@ func TestDeletePublicIPPrefix(t *testing.T) {
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		if test.expectedCall {
-			mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+			mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 			mockPublicIPPrefixClient.EXPECT().Delete(gomock.Any(), test.expectedRG, test.prefixName).Return(test.testErr)
 		}
 		err := az.DeletePublicIPPrefix(test.rg, test.prefixName)

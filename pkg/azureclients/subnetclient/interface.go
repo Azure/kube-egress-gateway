@@ -27,7 +27,7 @@ package subnetclient
 import (
 	"context"
 
-	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
+	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
 )
 
 type Interface interface {

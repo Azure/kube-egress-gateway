@@ -28,7 +28,7 @@ import (
 	"fmt"
 
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
-	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
+	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
 
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient"
@@ -257,7 +257,7 @@ func (az *AzureManager) GetPublicIPPrefix(resourceGroup, prefixName string) (*ne
 	if prefixName == "" {
 		return nil, fmt.Errorf("public ip prefix name is empty")
 	}
-	prefix, err := az.PublicIPPrefixClient.Get(context.Background(), resourceGroup, prefixName, "")
+	prefix, err := az.PublicIPPrefixClient.Get(context.Background(), resourceGroup, prefixName, nil)
 	if err != nil {
 		return nil, err
 	}

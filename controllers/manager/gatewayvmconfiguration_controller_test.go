@@ -31,7 +31,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
-	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
+	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -40,7 +40,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient/mock_publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -49,7 +51,6 @@ import (
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/publicipprefixclient/mockpublicipprefixclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssvmclient/mockvmssvmclient"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
@@ -239,7 +240,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 
 			It("should return error if getting prefix returns error", func() {
 				vmConfig.Spec.PublicIpPrefixId = "/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix"
-				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), "rg", "prefix", gomock.Any()).Return(nil, fmt.Errorf("prefix not found"))
 				_, _, _, err := r.ensurePublicIPPrefix(context.TODO(), 31, vmConfig)
 				Expect(errors.Unwrap(err)).To(Equal(fmt.Errorf("prefix not found")))
@@ -248,7 +249,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			It("should return error if prefix returned does not have properties", func() {
 				prefix := &network.PublicIPPrefix{Name: to.Ptr("prefix")}
 				vmConfig.Spec.PublicIpPrefixId = "/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix"
-				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), "rg", "prefix", gomock.Any()).Return(prefix, nil)
 				_, _, _, err := r.ensurePublicIPPrefix(context.TODO(), 31, vmConfig)
 				Expect(err).To(Equal(fmt.Errorf("public ip prefix(/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix) has empty properties")))
@@ -260,7 +261,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					Properties: &network.PublicIPPrefixPropertiesFormat{PrefixLength: to.Ptr(int32(30))},
 				}
 				vmConfig.Spec.PublicIpPrefixId = "/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix"
-				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), "rg", "prefix", gomock.Any()).Return(prefix, nil)
 				_, _, _, err := r.ensurePublicIPPrefix(context.TODO(), 31, vmConfig)
 				Expect(err).To(Equal(fmt.Errorf("provided public ip prefix has invalid length(30), required(31)")))
@@ -276,7 +277,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					},
 				}
 				vmConfig.Spec.PublicIpPrefixId = "/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix"
-				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), "rg", "prefix", gomock.Any()).Return(prefix, nil)
 				foundPrefix, prefixID, isManaged, err := r.ensurePublicIPPrefix(context.TODO(), 31, vmConfig)
 				Expect(foundPrefix).To(Equal("1.2.3.4/31"))
@@ -286,7 +287,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			})
 
 			It("should return error when getting managed ip prefix returns error", func() {
-				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), testRG, "testns_test", gomock.Any()).Return(nil, fmt.Errorf("failed"))
 				_, _, _, err := r.ensurePublicIPPrefix(context.TODO(), 31, vmConfig)
 				Expect(errors.Unwrap(err)).To(Equal(fmt.Errorf("failed")))
@@ -294,7 +295,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 
 			It("should return error if managed prefix does not have properties", func() {
 				prefix := &network.PublicIPPrefix{Name: to.Ptr("prefix")}
-				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), testRG, "testns_test", gomock.Any()).Return(prefix, nil)
 				_, _, _, err := r.ensurePublicIPPrefix(context.TODO(), 31, vmConfig)
 				Expect(err).To(Equal(fmt.Errorf("managed public ip prefix has empty properties")))
@@ -309,7 +310,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						IPPrefix:     to.Ptr("1.2.3.4/31"),
 					},
 				}
-				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), testRG, "testns_test", gomock.Any()).Return(prefix, nil)
 				foundPrefix, prefixID, isManaged, err := r.ensurePublicIPPrefix(context.TODO(), 31, vmConfig)
 				Expect(foundPrefix).To(Equal("1.2.3.4/31"))
@@ -331,7 +332,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						Tier: to.Ptr(network.PublicIPPrefixSKUTierRegional),
 					},
 				}
-				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), testRG, "testns_test", gomock.Any()).Return(nil, &azcore.ResponseError{StatusCode: http.StatusNotFound})
 				mockPublicIPPrefixClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, "testns_test", gomock.Any()).DoAndReturn(
 					func(ctx context.Context, resourceGroupName string, publicIPPrefixName string, ipPrefix network.PublicIPPrefix) (*network.PublicIPPrefix, error) {
@@ -348,7 +349,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			})
 
 			It("should return error when creating failed", func() {
-				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), testRG, "testns_test", gomock.Any()).Return(nil, &azcore.ResponseError{StatusCode: http.StatusNotFound})
 				mockPublicIPPrefixClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, "testns_test", gomock.Any()).Return(nil, fmt.Errorf("failed"))
 				_, _, _, err := r.ensurePublicIPPrefix(context.TODO(), 31, vmConfig)
@@ -363,21 +364,21 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			})
 
 			It("should return error when getting managed ip prefix returns error", func() {
-				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), testRG, "testns_test", gomock.Any()).Return(nil, fmt.Errorf("failed"))
 				err := r.ensurePublicIPPrefixDeleted(context.TODO(), vmConfig)
 				Expect(errors.Unwrap(err)).To(Equal(fmt.Errorf("failed")))
 			})
 
 			It("should do nothing when managed ip prefix is not found", func() {
-				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), testRG, "testns_test", gomock.Any()).Return(nil, &azcore.ResponseError{StatusCode: http.StatusNotFound})
 				err := r.ensurePublicIPPrefixDeleted(context.TODO(), vmConfig)
 				Expect(err).To(BeNil())
 			})
 
 			It("should return error when deleting ip prefix fails", func() {
-				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), testRG, "testns_test", gomock.Any()).Return(&network.PublicIPPrefix{}, nil)
 				mockPublicIPPrefixClient.EXPECT().Delete(gomock.Any(), testRG, "testns_test").Return(fmt.Errorf("failed"))
 				err := r.ensurePublicIPPrefixDeleted(context.TODO(), vmConfig)
@@ -385,7 +386,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			})
 
 			It("should delete managed ip prefix", func() {
-				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), testRG, "testns_test", gomock.Any()).Return(&network.PublicIPPrefix{}, nil)
 				mockPublicIPPrefixClient.EXPECT().Delete(gomock.Any(), testRG, "testns_test").Return(nil)
 				err := r.ensurePublicIPPrefixDeleted(context.TODO(), vmConfig)
@@ -736,7 +737,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				}
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
-				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), "rg", "prefix", gomock.Any()).Return(nil, fmt.Errorf("failed"))
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(errors.Unwrap(reconcileErr)).To(Equal(fmt.Errorf("failed")))
@@ -758,7 +759,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				}
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
-				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), "rg", "prefix", gomock.Any()).Return(ipPrefix, nil)
 				mockVMSSVMClient := az.VmssVMClient.(*mockvmssvmclient.MockInterface)
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), testRG, vmssName).Return(nil, fmt.Errorf("failed"))
@@ -782,7 +783,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				}
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
-				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), "rg", "prefix", gomock.Any()).Return(ipPrefix, nil)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), testRG, "testns_test", gomock.Any()).Return(nil, fmt.Errorf("failed"))
 				mockVMSSVMClient := az.VmssVMClient.(*mockvmssvmclient.MockInterface)
@@ -807,7 +808,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				}
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
-				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), "rg", "prefix", gomock.Any()).Return(ipPrefix, nil)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), testRG, "testns_test", gomock.Any()).Return(nil, &azcore.ResponseError{StatusCode: http.StatusNotFound})
 				mockVMSSVMClient := az.VmssVMClient.(*mockvmssvmclient.MockInterface)
@@ -875,7 +876,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				}
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
-				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), testRG, "testns_test", gomock.Any()).Return(nil, fmt.Errorf("failed"))
 				mockVMSSVMClient := az.VmssVMClient.(*mockvmssvmclient.MockInterface)
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), testRG, vmssName).Return([]*compute.VirtualMachineScaleSetVM{}, nil)
@@ -891,7 +892,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				}
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
-				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mockpublicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), testRG, "testns_test", gomock.Any()).Return(nil, &azcore.ResponseError{StatusCode: http.StatusNotFound})
 				mockVMSSVMClient := az.VmssVMClient.(*mockvmssvmclient.MockInterface)
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), testRG, vmssName).Return([]*compute.VirtualMachineScaleSetVM{}, nil)

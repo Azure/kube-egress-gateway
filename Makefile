@@ -138,12 +138,12 @@ $(GOIMPORTS): $(LOCALBIN)
 	test -s $(LOCALBIN)/goimports || GOBIN=$(LOCALBIN) go install golang.org/x/tools/cmd/goimports@latest
 
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
-KUSTOMIZE_VERSION ?= v4.5.7
+KUSTOMIZE_VERSION ?= latest
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
 $(KUSTOMIZE): $(LOCALBIN)
-	test -s $(LOCALBIN)/kustomize || { curl -s $(KUSTOMIZE_INSTALL_SCRIPT) | bash -s -- $(subst v,,$(KUSTOMIZE_VERSION)) $(LOCALBIN); }
+	test -s $(LOCALBIN)/kustomize || { curl -s $(KUSTOMIZE_INSTALL_SCRIPT) | bash -s -- $(LOCALBIN); }
 
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 .PHONY: controller-gen
@@ -191,7 +191,7 @@ PROTOC ?= $(LOCALBIN)/protoc
 .PHONY: protoc
 protoc: $(PROTOC)  ## Download protoc locally if necessary.
 $(PROTOC): $(LOCALBIN) 
-	test -s $(LOCALBIN)/protoc || { curl -L -o $(LOCALBIN)/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v3.20.2/protoc-3.20.2-linux-x86_64.zip && unzip $(LOCALBIN)/protoc.zip -d $(LOCALBIN) && mv $(LOCALBIN)/bin/protoc $(LOCALBIN) && rm -rf $(LOCALBIN)/protoc.zip $(LOCALBIN)/readme.txt $(LOCALBIN)/bin $(LOCALBIN)/include; }
+	test -s $(LOCALBIN)/protoc || { curl -L -o $(LOCALBIN)/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v23.1/protoc-23.1-linux-x86_64.zip && unzip $(LOCALBIN)/protoc.zip -d $(LOCALBIN) && mv $(LOCALBIN)/bin/protoc $(LOCALBIN) && rm -rf $(LOCALBIN)/protoc.zip $(LOCALBIN)/readme.txt $(LOCALBIN)/bin $(LOCALBIN)/include; }
 
 BUF ?= $(LOCALBIN)/buf
 .PHONY: buf
