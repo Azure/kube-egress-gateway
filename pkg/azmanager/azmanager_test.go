@@ -740,7 +740,12 @@ func TestGetVMSSInterface(t *testing.T) {
 		az, _ := CreateAzureManager(config, factory)
 		if test.expectedCall {
 			mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
-			mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), test.expectedRG, test.vmssName, test.instanceID, test.nicName, gomock.Any()).Return(test.nic, test.testErr)
+			if test.nic != nil {
+				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), test.expectedRG, test.vmssName, test.instanceID, test.nicName, gomock.Any()).Return(network.InterfacesClientGetVirtualMachineScaleSetNetworkInterfaceResponse{Interface: *test.nic}, test.testErr)
+			} else {
+				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), test.expectedRG, test.vmssName, test.instanceID, test.nicName, gomock.Any()).Return(network.InterfacesClientGetVirtualMachineScaleSetNetworkInterfaceResponse{}, test.testErr)
+
+			}
 		}
 		nic, err := az.GetVMSSInterface(test.rg, test.vmssName, test.instanceID, test.nicName)
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)

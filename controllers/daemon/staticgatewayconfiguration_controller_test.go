@@ -293,7 +293,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			mockInterfaceClient := r.AzureManager.InterfaceClient.(*mock_interfaceclient.MockInterface)
 			mockInterfaceClient.EXPECT().
 				GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "primary", gomock.Any()).
-				Return(nic, nil)
+				Return(network.InterfacesClientGetVirtualMachineScaleSetNetworkInterfaceResponse{Interface: *nic}, nil)
 			primaryIP, secondaryIP, err := r.getVMIP(context.TODO(), gwConfig)
 			Expect(primaryIP).To(Equal("10.0.0.5"))
 			Expect(secondaryIP).To(Equal("10.0.0.6"))
@@ -342,7 +342,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 				mockVMSSVMClient.EXPECT().Get(gomock.Any(), vmssRG, vmssName, "0").Return(vm, nil),
 				mockInterfaceClient.EXPECT().
 					GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "primary", gomock.Any()).
-					Return(nic, nil),
+					Return(network.InterfacesClientGetVirtualMachineScaleSetNetworkInterfaceResponse{Interface: *nic}, nil),
 				mnl.EXPECT().LinkByName("eth0").Return(eth0, fmt.Errorf("failed")),
 			)
 			_, reconcileErr = r.Reconcile(context.TODO(), req)
@@ -363,7 +363,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 				mockVMSSVMClient.EXPECT().Get(gomock.Any(), vmssRG, vmssName, "0").Return(vm, nil),
 				mockInterfaceClient.EXPECT().
 					GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "primary", gomock.Any()).
-					Return(nic, nil),
+					Return(network.InterfacesClientGetVirtualMachineScaleSetNetworkInterfaceResponse{Interface: *nic}, nil),
 				mnl.EXPECT().LinkByName("eth0").Return(eth0, nil),
 				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{}, nil),
 				mipt.EXPECT().New().Return(mtable, nil),
