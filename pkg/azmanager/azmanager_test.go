@@ -31,6 +31,7 @@ import (
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient/mock_publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient/mock_subnetclient"
@@ -38,7 +39,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
 
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient/mockinterfaceclient"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 )
@@ -739,7 +739,7 @@ func TestGetVMSSInterface(t *testing.T) {
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		if test.expectedCall {
-			mockInterfaceClient := az.InterfaceClient.(*mockinterfaceclient.MockInterface)
+			mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
 			mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), test.expectedRG, test.vmssName, test.instanceID, test.nicName, gomock.Any()).Return(test.nic, test.testErr)
 		}
 		nic, err := az.GetVMSSInterface(test.rg, test.vmssName, test.instanceID, test.nicName)
