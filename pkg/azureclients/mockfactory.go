@@ -27,6 +27,8 @@ package azureclients
 import (
 	"github.com/golang/mock/gomock"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
@@ -37,9 +39,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
-
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient/mockinterfaceclient"
 )
 
 type MockAzureClientsFactory struct {
@@ -67,7 +66,7 @@ func (factory *MockAzureClientsFactory) GetPublicIPPrefixesClient() (publicippre
 }
 
 func (factory *MockAzureClientsFactory) GetInterfacesClient() (interfaceclient.Interface, error) {
-	return mockinterfaceclient.NewMockInterface(factory.ctrl), nil
+	return mock_interfaceclient.NewMockInterface(factory.ctrl), nil
 }
 
 func (factory *MockAzureClientsFactory) GetSubnetsClient() (subnetclient.Interface, error) {

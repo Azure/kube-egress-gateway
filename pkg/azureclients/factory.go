@@ -31,13 +31,12 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
-
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient"
 )
 
 type AzureClientsFactory interface {
@@ -131,7 +130,7 @@ func (factory *azureClientsFactory) GetPublicIPPrefixesClient() (publicipprefixc
 }
 
 func (factory *azureClientsFactory) GetInterfacesClient() (interfaceclient.Interface, error) {
-	client, err := interfaceclient.NewInterfacesClient(factory.subscriptionID, factory.credentials, factory.clientOptions)
+	client, err := interfaceclient.New(factory.subscriptionID, factory.credentials, factory.clientOptions)
 	if err != nil {
 		return nil, err
 	}

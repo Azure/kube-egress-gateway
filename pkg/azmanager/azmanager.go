@@ -29,6 +29,7 @@ import (
 
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient"
@@ -36,7 +37,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
 
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 )
@@ -301,11 +301,11 @@ func (az *AzureManager) GetVMSSInterface(resourceGroup, vmssName, instanceID, in
 	if interfaceName == "" {
 		return nil, fmt.Errorf("interface name is empty")
 	}
-	nic, err := az.InterfaceClient.GetVirtualMachineScaleSetNetworkInterface(context.Background(), resourceGroup, vmssName, instanceID, interfaceName, "")
+	nicResp, err := az.InterfaceClient.GetVirtualMachineScaleSetNetworkInterface(context.Background(), resourceGroup, vmssName, instanceID, interfaceName, nil)
 	if err != nil {
 		return nil, err
 	}
-	return nic, nil
+	return &nicResp.Interface, nil
 }
 
 func (az *AzureManager) GetSubnet() (*network.Subnet, error) {
