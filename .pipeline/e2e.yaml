@@ -1,5 +1,10 @@
 name: $(Date:yyyyMMdd)$(Rev:.r)_e2e
 
+trigger:
+  branches:
+    include:
+    - main
+
 pr:
   branches:
     include:
