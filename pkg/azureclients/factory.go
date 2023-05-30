@@ -33,11 +33,11 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
 
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/subnetclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssvmclient"
 )
 
 type AzureClientsFactory interface {
@@ -48,7 +48,7 @@ type AzureClientsFactory interface {
 	GetVirtualMachineScaleSetsClient() (virtualmachinescalesetclient.Interface, error)
 
 	// get virtual machine scale set vms client
-	GetVirtualMachineScaleSetVMsClient() (vmssvmclient.Interface, error)
+	GetVirtualMachineScaleSetVMsClient() (virtualmachinescalesetvmclient.Interface, error)
 
 	// get public ip prefixes client
 	GetPublicIPPrefixesClient() (publicipprefixclient.Interface, error)
@@ -114,8 +114,8 @@ func (factory *azureClientsFactory) GetVirtualMachineScaleSetsClient() (virtualm
 	return client, nil
 }
 
-func (factory *azureClientsFactory) GetVirtualMachineScaleSetVMsClient() (vmssvmclient.Interface, error) {
-	client, err := vmssvmclient.NewVirtualMachineScaleSetVMsClient(factory.subscriptionID, factory.credentials, factory.clientOptions)
+func (factory *azureClientsFactory) GetVirtualMachineScaleSetVMsClient() (virtualmachinescalesetvmclient.Interface, error) {
+	client, err := virtualmachinescalesetvmclient.New(factory.subscriptionID, factory.credentials, factory.clientOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +139,7 @@ func (factory *azureClientsFactory) GetInterfacesClient() (interfaceclient.Inter
 }
 
 func (factory *azureClientsFactory) GetSubnetsClient() (subnetclient.Interface, error) {
-	client, err := subnetclient.NewSubnetsClient(factory.subscriptionID, factory.credentials, factory.clientOptions)
+	client, err := subnetclient.New(factory.subscriptionID, factory.credentials, factory.clientOptions)
 	if err != nil {
 		return nil, err
 	}

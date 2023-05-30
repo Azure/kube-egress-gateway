@@ -29,14 +29,14 @@ import (
 
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
 
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/loadbalancerclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/publicipprefixclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/subnetclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssvmclient"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 )
@@ -56,8 +56,8 @@ type AzureManager struct {
 	*config.CloudConfig
 
 	LoadBalancerClient   loadbalancerclient.Interface
-	VmssClient           vmssclient.Interface
-	VmssVMClient         vmssvmclient.Interface
+	VmssClient           virtualmachinescalesetclient.Interface
+	VmssVMClient         virtualmachinescalesetvmclient.Interface
 	PublicIPPrefixClient publicipprefixclient.Interface
 	InterfaceClient      interfaceclient.Interface
 	SubnetClient         subnetclient.Interface
@@ -226,7 +226,7 @@ func (az *AzureManager) GetVMSSInstance(resourceGroup, vmssName, instanceID stri
 	if instanceID == "" {
 		return nil, fmt.Errorf("vmss instanceID is empty")
 	}
-	vm, err := az.VmssVMClient.Get(context.Background(), resourceGroup, vmssName, instanceID, "")
+	vm, err := az.VmssVMClient.Get(context.Background(), resourceGroup, vmssName, instanceID)
 	if err != nil {
 		return nil, err
 	}
@@ -309,7 +309,7 @@ func (az *AzureManager) GetVMSSInterface(resourceGroup, vmssName, instanceID, in
 }
 
 func (az *AzureManager) GetSubnet() (*network.Subnet, error) {
-	subnet, err := az.SubnetClient.Get(context.Background(), az.VnetResourceGroup, az.VnetName, az.SubnetName, "")
+	subnet, err := az.SubnetClient.Get(context.Background(), az.VnetResourceGroup, az.VnetName, az.SubnetName, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -32,7 +32,7 @@ require (
 	k8s.io/api v0.26.5
 	k8s.io/apimachinery v0.27.2
 	k8s.io/client-go v0.26.5
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.0-20230526052853-a8d9a1538317
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.0-20230530032544-6a0270eac22b
 	sigs.k8s.io/controller-runtime v0.14.6
 )
 
