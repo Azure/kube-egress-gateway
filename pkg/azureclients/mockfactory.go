@@ -31,15 +31,15 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient/mock_publicipprefixclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient/mock_subnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
 
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient/mockinterfaceclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/subnetclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/subnetclient/mocksubnetclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssvmclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssvmclient/mockvmssvmclient"
 )
 
 type MockAzureClientsFactory struct {
@@ -58,8 +58,8 @@ func (factory *MockAzureClientsFactory) GetVirtualMachineScaleSetsClient() (virt
 	return mock_virtualmachinescalesetclient.NewMockInterface(factory.ctrl), nil
 }
 
-func (factory *MockAzureClientsFactory) GetVirtualMachineScaleSetVMsClient() (vmssvmclient.Interface, error) {
-	return mockvmssvmclient.NewMockInterface(factory.ctrl), nil
+func (factory *MockAzureClientsFactory) GetVirtualMachineScaleSetVMsClient() (virtualmachinescalesetvmclient.Interface, error) {
+	return mock_virtualmachinescalesetvmclient.NewMockInterface(factory.ctrl), nil
 }
 
 func (factory *MockAzureClientsFactory) GetPublicIPPrefixesClient() (publicipprefixclient.Interface, error) {
@@ -71,5 +71,5 @@ func (factory *MockAzureClientsFactory) GetInterfacesClient() (interfaceclient.I
 }
 
 func (factory *MockAzureClientsFactory) GetSubnetsClient() (subnetclient.Interface, error) {
-	return mocksubnetclient.NewMockInterface(factory.ctrl), nil
+	return mock_subnetclient.NewMockInterface(factory.ctrl), nil
 }

@@ -40,7 +40,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient/mock_subnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -50,7 +52,6 @@ import (
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/subnetclient/mocksubnetclient"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
@@ -325,7 +326,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 						Expect(equality.Semantic.DeepEqual(loadBalancer, *requestedLB)).To(BeTrue())
 						return expectedLB, nil
 					})
-				mockSubnetClient := az.SubnetClient.(*mocksubnetclient.MockInterface)
+				mockSubnetClient := az.SubnetClient.(*mock_subnetclient.MockInterface)
 				mockSubnetClient.EXPECT().Get(gomock.Any(), testVnetRG, testVnetName, testSubnetName, gomock.Any()).Return(&network.Subnet{
 					ID: to.Ptr("testSubnet"),
 				}, nil)

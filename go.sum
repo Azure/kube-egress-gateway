@@ -834,8 +834,8 @@ k8s.io/utils v0.0.0-20230209194617-a36077c30491/go.mod h1:OLgZIPagt7ERELqWJFomSt
 rsc.io/binaryregexp v0.2.0/go.mod h1:qTv7/COck+e2FymRvadv62gMdZztPaShugOCi3I+8D8=
 rsc.io/quote/v3 v3.1.0/go.mod h1:yEA65RcK8LyAZtP9Kv3t0HmxON59tX3rD+tICJqUlj0=
 rsc.io/sampler v1.3.0/go.mod h1:T1hPZKmBbMNahiBKFy5HrXp6adAjACjK9JXDnKaTXpA=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.0-20230526052853-a8d9a1538317 h1:APi4b6UQL8yg2QwxJ2TW0ciUrsHcCTzoOvArANHHmJ4=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.0-20230526052853-a8d9a1538317/go.mod h1:O4hJautSRqMa4LV205L1oBJEoJ9YDgZR8Vn1hK25uqM=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.0-20230530032544-6a0270eac22b h1:ThnPsw1ij7PL2qllTRw6Xka1aHLaIoPjYF9cyd56Kcs=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.0-20230530032544-6a0270eac22b/go.mod h1:OKVtvQGj9luQfnfoCFtpIOgr1R2/btHbmUenb4yJ8Ns=
 sigs.k8s.io/controller-runtime v0.14.6 h1:oxstGVvXGNnMvY7TAESYk+lzr6S3V5VFxQ6d92KcwQA=
 sigs.k8s.io/controller-runtime v0.14.6/go.mod h1:WqIdsAY6JBsjfc/CqO0CORmNtoCtE4S6qbPc9s68h+0=
 sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd h1:EDPBXCAspyGV4jQlpZSudPeMmr1bNJefnuqLsRAsHZo=

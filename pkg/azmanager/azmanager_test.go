@@ -31,15 +31,14 @@ import (
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient/mock_publicipprefixclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient/mock_subnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
 
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients/interfaceclient/mockinterfaceclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/subnetclient/mocksubnetclient"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients/vmssvmclient/mockvmssvmclient"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 )
@@ -376,7 +375,7 @@ func TestListVMSSInstances(t *testing.T) {
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		if test.expectedCall {
-			mockVMSSVMClient := az.VmssVMClient.(*mockvmssvmclient.MockInterface)
+			mockVMSSVMClient := az.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
 			mockVMSSVMClient.EXPECT().List(gomock.Any(), test.expectedRG, test.vmssName).Return(test.vms, test.testErr)
 		}
 		vms, err := az.ListVMSSInstances(test.rg, test.vmssName)
@@ -443,8 +442,8 @@ func TestGetVMSSInstance(t *testing.T) {
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		if test.expectedCall {
-			mockVMSSVMClient := az.VmssVMClient.(*mockvmssvmclient.MockInterface)
-			mockVMSSVMClient.EXPECT().Get(gomock.Any(), test.expectedRG, test.vmssName, test.instanceID, gomock.Any()).Return(test.vm, test.testErr)
+			mockVMSSVMClient := az.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
+			mockVMSSVMClient.EXPECT().Get(gomock.Any(), test.expectedRG, test.vmssName, test.instanceID).Return(test.vm, test.testErr)
 		}
 		vm, err := az.GetVMSSInstance(test.rg, test.vmssName, test.instanceID)
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
@@ -507,7 +506,7 @@ func TestUpdateVMSSInstance(t *testing.T) {
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		if test.expectedCall {
-			mockVMSSVMClient := az.VmssVMClient.(*mockvmssvmclient.MockInterface)
+			mockVMSSVMClient := az.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
 			mockVMSSVMClient.EXPECT().Update(gomock.Any(), test.expectedRG, test.vmssName, test.instanceID, to.Val(test.vm)).Return(test.vm, test.testErr)
 		}
 		vm, err := az.UpdateVMSSInstance(test.rg, test.vmssName, test.instanceID, to.Val(test.vm))
@@ -770,7 +769,7 @@ func TestGetSubnet(t *testing.T) {
 		config := getTestCloudConfig("", "", "")
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
-		mockSubnetClient := az.SubnetClient.(*mocksubnetclient.MockInterface)
+		mockSubnetClient := az.SubnetClient.(*mock_subnetclient.MockInterface)
 		mockSubnetClient.EXPECT().Get(gomock.Any(), "testRG", "testVnet", "testSubnet", gomock.Any()).Return(test.subnet, test.testErr)
 		subnet, err := az.GetSubnet()
 		assert.Equal(t, to.Val(subnet), to.Val(test.subnet), "TestCase[%d]: %s", i, test.desc)
