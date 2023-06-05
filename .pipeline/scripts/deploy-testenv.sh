@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e
 RESOURCE_GROUP=${RESOURCE_GROUP:-"kube-egress-gw-rg"}
-LOCATION=${LOCATION:-"eastus"}
 VNET_NAME=${VNET_NAME:-"gateway-vnet"}
 AKS_ID_NAME=${AKS_ID_NAME:-"gateway-aks-id"}
 AKS_CLUSTER_NAME=${AKS_CLUSTER_NAME:-"aks"}
@@ -15,6 +14,14 @@ LB_NAME=${LB_NAME:-"gateway-ilb"}
 : "${AZURE_TENANT_ID:?Environment variable empty or not defined.}"
 : "${AZURE_CLIENT_ID:?Environment variable empty or not defined.}"
 : "${AZURE_CLIENT_SECRET:?Environment variable empty or not defined.}"
+
+# Get random location
+# should have quota for Standard_DS2_v2 vCPUs in AKS_UPSTREAM_E2E or custom sub
+if [[ -z "${LOCATION}" ]]; then
+    REGIONS=("eastus" "eastus2" "northeurope" "uksouth" "westeurope" "westus2" "westus3")
+    LOCATION="${REGIONS[${RANDOM} % ${#REGIONS[@]}]}"
+fi
+echo "Deploying resources in region: ${LOCATION}"
 
 # Create resource group
 RG_EXISTS=$(az group exists -n ${RESOURCE_GROUP})
