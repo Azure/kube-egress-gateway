@@ -13,6 +13,12 @@ pr:
 variables:
 - group: pod-egress-e2e
 - group: aks-ci
+- name: kubeconfig_file
+  value: e2e-kubeconfig
+- name: pod_cidr
+  value: 10.244.0.0/16
+- name: service_cidr
+  value: 10.245.0.0/16
 
 pool:
   vmImage: ubuntu-latest
@@ -44,24 +50,49 @@ jobs:
       AZURE_CLIENT_ID: $(AZURE_CLIENT_ID)
       AZURE_CLIENT_SECRET: $(AZURE_CLIENT_SECRET)
       AZURE_TENANT_ID: $(AZURE_TENANT_ID)
-      KUBECONFIG_FILE: e2e-kubeconfig
   - bash: |
-      kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.11.0/cert-manager.crds.yaml
+      set -euo pipefail
+      kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.12.0/cert-manager.crds.yaml
       helm repo add jetstack https://charts.jetstack.io
       helm repo update
-      helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --version v1.11.0
+      helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --version v1.12.0
+      kubectl wait --for=condition=ready pod -A -l app.kubernetes.io/instance=cert-manager --timeout=300s
       kubectl get all -n cert-manager
     displayName: install cert-manager
     env:
       KUBECONFIG: $(kubeconfig)
   - bash: |
+      set -euo pipefail
       mv $(pwd)/azure.json $(pwd)/config/azureconfig/azure.json
+      export EXCEPTION_CIDRS=${POD_CIDR}","${SERVICE_CIDR}
       IMAGE_REGISTRY=$(registry.url) make install
+      kubectl wait --for=condition=ready pod -A -l app=kube-egress-gateway --timeout=300s
       kubectl get all -n kube-egress-gateway-system
     displayName: build and install kube-egress-gateway components
     env:
       KUBECONFIG: $(kubeconfig)
   - bash: |
-      az group delete -n $(resource_group) --yes
+      set -euo pipefail
+      mkdir ${ARTIFACT_DIR}/logs
+      export LOG_DIR=${ARTIFACT_DIR}/logs
+      make e2e-test
+    displayName: run e2e tests
+    env:
+      KUBECONFIG: $(kubeconfig)
+      AZURE_SUBSCRIPTION_ID: $(AZURE_SUBSCRIPTION_ID)
+      AZURE_CLIENT_ID: $(AZURE_CLIENT_ID)
+      AZURE_CLIENT_SECRET: $(AZURE_CLIENT_SECRET)
+      AZURE_TENANT_ID: $(AZURE_TENANT_ID)
+      COLLECT_LOG: true
+      ARTIFACT_DIR: $(Build.ArtifactStagingDirectory)
+  - bash: |
+      [ "$(az group exists -n $(resource_group))" == "true" ] && az group delete -n $(resource_group) --yes
     displayName: clean up resources
+    condition: always()
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathToPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: Logs
+    condition: succeededOrFailed()
+
 

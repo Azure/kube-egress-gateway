@@ -9,13 +9,14 @@ namespace: kube-egress-gateway-system
 namePrefix: kube-egress-gateway-
 
 # Labels to add to all resources and selectors.
-#commonLabels:
-#  someName: someValue
+commonLabels:
+  app: kube-egress-gateway
 
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
 - ../crd
+- ../environment_variables
 - ../rbac
 - ../resource
 - ../azureconfig

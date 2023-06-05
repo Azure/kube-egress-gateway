@@ -36,7 +36,7 @@ spec:
             - /kube-egress-gateway-cnimanager
           args:
             - serve
-            # - --exception-cidrs=
+            - --exception-cidrs=$(EXCEPTION_CIDRS)
             - --cni-conf-file=01-egressgateway.conflist
           image: cnimanager:latest
           name: cnimanager

@@ -70,9 +70,13 @@ fmt: goimports ## Run go fmt against code.
 vet: golangci-lint ## Run go vet against code.
 	$(LOCALBIN)/golangci-lint run --timeout 10m ./...
 
-.PHONY: test
-test: manifests generate fmt vet envtest ## Run tests.
+.PHONY: unit-test
+unit-test: manifests generate fmt vet envtest ## Run unit tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" ./hack/test_linux.sh 
+
+.PHONY: e2e-test
+e2e-test: manifests generate fmt vet envtest ## Run e2e tests.
+	./hack/run_e2e.sh
 
 ##@ Build
 
@@ -93,7 +97,7 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/kube-egress-gateway-controller/main.go --zap-log-level 5 --cloud-config $(AZURE_CONFIG_FILE)
 
 .PHONY: docker-build
-docker-build: test docker-builder-setup ## Build docker image with the manager.
+docker-build: unit-test docker-builder-setup ## Build docker image with the manager.
 	TAG=$(IMAGE_TAG) IMAGE_REGISTRY=$(IMAGE_REGISTRY) docker buildx bake -f docker-bake.hcl -f docker-localtag-bake.hcl --progress auto --push
 
 .PHONY: docker-builder-setup
@@ -106,6 +110,7 @@ ifndef ignore-not-found
   ignore-not-found = false
 endif
 
+## Set environment variable EXCEPTION_CIDRS="<pod cidr>,<service cidr>" to exclude traffic from gateway
 .PHONY: install
 install: manifests kustomize docker-build ## Install CRDs into the K8s cluster specified in ~/.kube/config.
 	cd config/default && \

@@ -1,0 +1,18 @@
+# This configMap is only used to pass environment variables to Kustomize
+configMapGenerator:
+- name: environment
+  envs:
+  - environment.env
+
+# Disable the name suffix hash, so `vars` can look for the correct configMap name
+generatorOptions:
+  disableNameSuffixHash: true
+
+vars:
+- name: EXCEPTION_CIDRS
+  objref:
+    kind: ConfigMap
+    name: environment
+    apiVersion: v1
+  fieldref:
+    fieldpath: data.EXCEPTION_CIDRS
