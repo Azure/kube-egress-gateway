@@ -19,6 +19,7 @@ target "daemon" {
   contexts = {
     baseimg = "target:daemon-compile"
   }
+  platforms = ["linux/amd64"]
   args = {
     MAIN_ENTRY = "kube-egress-gateway-daemon",
   }

@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM baseosscr.azurecr.io/build-image/distroless-iptables-amd64:v0.1.2
+FROM registry.k8s.io/build-image/distroless-iptables:v0.2.4
 USER 0:0
 COPY --from=baseimg /${MAIN_ENTRY} .
 ENTRYPOINT [${MAIN_ENTRY}]
