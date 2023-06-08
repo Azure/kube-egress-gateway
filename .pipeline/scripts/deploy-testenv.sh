@@ -27,7 +27,7 @@ echo "Deploying resources in region: ${LOCATION}"
 RG_EXISTS=$(az group exists -n ${RESOURCE_GROUP})
 if [ "$RG_EXISTS" != "true" ]; then
     echo "Creating resource group: ${RESOURCE_GROUP}"
-    az group create -n ${RESOURCE_GROUP} -l ${LOCATION}
+    az group create -n ${RESOURCE_GROUP} -l ${LOCATION} --tags usage=pod-egress-e2e creation_date="$(date)"
 else
     echo "Resource group ${RESOURCE_GROUP} already exists."
 fi

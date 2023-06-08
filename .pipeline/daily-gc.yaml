@@ -1,0 +1,27 @@
+schedules:
+- cron: "0 12 * * *"
+  displayName: Daily GC
+  branches:
+    include:
+    - master
+  always: true
+
+trigger: none
+
+pr: none
+
+variables:
+- group: pod-egress-e2e
+
+jobs:
+- job: Run_KubeEgressGateway_GC
+  timeoutInMinutes: 30
+  steps:
+    - bash: |
+        .pipeline/scripts/gc.sh
+      displayName: gc egress-gateway-e2e resource groups
+      env:
+        AZURE_SUBSCRIPTION_ID: $(AZURE_SUBSCRIPTION_ID)
+        AZURE_CLIENT_ID: $(AZURE_CLIENT_ID)
+        AZURE_CLIENT_SECRET: $(AZURE_CLIENT_SECRET)
+        AZURE_TENANT_ID: $(AZURE_TENANT_ID)
