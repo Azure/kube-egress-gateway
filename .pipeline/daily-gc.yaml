@@ -3,7 +3,7 @@ schedules:
   displayName: Daily GC
   branches:
     include:
-    - master
+    - main
   always: true
 
 trigger: none
