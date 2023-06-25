@@ -29,7 +29,7 @@ import (
 	"net/http"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
-	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
+	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
@@ -40,6 +40,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient/mock_subnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 
@@ -51,7 +52,6 @@ import (
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
@@ -782,10 +782,8 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 
 func getMockAzureManager(ctrl *gomock.Controller) *azmanager.AzureManager {
 	conf := &config.CloudConfig{
-		Cloud:                     "AzureTest",
 		Location:                  "location",
 		SubscriptionID:            "testSub",
-		UserAgent:                 "testUserAgent",
 		ResourceGroup:             testRG,
 		LoadBalancerName:          testLBName,
 		LoadBalancerResourceGroup: testLBRG,
@@ -793,7 +791,7 @@ func getMockAzureManager(ctrl *gomock.Controller) *azmanager.AzureManager {
 		VnetResourceGroup:         testVnetRG,
 		SubnetName:                testSubnetName,
 	}
-	az, _ := azmanager.CreateAzureManager(conf, azureclients.NewMockAzureClientsFactory(ctrl))
+	az, _ := azmanager.CreateAzureManager(conf, mock_azclient.NewMockClientFactory(ctrl))
 	return az
 }
 

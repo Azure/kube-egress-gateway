@@ -31,7 +31,7 @@ import (
 	"os"
 	"sort"
 
-	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
+	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/golang/mock/gomock"
@@ -47,6 +47,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -55,7 +56,6 @@ import (
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/imds"
@@ -787,7 +787,7 @@ func getMockAzureManager(ctrl *gomock.Controller) *azmanager.AzureManager {
 		ResourceGroup:    "rg",
 		LoadBalancerName: "lb",
 	}
-	az, _ := azmanager.CreateAzureManager(conf, azureclients.NewMockAzureClientsFactory(ctrl))
+	az, _ := azmanager.CreateAzureManager(conf, mock_azclient.NewMockClientFactory(ctrl))
 	return az
 }
 

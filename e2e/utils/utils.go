@@ -27,7 +27,6 @@ package utils
 import (
 	"context"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -48,7 +47,6 @@ import (
 
 	"github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	current "github.com/Azure/kube-egress-gateway/api/v1alpha1"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 )
 
 const (
@@ -73,24 +71,6 @@ func CreateK8sClient() (k8sClient client.Client, podLogClient clientset.Interfac
 	}
 	podLogClient, err = clientset.NewForConfig(restConfig)
 	return
-}
-
-func CreateAzureClients() (azureclients.AzureClientsFactory, error) {
-	var subscriptionID, tenantID, clientID, clientSecret string
-	if subscriptionID = os.Getenv("AZURE_SUBSCRIPTION_ID"); subscriptionID == "" {
-		return nil, fmt.Errorf("AZURE_SUBSCRIPTION_ID is not set")
-	}
-	if tenantID = os.Getenv("AZURE_TENANT_ID"); tenantID == "" {
-		return nil, fmt.Errorf("AZURE_TENANT_ID is not set")
-	}
-	if clientID = os.Getenv("AZURE_CLIENT_ID"); clientID == "" {
-		return nil, fmt.Errorf("AZURE_CLIENT_ID is not set")
-	}
-	if clientSecret = os.Getenv("AZURE_CLIENT_SECRET"); clientSecret == "" {
-		return nil, fmt.Errorf("AZURE_CLIENT_SECRET is not set")
-	}
-	// only test in Public Cloud
-	return azureclients.NewAzureClientsFactoryWithClientSecret("AzurePublicCloud", subscriptionID, tenantID, clientID, clientSecret)
 }
 
 func CreateNamespace(namespaceName string, c client.Client) error {

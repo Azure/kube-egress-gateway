@@ -29,12 +29,17 @@ import (
 	"os"
 	"strconv"
 
+	armpolicy "github.com/Azure/azure-sdk-for-go/sdk/azcore/arm/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -42,7 +47,6 @@ import (
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	controllers "github.com/Azure/kube-egress-gateway/controllers/manager"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	//+kubebuilder:scaffold:imports
 )
@@ -164,17 +168,47 @@ func startControllers(cmd *cobra.Command, args []string) {
 		setupLog.Error(err, "cloud configuration is invalid")
 		os.Exit(1)
 	}
-
-	var factory azureclients.AzureClientsFactory
+	var clientOps armpolicy.ClientOptions
+	switch cloudConfig.Cloud {
+	case "AzureChina":
+		clientOps.ClientOptions = policy.ClientOptions{
+			Cloud: cloud.AzureChina,
+		}
+	case "AzurePublic":
+		clientOps.ClientOptions = policy.ClientOptions{
+			Cloud: cloud.AzurePublic,
+		}
+	case "AzureGovernment":
+		clientOps.ClientOptions = policy.ClientOptions{
+			Cloud: cloud.AzureGovernment,
+		}
+	}
+	authProvider, err := azclient.NewAuthProvider(azclient.AzureAuthConfig{
+		UserAssignedIdentityID:      cloudConfig.UserAssignedIdentityID,
+		UseManagedIdentityExtension: true,
+		TenantID:                    cloudConfig.TenantID,
+		AADClientID:                 cloudConfig.AADClientID,
+		AADClientSecret:             cloudConfig.AADClientSecret,
+	}, &clientOps)
+	if err != nil {
+		setupLog.Error(err, "unable to setup auth provider")
+		os.Exit(1)
+	}
+	var factoryConfig azclient.ClientFactoryConfig
+	factoryConfig.SubscriptionID = cloudConfig.SubscriptionID
+	var factory azclient.ClientFactory
 	if cloudConfig.UseUserAssignedIdentity {
-		factory, err = azureclients.NewAzureClientsFactoryWithManagedIdentity(cloudConfig.Cloud, cloudConfig.SubscriptionID, cloudConfig.UserAssignedIdentityID)
+		factory, err = azclient.NewClientFactory(&factoryConfig, &azclient.ARMClientConfig{
+			Cloud: cloudConfig.Cloud,
+		}, authProvider.ManagedIdentityCredential)
 		if err != nil {
 			setupLog.Error(err, "unable to create azure clients")
 			os.Exit(1)
 		}
 	} else {
-		factory, err = azureclients.NewAzureClientsFactoryWithClientSecret(cloudConfig.Cloud, cloudConfig.SubscriptionID, cloudConfig.TenantID,
-			cloudConfig.AADClientID, cloudConfig.AADClientSecret)
+		factory, err = azclient.NewClientFactory(&factoryConfig, &azclient.ARMClientConfig{
+			Cloud: cloudConfig.Cloud,
+		}, authProvider.NetworkClientSecretCredential)
 		if err != nil {
 			setupLog.Error(err, "unable to create azure clients")
 			os.Exit(1)

@@ -27,8 +27,9 @@ import (
 	"context"
 	"fmt"
 
-	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
+	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
@@ -36,7 +37,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
 
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 )
@@ -63,7 +63,7 @@ type AzureManager struct {
 	SubnetClient         subnetclient.Interface
 }
 
-func CreateAzureManager(cloud *config.CloudConfig, factory azureclients.AzureClientsFactory) (*AzureManager, error) {
+func CreateAzureManager(cloud *config.CloudConfig, factory azclient.ClientFactory) (*AzureManager, error) {
 	az := AzureManager{
 		CloudConfig: cloud,
 	}
@@ -80,41 +80,12 @@ func CreateAzureManager(cloud *config.CloudConfig, factory azureclients.AzureCli
 		az.VnetResourceGroup = az.ResourceGroup
 	}
 
-	lbClient, err := factory.GetLoadBalancersClient()
-	if err != nil {
-		return &AzureManager{}, err
-	}
-	az.LoadBalancerClient = lbClient
-
-	vmssClient, err := factory.GetVirtualMachineScaleSetsClient()
-	if err != nil {
-		return &AzureManager{}, err
-	}
-	az.VmssClient = vmssClient
-
-	publicIPPrefixClient, err := factory.GetPublicIPPrefixesClient()
-	if err != nil {
-		return &AzureManager{}, err
-	}
-	az.PublicIPPrefixClient = publicIPPrefixClient
-
-	vmssVMClient, err := factory.GetVirtualMachineScaleSetVMsClient()
-	if err != nil {
-		return &AzureManager{}, err
-	}
-	az.VmssVMClient = vmssVMClient
-
-	interfaceClient, err := factory.GetInterfacesClient()
-	if err != nil {
-		return &AzureManager{}, err
-	}
-	az.InterfaceClient = interfaceClient
-
-	subnetClient, err := factory.GetSubnetsClient()
-	if err != nil {
-		return &AzureManager{}, err
-	}
-	az.SubnetClient = subnetClient
+	az.LoadBalancerClient = factory.GetloadbalancerclientInterface()
+	az.VmssClient = factory.GetvirtualmachinescalesetclientInterface()
+	az.PublicIPPrefixClient = factory.GetpublicipprefixclientInterface()
+	az.VmssVMClient = factory.GetvirtualmachinescalesetvmclientInterface()
+	az.InterfaceClient = factory.GetinterfaceclientInterface()
+	az.SubnetClient = factory.GetsubnetclientInterface()
 
 	return &az, nil
 }
