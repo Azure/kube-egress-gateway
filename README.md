@@ -1,61 +1,28 @@
-# Project kube-egress-gateway
+# kube-egress-gateway
 
-## Table of Contents
+kube-egress-gateway provides a scalable and cost-efficient way to configure fixed source IP for Kubernetes pod egress traffic on Azure.
+kube-egress-gateway components run in kubernetes clusters, either managed (Azure Kubernetes Service, AKS) or unmanaged, utilizes one or more dedicated kubernetes nodes as pod egress gateways and routes pod outbound traffic to gateway via wireguard tunnel.
 
-<!-- toc -->
-- [Summary](#summary)
-- [Motivation](#motivation)
-  - [Goals](#goals)
-- [Design](#design)
-  - [Components](#components)
-  - [Test Plan](#test-plan)
-    - [Needed Tests](#needed-tests)
-- [Current Progress](#current-progress)
-- [Contributing](#contributing)
-- [Trademarks](#trademarks)
-<!-- /toc -->
+Compared with existing methods, for example, creating dedicated kubernetes nodes with NAT gateway or instance level public ip address and only scheduling pods with such requirement on these nodes, kube-egress-gateway provides a more cost-efficient method as pods requiring different egress IPs can share the same gateway and can be scheduled on any regular worker nodes. 
 
-## Summary
-
-kube-egress-gateway provides the ability to configure fixed source IP for Kubernetes pod egress traffic on Azure.
-
-## Motivation
-
-Currently, the only way to provide fixed egress IP for pods is to deploy a nodepool with dedicated NAT gateway/ILPIP and schedule pods only to this nodepool, which may not be cost-efficient if there may just be a few pods and different pods require different egress IPs.
-
-Here we propose another method where a dedicated nodepool is used as gateway. Pods with static egress requirement are still scheduled on regular cluster nodes but get their traffic routed to the gateway nodepool while other pods remain unaffected.
-
-### Goals
-
-* Provide a scalable way for users to have fixed egress IPs on certain workloads.
+![Kube Egress Gateway](docs/images/kube_egress_gateway.png)
 
 ## Design
 
-This approach utilizes a dedicated AKS nodepool or Azure virtual machine scale set (VMSS) behind an Azure internal load balancer (ILB) as gateway. Please refer to `tests/deploy` to create a sample environment where an AKS cluster along with a gateway nodepool and ILB are created.
+* [Design doc](docs/design.md)
 
-When the gateway nodepool is created, there are no gateway IPConfigurations. A user should create a namespaced `StaticGatewayConfiguration` CRD object to create an egress gateway configuration, specifying the target gateway nodepool, and optional BYO public IP prefix. Users can then annotate the pod (`kubernetes.azure.com/static-gateway-configuration: <gateway config name, e.g. aks-static-gw-001>`) to claim a static gateway configuration as egress.
+## Installation
 
-### Components
-* **Gateway manager**: Contains three controllers, one monitors `StaticGatewayConfiguration` CR and generates corresponding `GatewayLBConfiguration` and `GatewayVMConfiguration` CRs. Two other controllers monitor these two CRs and configure Azure LB and Azure VMSS respectively.
-* **Gateway daemonSet on gateway nodes**: Monitors `StaticGatewayConfiguration` CR and `PodWireguardEndpoint` CR, configures the network namespaces, interfaces, and routes on gateway nodes.
-* **Chained CNI and pod egress controller daemonSet on regular cluster nodes**: Setups wireguard interfaces and routes in pods' network namespace.
+TODO
 
-### Test Plan
+## Usage
 
-#### Needed Tests
+TODO
 
-- Unit tests
-- E2E tests to allow `StaticEgressGateway` CRUD and pod annotation, and make sure static egress gateway works.
+## Troubleshooting
 
-## Current Progress
-- [] StaticGatewayConfiguration operator - Wantong
-- [] GatewayWireguardEndpoint CRD, PodWireguardEndpoint CRD, and Gateway nodepool daemonSet 
-- [] Chained CNI and non-gateway nodepool daemonSet
-- [] E2E tests
+TODO
 
-<!-- ### Graduation Criteria
-## Proposed roadmap
-## Implementation History -->
 
 ## Contributing
 
