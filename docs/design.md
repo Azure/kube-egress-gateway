@@ -7,7 +7,7 @@ kube-egress-gateway routes egress traffic from pods on regular kubernetes worker
 kube-egress-gateway needs at least two of dedicated kubernetes nodes backed by Azure virtual machine scale set (VMSS) as egress gateway to work. In Azure Kubernetes Service (AKS, managed kubernetes service on Azure) terminology, this is called a "nodepool". We use "nodepool" in this document for simplicity but it's not limited to AKS only. Users with self-managed kubernetes clusters can still use this feature, just by deploying a dedicated Azure VMSS and adding them to the cluster. There are some requirements for the nodepool:
 * It will be configured with additional secondary IP configurations on its NIC by kube-egress-gateway operator, and each secondary IP configuration is associated with a public IP prefix as outbound IP.
 * It has a fixed maximum node size (public ip prefix size), and should have cluster auto-scaler disabled.
-* It should be tainted (`mode=gateway:NoSchedule`) permanently so that no normal workload would land on it. 
+* It should be tainted (`kubeegressgateway.azure.com/mode=true:NoSchedule`) permanently so that no normal workload would land on it. 
 * It also has label `kubeegressgateway.azure.com/mode: true` for nodeSelector.
 * The nodepool VMSS instances should be linux only.
 * The cluster cannot use [Azure CNI with Dynamic IP allocation](https://learn.microsoft.com/en-us/azure/aks/configure-azure-cni-dynamic-ip-allocation) as CNI plugin due to known issue.

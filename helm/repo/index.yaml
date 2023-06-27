@@ -2,7 +2,7 @@ apiVersion: v1
 entries:
   kube-egress-gateway:
   - apiVersion: v2
-    created: "2023-04-06T06:14:42.599119029Z"
+    created: "2023-07-06T07:59:09.474504466Z"
     dependencies:
     - alias: cert-manager
       condition: cert-manager.enabled
@@ -10,7 +10,7 @@ entries:
       repository: https://charts.jetstack.io
       version: v1.11.0
     description: A Helm chart for installing Azure kube-egress-gateway components
-    digest: e4431ca95b74cd63417fe532111e2182ce30a80c353406de3b50712c5693efbf
+    digest: 87894f5b8e6dc7b118946c936d23e058c35d5404e5e31f94ed06d97f7acaceb3
     maintainers:
     - email: jwtty0919@gmail.com
       name: Wantong Jiang
@@ -23,4 +23,4 @@ entries:
     urls:
     - kube-egress-gateway-0.1.0.tgz
     version: 0.1.0
-generated: "2023-04-06T06:14:42.595677589Z"
+generated: "2023-07-06T07:59:09.470455334Z"

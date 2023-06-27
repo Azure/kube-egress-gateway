@@ -79,7 +79,7 @@ AKS_NODE_RESOURCE_GROUP=$(echo ${AKS} | jq -r '. | .nodeResourceGroup')
 echo "Adding gateway nodepool to AKS cluster"
 GW_NODEPOOL=$(az aks nodepool add -g ${RESOURCE_GROUP} -n "gwnodepool" --cluster-name ${AKS_CLUSTER_NAME} --node-count 2 --vnet-subnet-id ${SUBNET_GATEWAY_ID} ${NODEPOOL_PROFILE} \
             --labels node.kubernetes.io/exclude-from-external-load-balancers=true kubeegressgateway.azure.com/mode=true \
-            --node-taints mode=gateway:NoSchedule)
+            --node-taints kubeegressgateway.azure.com/mode=true:NoSchedule)
 
 readarray -t VMSS_INFO < <(az vmss list -g ${AKS_NODE_RESOURCE_GROUP} | jq -r '.[] | select(.name | contains("gwnodepool")) | .uniqueId,.name')
 GW_VMSS_ID=${VMSS_INFO[0]}
