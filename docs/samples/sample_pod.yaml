@@ -3,7 +3,7 @@ kind: Pod
 metadata:
   name: samplepod
   annotations:
-    k8s.v1.cni.cncf.io/networks: sgw1@wg0
+    kubernetes.azure.com/static-gateway-configuration: sgw1 # required
 spec:
   containers:
     - name: samplepod

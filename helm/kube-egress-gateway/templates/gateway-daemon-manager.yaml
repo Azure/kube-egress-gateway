@@ -8,7 +8,6 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  creationTimestamp: null
   name: kube-egress-gateway-daemon-manager-role
 rules:
 - apiGroups:
@@ -164,9 +163,9 @@ spec:
       terminationGracePeriodSeconds: 10
       tolerations:
       - effect: NoSchedule
-        key: mode
+        key: kubeegressgateway.azure.com/mode
         operator: Equal
-        value: gateway
+        value: "true"
       volumes:
       - hostPath:
           path: /run/netns

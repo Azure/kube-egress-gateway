@@ -86,7 +86,7 @@ jobs:
       COLLECT_LOG: true
       ARTIFACT_DIR: $(Build.ArtifactStagingDirectory)
   - bash: |
-      [ "$(az group exists -n $(resource_group))" == "true" ] && az group delete -n $(resource_group) --yes
+      [ "$(az group exists -n $(resource_group))" == "true" ] && az group delete -n $(resource_group) --yes --no-wait
     displayName: clean up resources
     condition: always()
   - task: PublishBuildArtifacts@1

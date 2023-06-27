@@ -30,9 +30,9 @@ spec:
       nodeSelector:
         kubeegressgateway.azure.com/mode: "true"
       tolerations:
-      - key: mode
+      - key: kubeegressgateway.azure.com/mode
         operator: "Equal"
-        value: "gateway"
+        value: "true"
         effect: "NoSchedule"
       containers:
       - command:

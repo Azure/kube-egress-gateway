@@ -6,9 +6,10 @@ This Helm chart enables installation and maintenance of Azure kube-egress-gatewa
 
 ## Installation
 
-A Helm repo is maintained at the following URI:
-
-- https://raw.githubusercontent.com/Azure/kube-egress-gateway/main/helm/repo
+Clone this repository, kube-egress-gateway chart is maintained in `helm/kube-egress-gateway` directory:
+```
+git clone https://github.com/Azure/kube-egress-gateway.git
+```
 
 The `kube-egress-gateway` project relies on [cert-manager](https://cert-manager.io/) to provide webhook certificate issuance and rotation. You can install it separately (recommended) or install it as a subchart included in this Helm chart.
 
@@ -18,26 +19,16 @@ We recommend users to install cert-manager before installing this chart.
 
 To manually install cert-manager, you can follow [cert-manager official doc](https://cert-manager.io/docs/installation/helm/#option-1-installing-crds-with-kubectl).
 
-You can install CRD resources with `kubectl` first:
-
-```bash
-$ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.11.0/cert-manager.crds.yaml
-```
-
-And then install cert-manager Helm chart:
-```bash
-$ helm install \
-  cert-manager jetstack/cert-manager \
-  --namespace cert-manager \
-  --create-namespace \
-  --version v1.11.0 \
-  # --set installCRDs=true
-```
-
 Then to install `kube-egress-gateway`, you may run below `helm` command:
 
 ```bash
-$ helm install --repo https://raw.githubusercontent.com/Azure/kube-egress-gateway/main/helm/repo kube-egress-gateway --set common.imageRepository=<TBD> --set common.imageTag=<TBD> -f azure_config.yaml
+$ helm install \
+  kube-egress-gateway ./helm/kube-egress-gateway \
+  --namespace kube-egress-gateway-system \
+  --create-namespace \
+  --set common.imageRepository=mcr.microsoft.com/oss/kubernetes \
+  --set common.imageTag=v1.0.0 \ 
+  -f azure_config.yaml
 ```
 
 See more details about azure_config.yaml in [azure cloud configurations](#azure-cloud-configurations)
@@ -48,25 +39,19 @@ You may also install cert-manager as a subchart with `enabled` set to `true`:
 
 ```bash
 $ helm install \
-  --repo https://raw.githubusercontent.com/Azure/kube-egress-gateway/main/helm/repo kube-egress-gateway \
-  --set common.imageRepository=<TBD> \
-  --set common.imageTag=<TBD> \
+  kube-egress-gateway ./helm/kube-egress-gateway \
+  --namespace kube-egress-gateway-system \
+  --create-namespace \
+  --set common.imageRepository=mcr.microsoft.com/oss/kubernetes \
+  --set common.imageTag=v1.0.0 \
   --set cert-manager.enabled=true \ # to enable cert-manager installation
   --set cert-manager.namespace=<your desired namespace> \ # to install cert-manager components in specified namespace, default to cert-manager
   -f azure_config.yaml
 ```
-## Uninstallation
-
-Use the following commans to find the `kube-egress-gateway` Helm chart release name and uninstall it.
-
-```bash
-$ helm list
-$ helm delete <kube-egress-gateway-char-release-name>
-```
 
 # Configurable values
 
-Below we provide a list of configurations you can set when invoking `helm install` against your Kubernetes cluster.
+Below we provide a list of configurations you can set when invoking `helm install` against your Kubernetes cluster. You can also check [values.yaml](./values.yaml).
 
 ## azure cloud configurations
 

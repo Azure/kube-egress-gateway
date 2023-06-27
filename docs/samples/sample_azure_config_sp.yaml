@@ -1,0 +1,17 @@
+config:
+  azureCloudConfig:
+    cloud: "AzurePublicCloud"
+    tenantId: "<tenant ID>"
+    subscriptionId: "<subscription ID>"
+    useUserAssignedIdentity: false
+    aadClientId: "<sp clientID>"
+    aadClientSecret: "<sp secret>"
+    userAgent: "kube-egress-gateway-controller"
+    resourceGroup: "<resource group name>"
+    location: "<resource group location>"
+    loadBalancerName: "gateway-ilb"
+    loadBalancerResourceGroup: ""
+    vnetName: "<virtual network name>"
+    vnetResourceGroup: ""
+    subnetName: "<subnet name>"
+

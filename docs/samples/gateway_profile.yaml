@@ -1,0 +1,13 @@
+apiVersion: egressgateway.kubernetes.azure.com/v1alpha1
+kind: StaticGatewayConfiguration
+metadata:
+  name: sgw1
+spec:
+  gatewayVmssProfile: 
+    vmssResourceGroup: myResourceGroup # required
+    vmssName: gatewayVMSS # required
+    publicIpPrefixSize: 31 # required
+  publicIpPrefixsId: /subscriptions/<subscription ID>/resourcegroups/<resourceGroup name>/providers/Microsoft.Network/publicipprefixes/<pip prefix name> # optional
+  excludeCIDRs: # optional
+    - <pod cidr>
+    - <service cidr>
