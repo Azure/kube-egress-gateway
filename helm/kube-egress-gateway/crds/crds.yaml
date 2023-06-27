@@ -114,9 +114,6 @@ spec:
               publicIpPrefix:
                 description: Public IP Prefix CIDR used for this gateway configuration.
                 type: string
-              state:
-                description: State of the GatewayConfiguration.
-                type: string
             type: object
         type: object
     served: true

@@ -28,7 +28,7 @@ spec:
       hostPID: true
       hostNetwork: true
       nodeSelector:
-        todo.kubernetes.azure.com/mode: "Gateway"
+        kubeegressgateway.azure.com/mode: "true"
       tolerations:
       - key: mode
         operator: "Equal"

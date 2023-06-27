@@ -8,7 +8,7 @@ kube-egress-gateway needs at least two of dedicated kubernetes nodes backed by A
 * It will be configured with additional secondary IP configurations on its NIC by kube-egress-gateway operator, and each secondary IP configuration is associated with a public IP prefix as outbound IP.
 * It has a fixed maximum node size (public ip prefix size), and should have cluster auto-scaler disabled.
 * It should be tainted (`mode=gateway:NoSchedule`) permanently so that no normal workload would land on it. 
-* It also has label `kubernetes.azure.com/mode: gateway` for nodeSelector.
+* It also has label `kubeegressgateway.azure.com/mode: true` for nodeSelector.
 * The nodepool VMSS instances should be linux only.
 * The cluster cannot use [Azure CNI with Dynamic IP allocation](https://learn.microsoft.com/en-us/azure/aks/configure-azure-cni-dynamic-ip-allocation) as CNI plugin due to known issue.
 * Deploying multiple gateway nodepools (multiple VMSSes) is supported. But single nodepool cannot contain multiple VMSSes.
