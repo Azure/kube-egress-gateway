@@ -222,7 +222,7 @@ func WaitPipPrefixDeletion(resourceGroup, pipName string, c publicipprefixclient
 
 func GetGatewayVmssProfile(c client.Client) (resourceGroup, vmssName, location string, prefixLen int32, err error) {
 	nodes := &corev1.NodeList{}
-	err = c.List(context.Background(), nodes, client.MatchingLabels{"todo.kubernetes.azure.com/mode": "Gateway"})
+	err = c.List(context.Background(), nodes, client.MatchingLabels{"kubeegressgateway.azure.com/mode": "true"})
 	if err != nil {
 		return
 	}

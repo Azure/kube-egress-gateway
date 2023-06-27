@@ -159,7 +159,7 @@ spec:
       hostNetwork: true
       hostPID: true
       nodeSelector:
-        todo.kubernetes.azure.com/mode: Gateway
+        kubeegressgateway.azure.com/mode: "true"
       serviceAccountName: kube-egress-gateway-daemon-manager
       terminationGracePeriodSeconds: 10
       tolerations:

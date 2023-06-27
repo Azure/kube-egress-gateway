@@ -87,9 +87,6 @@ type StaticGatewayConfigurationStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// State of the GatewayConfiguration.
-	State string `json:"state,omitempty"`
-
 	// Additional message (e.g. error) to explain the state.
 	Message string `json:"message,omitempty"`
 
