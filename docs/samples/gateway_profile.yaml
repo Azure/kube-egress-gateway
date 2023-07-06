@@ -7,7 +7,7 @@ spec:
     vmssResourceGroup: myResourceGroup # required
     vmssName: gatewayVMSS # required
     publicIpPrefixSize: 31 # required
-  publicIpPrefixsId: /subscriptions/<subscription ID>/resourcegroups/<resourceGroup name>/providers/Microsoft.Network/publicipprefixes/<pip prefix name> # optional
+  publicIpPrefixId: /subscriptions/<subscription ID>/resourcegroups/<resourceGroup name>/providers/Microsoft.Network/publicipprefixes/<pip prefix name> # optional
   excludeCIDRs: # optional
     - <pod cidr>
     - <service cidr>
