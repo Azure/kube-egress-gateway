@@ -32,11 +32,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func CreateCurlPodManifest(nsName, gwName, curlTarget string) *corev1.Pod {
@@ -91,6 +89,17 @@ func CreateNginxPodManifest(nsName, gwName string) *corev1.Pod {
 	}
 }
 
+func getPodLog(c clientset.Interface, name, namespace string, opts *v1.PodLogOptions) ([]byte, error) {
+	return c.CoreV1().Pods(namespace).GetLogs(name, opts).Do(context.Background()).Raw()
+}
+
+func printPodInfo(c clientset.Interface, pod *v1.Pod) {
+	log, _ := getPodLog(c, pod.Name, pod.Namespace, &v1.PodLogOptions{})
+	Logf("Pod %s/%s log:\n%s", pod.Namespace, pod.Name, string(log))
+	log, _ = getPodLog(c, pod.Name, pod.Namespace, &v1.PodLogOptions{Previous: true})
+	Logf("Pod %s/%s previous log:\n%s", pod.Namespace, pod.Name, string(log))
+}
+
 func GetExpectedPodLog(pod *v1.Pod, c clientset.Interface, expectLogRegex *regexp.Regexp) (string, error) {
 	var log []byte
 	err := wait.PollUntilContextTimeout(context.Background(), poll, pollTimeoutForProvision, true, func(ctx context.Context) (bool, error) {
@@ -104,6 +113,7 @@ func GetExpectedPodLog(pod *v1.Pod, c clientset.Interface, expectLogRegex *regex
 		if pod.Status.Phase != v1.PodSucceeded {
 			Logf("Waiting for the pod to succeed, current status: %s", pod.Status.Phase)
 			if pod.Status.Phase == v1.PodFailed {
+				printPodInfo(c, pod)
 				return false, fmt.Errorf("test pod is in Failed phase")
 			}
 			return false, nil
@@ -112,7 +122,7 @@ func GetExpectedPodLog(pod *v1.Pod, c clientset.Interface, expectLogRegex *regex
 			Logf("Waiting for the container to be completed")
 			return false, nil
 		}
-		log, err = c.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &v1.PodLogOptions{}).Do(context.Background()).Raw()
+		log, err = getPodLog(c, pod.Name, pod.Namespace, &v1.PodLogOptions{})
 		if err != nil {
 			Logf("Got %v when retrieving test pod log, retrying", err)
 			return false, nil
@@ -126,14 +136,10 @@ func GetExpectedPodLog(pod *v1.Pod, c clientset.Interface, expectLogRegex *regex
 	return found, nil
 }
 
-func WaitGetPodIP(pod *v1.Pod, c client.Client) (string, error) {
+func WaitGetPodIP(pod *v1.Pod, c clientset.Interface) (string, error) {
 	var podIP string
-	key := types.NamespacedName{
-		Name:      pod.Name,
-		Namespace: pod.Namespace,
-	}
 	err := wait.PollUntilContextTimeout(context.Background(), poll, pollTimeout, true, func(ctx context.Context) (bool, error) {
-		err := c.Get(ctx, key, pod)
+		pod, err := c.CoreV1().Pods(pod.Namespace).Get(context.Background(), pod.Name, metav1.GetOptions{})
 		if err != nil {
 			if retriable(err) {
 				return false, nil
@@ -145,6 +151,10 @@ func WaitGetPodIP(pod *v1.Pod, c client.Client) (string, error) {
 			return true, nil
 		}
 		Logf("Waiting for the pod to Running, current status: %s", pod.Status.Phase)
+		if pod.Status.Phase == v1.PodFailed {
+			printPodInfo(c, pod)
+			return false, fmt.Errorf("test pod is in Failed phase")
+		}
 		return false, nil
 	})
 	return podIP, err

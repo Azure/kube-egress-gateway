@@ -233,7 +233,7 @@ var _ = Describe("Test staticGatewayConfiguration deployment", func() {
 		pod := utils.CreateNginxPodManifest(testns, "sgw1")
 		err = utils.CreateK8sObject(pod, k8sClient)
 		Expect(err).NotTo(HaveOccurred())
-		podIP, err := utils.WaitGetPodIP(pod, k8sClient)
+		podIP, err := utils.WaitGetPodIP(pod, podLogClient)
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("nginx pod IP: %s", podIP)
 
