@@ -32,8 +32,7 @@ collect_node_logs() {
     kubectl get node | grep "aks-" | awk '{printf("%s\n",$1)}' | while read -r NODE; do
         NODE_LOG_DIR="${LOG_DIR}/nodes-log/${NODE}"
         mkdir -p "${NODE_LOG_DIR}"
-        kubectl debug node/${NODE} -it --image=${LOG_IMAGE} -- cat /host/var/log/kubelet.log  > "${NODE_LOG_DIR}/kubelet.log" || echo "Cannot collect kubelet.log from node ${NODE}"
-        kubectl debug node/${NODE} -it --image=${LOG_IMAGE} -- cat /host/var/log/syslog  > "${NODE_LOG_DIR}/syslog.log" || echo "Cannot collect syslog.log from node ${NODE}"
+        kubectl debug node/${NODE} -it --image=${LOG_IMAGE} -- cat /host/var/log/syslog  > "${NODE_LOG_DIR}/syslog" || echo "Cannot collect syslog.log from node ${NODE}"
         kubectl debug node/${NODE} -it --image=${LOG_IMAGE} -- cat /host/var/log/kern.log  > "${NODE_LOG_DIR}/kern.log" || echo "Cannot collect kern.log from node ${NODE}"
         kubectl debug node/${NODE} -it --image=${LOG_IMAGE} -- cat /host/var/log/messages  > "${NODE_LOG_DIR}/messages" || echo "Cannot collect messages from node ${NODE}"
         kubectl debug node/${NODE} -it --image=${LOG_IMAGE} -- cat /host/etc/cni/net.d/01-egressgateway.conflist  > "${NODE_LOG_DIR}/01-egressgateway.conflist" || echo "Cannot collect cni conflist from node ${NODE}"
