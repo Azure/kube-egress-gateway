@@ -8,7 +8,7 @@ set -euo pipefail
 : "${AZURE_CLIENT_SECRET:?Environment variable empty or not defined.}"
 
 # Check if collecting log is needed
-if [[ "${COLLECT_LOG}" != "true" ]]; then
+if [[ "${COLLECT_LOG}" == "true" ]]; then
     if [[ -z "${LOG_DIR}" ]]; then
         echo "LOG_DIR is not set"
         exit 1
