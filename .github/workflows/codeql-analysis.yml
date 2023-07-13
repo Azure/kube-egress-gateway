@@ -78,3 +78,14 @@ jobs:
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v2
+
+    - name: Go Coverage
+      uses: gwatts/go-coverage-action@v1.3.0
+      with:
+        # collect coverage for all packages beyond the one under test
+        cover-pkg: ./...
+
+        # Ignore code-generated files when calculating coverage totals
+        ignore-pattern: |
+          \.pb\.go$
+          \_string\.go$
