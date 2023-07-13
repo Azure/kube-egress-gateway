@@ -18,7 +18,7 @@ LB_NAME=${LB_NAME:-"gateway-ilb"}
 # Get random location
 # should have quota for Standard_DS2_v2 vCPUs in AKS_UPSTREAM_E2E or custom sub
 if [[ -z "${LOCATION}" ]]; then
-    REGIONS=("eastus" "eastus2" "northeurope" "uksouth" "westeurope" "westus2" "westus3")
+    REGIONS=("eastus" "eastus2" "northeurope" "westus2")
     LOCATION="${REGIONS[${RANDOM} % ${#REGIONS[@]}]}"
 fi
 echo "Deploying resources in region: ${LOCATION}"
@@ -58,7 +58,7 @@ elif [ "$NETWORK_PLUGIN" == "overlay" ]; then
     NETWORK_PROFILE="--network-plugin azure --network-plugin-mode overlay --pod-cidr ${POD_CIDR}"
     NODEPOOL_PROFILE="--max-pods 250"
 elif [ "$NETWORK_PLUGIN" == "cilium" ]; then
-    NETWORK_PROFILE="--network-plugin azure --network-plugin-mode overlay --pod-cidr ${POD_CIDR} --enable-cilium-dataplane"
+    NETWORK_PROFILE="--network-plugin azure --network-plugin-mode overlay --pod-cidr ${POD_CIDR} --network-dataplane cilium"
     NODEPOOL_PROFILE="--max-pods 250"
 elif [ "$NETWORK_PLUGIN" == "calico" ]; then
     NETWORK_PROFILE="--network-plugin azure --network-policy calico"
