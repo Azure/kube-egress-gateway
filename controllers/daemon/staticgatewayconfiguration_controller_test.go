@@ -725,10 +725,35 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			nsToDel := "gw-ns-10_0_0_6"
 			gwns := &mocknetnswrapper.MockNetNS{Name: nsToDel}
 			gomock.InOrder(
-				mns.EXPECT().ListNS().Return([]string{nsName, nsToDel}, nil),
+				mns.EXPECT().ListNS().Return([]string{nsToDel}, nil).Times(2),
 				mnl.EXPECT().LinkByName("eth0").Return(eth0, nil),
 				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNet("10.0.0.6/31")}}, nil),
 				mnl.EXPECT().AddrDel(eth0, &netlink.Addr{IPNet: getIPNetWithActualIP("10.0.0.6/31")}).Return(nil),
+				mipt.EXPECT().New().Return(mtable, nil),
+				mtable.EXPECT().List("nat", "POSTROUTING").Return([]string{"-s 10.0.0.7/32 --comment no SNAT for traffic from netns gw-ns-10_0_0_6"}, nil),
+				mtable.EXPECT().Delete(
+					"nat", "POSTROUTING", "-s", "10.0.0.7/32", "-m", "comment", "--comment", "no SNAT for traffic from netns gw-ns-10_0_0_6",
+					"-j", "RETURN").Return(nil),
+				mns.EXPECT().GetNS(nsToDel).Return(gwns, nil),
+				mns.EXPECT().UnmountNS(nsToDel).Return(nil),
+			)
+			res, reconcileErr = r.Reconcile(context.TODO(), req)
+			Expect(reconcileErr).To(BeNil())
+			Expect(res).To(Equal(ctrl.Result{}))
+			gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
+			err := getGatewayStatus(r.Client, gwStatus)
+			Expect(err).To(BeNil())
+			Expect(gwStatus.Spec.ReadyGatewayNamespaces).To(BeEmpty())
+			Expect(gwStatus.Spec.ReadyPeerConfigurations).To(BeEmpty())
+		})
+
+		It("should not delete ilb ip from eth0 if there are other gateway namespaces", func() {
+			mns := r.NetNS.(*mocknetnswrapper.MockInterface)
+			mipt := r.IPTables.(*mockiptableswrapper.MockInterface)
+			nsToDel := "gw-ns-10_0_0_6"
+			gwns := &mocknetnswrapper.MockNetNS{Name: nsToDel}
+			gomock.InOrder(
+				mns.EXPECT().ListNS().Return([]string{nsName, nsToDel}, nil).Times(2),
 				mipt.EXPECT().New().Return(mtable, nil),
 				mtable.EXPECT().List("nat", "POSTROUTING").Return([]string{"-s 10.0.0.7/32 --comment no SNAT for traffic from netns gw-ns-10_0_0_6"}, nil),
 				mtable.EXPECT().Delete(
