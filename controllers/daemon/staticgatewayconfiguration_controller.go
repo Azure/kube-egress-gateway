@@ -255,10 +255,23 @@ func (r *StaticGatewayConfigurationReconciler) cleanUp(ctx context.Context) erro
 func (r *StaticGatewayConfigurationReconciler) ensureDeleted(ctx context.Context, netns string) error {
 	log := log.FromContext(ctx)
 
-	// remove lb ip (if exists) from eth0
-	ilbIP := getILBIPFromNamespaceName(netns)
-	if err := r.reconcileIlbIPOnHost(ctx, ilbIP, true /* deleting */); err != nil {
-		return err
+	// remove lb ip (if exists and if it's the last network namespace) from eth0
+	netnsList, err := r.NetNS.ListNS()
+	if err != nil {
+		return fmt.Errorf("failed to list network namespace: %w", err)
+	}
+	exists := false
+	for _, ns := range netnsList {
+		if strings.HasPrefix(ns, "gw-") && ns != netns {
+			exists = true
+			break
+		}
+	}
+	if !exists {
+		ilbIP := getILBIPFromNamespaceName(netns)
+		if err := r.reconcileIlbIPOnHost(ctx, ilbIP, true /* deleting */); err != nil {
+			return err
+		}
 	}
 
 	// delete iptables rule in host namespace
