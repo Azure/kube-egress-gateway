@@ -28,9 +28,11 @@ for t in ${PKG}; do
     fi
 done
 
-go tool covdata textfmt -i=${PWD}/testcoverage -o ./profile.cov
+go tool covdata textfmt -i=${PWD}/testcoverage -o ./profile.cov.tmp
+cat ./profile.cov.tmp | grep -v "zz_generated.deepcopy.go" > ./profile.cov
 go tool cover -func ./profile.cov
 
 rm -rf /tmp/cni-rootless
 rm -rf ./testcoverage
+rm ./profile.cov.tmp
 popd
