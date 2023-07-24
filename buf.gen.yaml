@@ -9,4 +9,4 @@ plugins:
     out: .
     path: bin/protoc-gen-go-grpc
     opt:
-        - paths=source_relative
+      - paths=source_relative

@@ -57,14 +57,18 @@ func NewNicService(k8sClient client.Client) *NicService {
 func (s *NicService) NicAdd(ctx context.Context, in *cniprotocol.NicAddRequest) (*cniprotocol.NicAddResponse, error) {
 	gwConfig := &current.StaticGatewayConfiguration{}
 	if err := s.k8sClient.Get(ctx, client.ObjectKey{Name: in.GetGatewayName(), Namespace: in.GetPodConfig().GetPodNamespace()}, gwConfig); err != nil {
-		return nil, status.Errorf(codes.Unknown, "failed to retrieve staticgatewayconfiguration %s/%s: %s", in.GetPodConfig().GetPodNamespace(), in.GetPodConfig().GetPodName(), err)
+		return nil, status.Errorf(codes.Unknown, "failed to retrieve StaticGatewayConfiguration %s/%s: %s", in.GetPodConfig().GetPodNamespace(), in.GetGatewayName(), err)
 	}
 	if len(gwConfig.Status.WireguardServerIP) == 0 {
 		return nil, status.Errorf(codes.FailedPrecondition, "the gateway is not ready yet.")
 	}
+	pod := &corev1.Pod{}
+	if err := s.k8sClient.Get(ctx, client.ObjectKey{Name: in.GetPodConfig().GetPodName(), Namespace: in.GetPodConfig().GetPodNamespace()}, pod); err != nil {
+		return nil, status.Errorf(codes.Unknown, "failed to retrieve pod %s/%s: %s", in.GetPodConfig().GetPodNamespace(), in.GetPodConfig().GetPodName(), err)
+	}
 	podEndpoint := &current.PodWireguardEndpoint{ObjectMeta: metav1.ObjectMeta{Name: in.GetPodConfig().GetPodName(), Namespace: in.GetPodConfig().GetPodNamespace()}}
 	if _, err := controllerutil.CreateOrUpdate(ctx, s.k8sClient, podEndpoint, func() error {
-		if err := controllerutil.SetControllerReference(gwConfig, podEndpoint, s.k8sClient.Scheme()); err != nil {
+		if err := controllerutil.SetControllerReference(pod, podEndpoint, s.k8sClient.Scheme()); err != nil {
 			return err
 		}
 		podEndpoint.Spec.PodIpAddress = in.GetAllowedIp()
@@ -72,7 +76,7 @@ func (s *NicService) NicAdd(ctx context.Context, in *cniprotocol.NicAddRequest) 
 		podEndpoint.Spec.PodWireguardPublicKey = in.PublicKey
 		return nil
 	}); err != nil {
-		return nil, status.Errorf(codes.Unknown, "failed to update staticgatewayconfiguration %s/%s: %s", in.GetPodConfig().GetPodNamespace(), in.GetPodConfig().GetPodName(), err)
+		return nil, status.Errorf(codes.Unknown, "failed to update PodWireguardEndpoint %s/%s: %s", in.GetPodConfig().GetPodNamespace(), in.GetPodConfig().GetPodName(), err)
 	}
 	return &cniprotocol.NicAddResponse{
 		EndpointIp:     gwConfig.Status.WireguardServerIP,
