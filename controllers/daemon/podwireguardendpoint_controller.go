@@ -259,8 +259,7 @@ func (r *PodWireguardEndpointReconciler) cleanUpNetNS(
 
 	gwns, err := r.NetNS.GetNS(nsName)
 	if err != nil {
-		// do not return error to continue cleanup
-		return nil, fmt.Errorf("failed to get gateway network namespace %s", nsName)
+		return nil, fmt.Errorf("failed to get gateway network namespace %s: %w", nsName, err)
 	}
 	defer gwns.Close()
 
