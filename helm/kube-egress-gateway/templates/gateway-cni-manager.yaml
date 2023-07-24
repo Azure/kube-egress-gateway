@@ -11,6 +11,14 @@ metadata:
   name: kube-egress-gateway-cni-manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - egressgateway.kubernetes.azure.com
   resources:
   - podwireguardendpoints
