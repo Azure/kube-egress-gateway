@@ -40,10 +40,11 @@ import (
 )
 
 type Manager struct {
-	cniConfDir     string
-	cniConfFile    string
-	cniConfWatcher *fsnotify.Watcher
-	exceptionCidrs []string
+	cniConfDir      string
+	cniConfFile     string
+	cniConfFileTemp string
+	cniConfWatcher  *fsnotify.Watcher
+	exceptionCidrs  []string
 }
 
 func NewCNIConfManager(cniConfDir, cniConfFile, exceptionCidrs string) (*Manager, error) {
@@ -58,10 +59,11 @@ func NewCNIConfManager(cniConfDir, cniConfFile, exceptionCidrs string) (*Manager
 	}
 
 	return &Manager{
-		cniConfDir:     cniConfDir,
-		cniConfFile:    cniConfFile,
-		cniConfWatcher: watcher,
-		exceptionCidrs: cidrs,
+		cniConfDir:      cniConfDir,
+		cniConfFile:     cniConfFile,
+		cniConfFileTemp: cniConfFile + ".tmp",
+		cniConfWatcher:  watcher,
+		exceptionCidrs:  cidrs,
 	}, nil
 }
 
@@ -83,8 +85,10 @@ func (mgr *Manager) Start(ctx context.Context) error {
 	for {
 		select {
 		case event := <-mgr.cniConfWatcher.Events:
-			if strings.Contains(event.Name, mgr.cniConfFile) && !event.Has(fsnotify.Remove) {
-				// ignore our cni conf file change (unless it's deletion) to avoid loop
+			if strings.Contains(event.Name, mgr.cniConfFileTemp) ||
+				(strings.Contains(event.Name, mgr.cniConfFile) && !event.Has(fsnotify.Remove) && !event.Has(fsnotify.Rename)) {
+				// ignore our cni conf file change (unless it's deletion or rename) to avoid loop
+				log.Info("Detected changes in cni configuration file, ignoring...", "change event", event)
 				continue
 			}
 			log.Info("Detected changes in cni configuration directory, regenerating...", "change event", event)
@@ -125,7 +129,7 @@ func (mgr *Manager) insertCNIPluginConf() error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal bytes into json: %w, bytes: %s", err, string(newBytes))
 	}
-	tmpFile := filepath.Join(mgr.cniConfDir, mgr.cniConfFile+".tmp")
+	tmpFile := filepath.Join(mgr.cniConfDir, mgr.cniConfFileTemp)
 	err = os.WriteFile(tmpFile, newBytes, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write to tmp file: %w", err)

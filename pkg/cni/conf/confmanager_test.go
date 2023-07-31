@@ -81,6 +81,9 @@ func TestNewCNIConfManager(t *testing.T) {
 				if mgr.cniConfFile != testConfList {
 					t.Fatalf("mgr's cniConfFile is different: got: %s, expected: %s", mgr.cniConfFile, testConfList)
 				}
+				if mgr.cniConfFileTemp != testConfList+".tmp" {
+					t.Fatalf("mgr's cniConfFileTemp is different: got: %s, expected: %s", mgr.cniConfFileTemp, testConfList+".tmp")
+				}
 				if mgr.cniConfWatcher == nil {
 					t.Fatalf("mgr's cniConfWatch is nil")
 				}
@@ -125,7 +128,7 @@ func TestStart(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	file, err := os.Stat(filepath.Join(testDir, testConfList))
 	if err != nil {
-		t.Fatalf("failed to find cni conf file: %v", err)
+		t.Fatalf("failed to find cni conf file after cnimanager is started: %v", err)
 	}
 	creationTime := file.ModTime()
 
@@ -151,7 +154,18 @@ func TestStart(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	_, err = os.Stat(filepath.Join(testDir, testConfList))
 	if err != nil {
-		t.Fatalf("failed to find cni conf file: %v", err)
+		t.Fatalf("failed to recreate cni conf file after it's deleted: %v", err)
+	}
+
+	// rename existing cni conf file
+	_ = os.Rename(filepath.Join(testDir, testConfList), filepath.Join(testDir, "test"))
+	defer func() {
+		_ = os.Remove(filepath.Join(testDir, "test"))
+	}()
+	time.Sleep(100 * time.Millisecond)
+	_, err = os.Stat(filepath.Join(testDir, testConfList))
+	if err != nil {
+		t.Fatalf("failed to create cni conf file after it's renamed: %v", err)
 	}
 }
 
