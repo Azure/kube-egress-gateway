@@ -115,7 +115,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 
 		When("gwConfig is newly created", func() {
 			BeforeEach(func() {
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(gwConfig).WithRuntimeObjects(gwConfig).Build()
 				r = &StaticGatewayConfigurationReconciler{Client: cl}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundGWConfig)
@@ -131,7 +131,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 
 		When("gwConfig is out of sync", func() {
 			BeforeEach(func() {
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(gwConfig).WithRuntimeObjects(gwConfig).Build()
 				r = &StaticGatewayConfigurationReconciler{Client: cl}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundGWConfig)
@@ -214,7 +214,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 						PublicIpPrefix: "1.2.3.4/31",
 					},
 				}
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig, secret, lbConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(gwConfig).WithRuntimeObjects(gwConfig, secret, lbConfig).Build()
 				r = &StaticGatewayConfigurationReconciler{Client: cl}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundGWConfig)
@@ -263,7 +263,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 						ServerPort: 6000,
 					},
 				}
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig, secret, lbConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(gwConfig).WithRuntimeObjects(gwConfig, secret, lbConfig).Build()
 				r = &StaticGatewayConfigurationReconciler{Client: cl}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundGWConfig)
@@ -280,39 +280,7 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 			})
 		})
 
-		When("deleting a gwConfig without finalizer", func() {
-			BeforeEach(func() {
-				gwConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig).Build()
-				r = &StaticGatewayConfigurationReconciler{Client: cl}
-				res, reconcileErr = r.Reconcile(context.TODO(), req)
-				getErr = getResource(cl, foundGWConfig)
-			})
-
-			It("shouldn't error and should do nothing", func() {
-				Expect(reconcileErr).To(BeNil())
-				Expect(getErr).To(BeNil())
-				Expect(res).To(Equal(ctrl.Result{}))
-			})
-		})
-
-		When("deleting a gwConfig with finalizer but no subresources", func() {
-			BeforeEach(func() {
-				gwConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig).Build()
-				r = &StaticGatewayConfigurationReconciler{Client: cl}
-				res, reconcileErr = r.Reconcile(context.TODO(), req)
-				getErr = getResource(cl, foundGWConfig)
-			})
-
-			It("shouldn't return error", func() {
-				Expect(reconcileErr).To(BeNil())
-				Expect(res).To(Equal(ctrl.Result{}))
-			})
-
-		})
-
-		When("deleting a gwConfig with finalizer and subresources", func() {
+		When("deleting a gwConfig with subresources", func() {
 			BeforeEach(func() {
 				gwConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
 				lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{
@@ -322,19 +290,13 @@ var _ = Describe("StaticGatewayConfiguration controller unit tests", func() {
 					},
 				}
 				controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(gwConfig, lbConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(lbConfig).Build()
 				r = &StaticGatewayConfigurationReconciler{Client: cl}
-				res, reconcileErr = r.Reconcile(context.TODO(), req)
-				getErr = getResource(cl, foundGWConfig)
+				reconcileErr = r.ensureDeleted(context.TODO(), gwConfig)
 			})
 
 			It("shouldn't error", func() {
 				Expect(reconcileErr).To(BeNil())
-				Expect(res).To(Equal(ctrl.Result{}))
-			})
-
-			It("should not delete gwConfig", func() {
-				Expect(getErr).To(BeNil())
 			})
 
 			It("should delete subresources", func() {

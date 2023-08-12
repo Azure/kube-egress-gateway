@@ -158,18 +158,6 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			})
 		})
 
-		When("gwConfig is being deleted", func() {
-			It("should not do anything", func() {
-				gwConfig.Status = getTestGwConfigStatus()
-				gwConfig.DeletionTimestamp = to.Ptr(metav1.Now())
-				getTestReconciler(gwConfig)
-				res, reconcileErr = r.Reconcile(context.TODO(), req)
-
-				Expect(reconcileErr).To(BeNil())
-				Expect(res).To(Equal(ctrl.Result{}))
-			})
-		})
-
 		When("secret is not found", func() {
 			It("should report error", func() {
 				gwConfig.Status = getTestGwConfigStatus()

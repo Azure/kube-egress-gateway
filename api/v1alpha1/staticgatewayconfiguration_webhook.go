@@ -34,6 +34,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 // log is for logging in this package.
@@ -60,22 +61,22 @@ func (r *StaticGatewayConfiguration) Default() {
 var _ webhook.Validator = &StaticGatewayConfiguration{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (r *StaticGatewayConfiguration) ValidateCreate() error {
+func (r *StaticGatewayConfiguration) ValidateCreate() (admission.Warnings, error) {
 	staticgatewayconfigurationlog.Info("validate create", "name", r.Name)
-	return r.validateSGC()
+	return nil, r.validateSGC()
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *StaticGatewayConfiguration) ValidateUpdate(old runtime.Object) error {
+func (r *StaticGatewayConfiguration) ValidateUpdate(old runtime.Object) (admission.Warnings, error) {
 	staticgatewayconfigurationlog.Info("validate update", "name", r.Name)
-	return r.validateSGC()
+	return nil, r.validateSGC()
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (r *StaticGatewayConfiguration) ValidateDelete() error {
+func (r *StaticGatewayConfiguration) ValidateDelete() (admission.Warnings, error) {
 	staticgatewayconfigurationlog.Info("validate delete", "name", r.Name)
 	// no need to validate delete at this moment
-	return nil
+	return nil, nil
 }
 
 func (r *StaticGatewayConfiguration) validateSGC() error {
