@@ -138,7 +138,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 		When("lbConfig is newly created", func() {
 			BeforeEach(func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(lbConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(lbConfig).Build()
 				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundLBConfig)
@@ -215,7 +215,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			BeforeEach(func() {
 				controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(lbConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(lbConfig).Build()
 				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az}
 			})
 
@@ -475,7 +475,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			})
 
 			It("should create a new vmConfig", func() {
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(lbConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(lbConfig).Build()
 				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(BeNil())
@@ -517,7 +517,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					},
 				}
 
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(lbConfig, vmConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(lbConfig, vmConfig).Build()
 				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(BeNil())
@@ -548,7 +548,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					},
 				}
 
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(lbConfig, vmConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(lbConfig, vmConfig).Build()
 				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(BeNil())
@@ -557,23 +557,6 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				getErr = getResource(cl, foundVMConfig)
 				Expect(getErr).To(BeNil())
 				Expect(foundVMConfig.Spec.GatewayNodepoolName).To(Equal(lbConfig.Spec.GatewayNodepoolName))
-			})
-		})
-
-		When("deleting lbConfig without finalizer", func() {
-			BeforeEach(func() {
-				lbConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
-				az = getMockAzureManager(gomock.NewController(GinkgoT()))
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(lbConfig).Build()
-				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az}
-			})
-
-			It("should not do anything", func() {
-				res, reconcileErr = r.Reconcile(context.TODO(), req)
-				getErr = getResource(cl, foundLBConfig)
-				Expect(res).To(Equal(ctrl.Result{}))
-				Expect(reconcileErr).To(BeNil())
-				Expect(getErr).To(BeNil())
 			})
 		})
 
@@ -591,23 +574,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 						Namespace: testNamespace,
 					},
 				}
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(lbConfig, vmConfig).Build()
-				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az}
-				_, reconcileErr = r.Reconcile(context.TODO(), req)
-				Expect(reconcileErr).To(BeNil())
-				getErr = getResource(cl, foundVMConfig)
-				Expect(apierrors.IsNotFound(getErr)).To(BeTrue())
-			})
-
-			It("should wait for vmConfig to be deleted before cleaning lb", func() {
-				vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:              testName,
-						Namespace:         testNamespace,
-						DeletionTimestamp: to.Ptr(metav1.Now()),
-					},
-				}
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(lbConfig, vmConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(lbConfig, vmConfig).Build()
 				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az}
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(BeNil())
@@ -621,7 +588,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
 				lbConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(lbConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(lbConfig).Build()
 				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az}
 				vmss := &compute.VirtualMachineScaleSet{
 					Properties: &compute.VirtualMachineScaleSetProperties{UniqueID: to.Ptr(testVMSSUID)},

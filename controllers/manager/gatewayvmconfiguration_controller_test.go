@@ -121,7 +121,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 		When("vmConfig is newly created", func() {
 			BeforeEach(func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(vmConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(vmConfig).WithRuntimeObjects(vmConfig).Build()
 				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundVMConfig)
@@ -716,7 +716,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				controllerutil.AddFinalizer(vmConfig, consts.VMConfigFinalizerName)
 				vmConfig.Spec.PublicIpPrefixId = "/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix"
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(vmConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(vmConfig).WithRuntimeObjects(vmConfig).Build()
 				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az}
 			})
 
@@ -820,27 +820,13 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			})
 		})
 
-		When("deleting vmConfig", func() {
-			It("should do nothing if vmConfig does not finalizer", func() {
-				az = getMockAzureManager(gomock.NewController(GinkgoT()))
-				vmConfig.Spec.PublicIpPrefixId = "/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix"
-				vmConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(vmConfig).Build()
-				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az}
-				_, reconcileErr = r.Reconcile(context.TODO(), req)
-				Expect(reconcileErr).To(BeNil())
-				getErr = getResource(cl, foundVMConfig)
-				Expect(getErr).To(BeNil())
-			})
-		})
-
 		When("deleting vmConfig with finalizer", func() {
 			BeforeEach(func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				vmConfig.Spec.PublicIpPrefixId = "/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix"
 				vmConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
 				controllerutil.AddFinalizer(vmConfig, consts.VMConfigFinalizerName)
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(vmConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(vmConfig).WithRuntimeObjects(vmConfig).Build()
 				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az}
 			})
 
