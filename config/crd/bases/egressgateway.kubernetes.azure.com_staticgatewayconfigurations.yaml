@@ -120,9 +120,6 @@ spec:
                     format: int32
                     type: integer
                 type: object
-              message:
-                description: Additional message (e.g. error) to explain the state.
-                type: string
               publicIpPrefix:
                 description: Public IP Prefix CIDR used for this gateway configuration.
                 type: string
