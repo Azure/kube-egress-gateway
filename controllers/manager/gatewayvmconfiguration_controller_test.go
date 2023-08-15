@@ -40,6 +40,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient/mock_publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
@@ -62,9 +63,9 @@ const (
 
 var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 	var (
-		s  = scheme.Scheme
-		r  *GatewayVMConfigurationReconciler
-		az *azmanager.AzureManager
+		r        *GatewayVMConfigurationReconciler
+		az       *azmanager.AzureManager
+		recorder = record.NewFakeRecorder(10)
 	)
 
 	Context("Reconcile", func() {
@@ -99,16 +100,13 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					},
 				},
 			}
-			s.AddKnownTypes(egressgatewayv1alpha1.GroupVersion, vmConfig,
-				&egressgatewayv1alpha1.StaticGatewayConfiguration{},
-				&egressgatewayv1alpha1.GatewayLBConfiguration{})
 		})
 
 		When("vmConfig is not found", func() {
 			It("should only report error in get", func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
-				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az}
+				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundVMConfig)
 
@@ -122,7 +120,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			BeforeEach(func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(vmConfig).WithRuntimeObjects(vmConfig).Build()
-				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az}
+				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundVMConfig)
 			})
@@ -195,7 +193,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				}
 				for i, c := range tests {
 					az = getMockAzureManager(gomock.NewController(GinkgoT()))
-					r = &GatewayVMConfigurationReconciler{AzureManager: az}
+					r = &GatewayVMConfigurationReconciler{AzureManager: az, Recorder: recorder}
 					mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 					if c.expectGet {
 						vmConfig.Spec.GatewayNodepoolName = ""
@@ -221,7 +219,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 		Context("TestEnsurePublicIPPrefix", func() {
 			BeforeEach(func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
-				r = &GatewayVMConfigurationReconciler{AzureManager: az}
+				r = &GatewayVMConfigurationReconciler{AzureManager: az, Recorder: recorder}
 				vmConfig.Spec.PublicIpPrefixId = ""
 			})
 
@@ -359,7 +357,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 		Context("TestEnsurePublicIPPrefixDeleted", func() {
 			BeforeEach(func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
-				r = &GatewayVMConfigurationReconciler{AzureManager: az}
+				r = &GatewayVMConfigurationReconciler{AzureManager: az, Recorder: recorder}
 			})
 
 			It("should return error when getting managed ip prefix returns error", func() {
@@ -527,7 +525,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 		Context("TestReconcileVMSS", func() {
 			BeforeEach(func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
-				r = &GatewayVMConfigurationReconciler{AzureManager: az}
+				r = &GatewayVMConfigurationReconciler{AzureManager: az, Recorder: recorder}
 			})
 
 			It("should return error if vmss does not have properties", func() {
@@ -717,7 +715,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				controllerutil.AddFinalizer(vmConfig, consts.VMConfigFinalizerName)
 				vmConfig.Spec.PublicIpPrefixId = "/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix"
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(vmConfig).WithRuntimeObjects(vmConfig).Build()
-				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az}
+				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
 			})
 
 			It("should report error when getGatewayVMSS fails", func() {
@@ -725,6 +723,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return(nil, fmt.Errorf("failed"))
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(Equal(fmt.Errorf("failed")))
+				assertEqualEvents([]string{"Warning ReconcileError failed"}, recorder.Events)
 			})
 
 			It("should report error when ensurePublicIPPrefix fails", func() {
@@ -740,6 +739,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), "rg", "prefix", gomock.Any()).Return(nil, fmt.Errorf("failed"))
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(errors.Unwrap(reconcileErr)).To(Equal(fmt.Errorf("failed")))
+				assertEqualEvents([]string{"Warning ReconcileError failed to get public ip prefix(/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix): failed"}, recorder.Events)
 			})
 
 			It("should report error when reconcileVMSS fails", func() {
@@ -764,6 +764,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), testRG, vmssName).Return(nil, fmt.Errorf("failed"))
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(errors.Unwrap(reconcileErr)).To(Equal(fmt.Errorf("failed")))
+				assertEqualEvents([]string{"Warning ReconcileError failed to get vm instances from vmss(vmss): failed"}, recorder.Events)
 			})
 
 			It("should report error when removing managed public ip prefix fails", func() {
@@ -789,6 +790,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), testRG, vmssName).Return([]*compute.VirtualMachineScaleSetVM{}, nil)
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(errors.Unwrap(reconcileErr)).To(Equal(fmt.Errorf("failed")))
+				assertEqualEvents([]string{"Warning ReconcileError failed to get public ip prefix(testns_test): failed"}, recorder.Events)
 			})
 
 			It("should update vmConfig with public ip prefix", func() {
@@ -817,6 +819,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				getErr = getResource(cl, foundVMConfig)
 				Expect(getErr).To(BeNil())
 				Expect(foundVMConfig.Status.EgressIpPrefix).To(Equal("1.2.3.4/31"))
+				assertEqualEvents([]string{"Normal Reconciled GatewayVMConfiguration provisioned with pip prefix 1.2.3.4/31"}, recorder.Events)
 			})
 		})
 
@@ -827,7 +830,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				vmConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
 				controllerutil.AddFinalizer(vmConfig, consts.VMConfigFinalizerName)
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(vmConfig).WithRuntimeObjects(vmConfig).Build()
-				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az}
+				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
 			})
 
 			It("should report error when getGatewayVMSS fails", func() {

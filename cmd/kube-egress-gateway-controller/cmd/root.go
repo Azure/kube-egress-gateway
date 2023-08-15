@@ -187,7 +187,8 @@ func startControllers(cmd *cobra.Command, args []string) {
 	}
 
 	if err = (&controllers.StaticGatewayConfigurationReconciler{
-		Client: mgr.GetClient(),
+		Client:   mgr.GetClient(),
+		Recorder: mgr.GetEventRecorderFor("staticGatewayConfiguration-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "StaticGatewayConfiguration")
 		os.Exit(1)
@@ -199,6 +200,7 @@ func startControllers(cmd *cobra.Command, args []string) {
 	if err = (&controllers.GatewayLBConfigurationReconciler{
 		Client:       mgr.GetClient(),
 		AzureManager: az,
+		Recorder:     mgr.GetEventRecorderFor("gatewayLBConfiguration-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GatewayLBConfiguration")
 		os.Exit(1)
@@ -206,6 +208,7 @@ func startControllers(cmd *cobra.Command, args []string) {
 	if err = (&controllers.GatewayVMConfigurationReconciler{
 		Client:       mgr.GetClient(),
 		AzureManager: az,
+		Recorder:     mgr.GetEventRecorderFor("gatewayVMConfiguration-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GatewayVMConfiguration")
 		os.Exit(1)

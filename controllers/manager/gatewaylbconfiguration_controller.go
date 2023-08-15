@@ -34,9 +34,11 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -52,6 +54,7 @@ import (
 type GatewayLBConfigurationReconciler struct {
 	client.Client
 	*azmanager.AzureManager
+	Recorder record.EventRecorder
 }
 
 type lbPropertyNames struct {
@@ -61,6 +64,7 @@ type lbPropertyNames struct {
 	probeName    string
 }
 
+//+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations/finalizers,verbs=update
@@ -95,7 +99,11 @@ func (r *GatewayLBConfigurationReconciler) Reconcile(ctx context.Context, req ct
 		return r.ensureDeleted(ctx, lbConfig)
 	}
 
-	return r.reconcile(ctx, lbConfig)
+	res, err := r.reconcile(ctx, lbConfig)
+	if err != nil {
+		r.Recorder.Event(lbConfig, corev1.EventTypeWarning, "ReconcileError", err.Error())
+	}
+	return res, err
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -152,6 +160,18 @@ func (r *GatewayLBConfigurationReconciler) reconcile(
 		}
 	}
 
+	frontend, po, prefix := "nil", "nil", "nil"
+	if lbConfig.Status != nil {
+		frontend = lbConfig.Status.FrontendIP
+		po = fmt.Sprintf("%d", lbConfig.Status.ServerPort)
+		prefix = lbConfig.Status.PublicIpPrefix
+	}
+	r.Recorder.Eventf(lbConfig,
+		corev1.EventTypeNormal,
+		"Reconciled",
+		"GatewayLBConfiguration updated with frontendIP(%s), port(%s), and pip prefix(%s)",
+		frontend, po, prefix,
+	)
 	log.Info("GatewayLBConfiguration reconciled")
 	return ctrl.Result{}, nil
 }

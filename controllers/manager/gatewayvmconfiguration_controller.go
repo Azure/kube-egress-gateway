@@ -37,8 +37,10 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -54,12 +56,14 @@ import (
 type GatewayVMConfigurationReconciler struct {
 	client.Client
 	*azmanager.AzureManager
+	Recorder record.EventRecorder
 }
 
 var (
 	publicIPPrefixRE = regexp.MustCompile(`(?i).*/subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Network/publicIPPrefixes/(.+)`)
 )
 
+//+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/finalizers,verbs=update
@@ -91,7 +95,11 @@ func (r *GatewayVMConfigurationReconciler) Reconcile(ctx context.Context, req ct
 		return r.ensureDeleted(ctx, vmConfig)
 	}
 
-	return r.reconcile(ctx, vmConfig)
+	res, err := r.reconcile(ctx, vmConfig)
+	if err != nil {
+		r.Recorder.Event(vmConfig, corev1.EventTypeWarning, "ReconcileError", err.Error())
+	}
+	return res, err
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -154,6 +162,11 @@ func (r *GatewayVMConfigurationReconciler) reconcile(
 		}
 	}
 
+	prefix := "nil"
+	if vmConfig.Status != nil && vmConfig.Status.EgressIpPrefix != "" {
+		prefix = vmConfig.Status.EgressIpPrefix
+	}
+	r.Recorder.Eventf(vmConfig, corev1.EventTypeNormal, "Reconciled", "GatewayVMConfiguration provisioned with pip prefix %s", prefix)
 	log.Info("GatewayVMConfiguration reconciled")
 	return ctrl.Result{}, nil
 }
