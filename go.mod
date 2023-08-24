@@ -30,7 +30,7 @@ require (
 	google.golang.org/grpc v1.57.0
 	google.golang.org/protobuf v1.31.0
 	k8s.io/api v0.28.0
-	k8s.io/apimachinery v0.28.0
+	k8s.io/apimachinery v0.28.1
 	k8s.io/client-go v0.28.0
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.0-20230530032544-6a0270eac22b
 	sigs.k8s.io/controller-runtime v0.15.1
