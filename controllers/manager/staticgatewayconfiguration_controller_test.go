@@ -26,6 +26,7 @@ package manager
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -118,7 +119,14 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 			}, timeout, interval).ShouldNot(HaveOccurred())
 			updatedGWConfig := &egressgatewayv1alpha1.StaticGatewayConfiguration{}
 			Eventually(func() error {
-				return k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), updatedGWConfig)
+				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), updatedGWConfig); err != nil {
+					return err
+				}
+				if updatedGWConfig.Status.WireguardPrivateKeySecretRef == nil ||
+					updatedGWConfig.Status.WireguardPrivateKeySecretRef.Name != testName {
+					return errors.New("wireguardPrivateKeySecretRef is not ready yet")
+				}
+				return nil
 			}, timeout, interval).ShouldNot(HaveOccurred())
 
 			Expect(len(secret.Data)).To(Equal(2))
@@ -129,9 +137,6 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 			owner := metav1.GetControllerOf(secret)
 			Expect(owner).NotTo(BeNil())
 			Expect(owner.Name).To(Equal(testName))
-
-			Expect(updatedGWConfig.Status.WireguardPrivateKeySecretRef).NotTo(BeNil())
-			Expect(updatedGWConfig.Status.WireguardPrivateKeySecretRef.Name).To(Equal(testName))
 
 			wgPrivateKey, err := wgtypes.ParseKey(string(privateKeyBytes))
 			Expect(err).To(BeNil())

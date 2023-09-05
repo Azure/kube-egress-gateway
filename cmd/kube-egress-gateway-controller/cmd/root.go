@@ -38,6 +38,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	controllers "github.com/Azure/kube-egress-gateway/controllers/manager"
@@ -130,9 +132,11 @@ func startControllers(cmd *cobra.Command, args []string) {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
 	var err error
 	options := ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     ":" + strconv.Itoa(metricsPort),
-		Port:                   9443,
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: ":" + strconv.Itoa(metricsPort),
+		},
+		WebhookServer:          webhook.NewServer(webhook.Options{Port: 9443}),
 		HealthProbeBindAddress: ":" + strconv.Itoa(probePort),
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "0a299682.microsoft.com",
