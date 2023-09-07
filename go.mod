@@ -27,7 +27,7 @@ require (
 	go.uber.org/zap v1.25.0
 	golang.org/x/sys v0.12.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20220916014741-473347a5e6e3
-	google.golang.org/grpc v1.57.0
+	google.golang.org/grpc v1.58.0
 	google.golang.org/protobuf v1.31.0
 	k8s.io/api v0.28.1
 	k8s.io/apimachinery v0.28.1
@@ -98,7 +98,7 @@ require (
 	golang.org/x/crypto v0.12.0 // indirect
 	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e // indirect
 	golang.org/x/net v0.14.0 // indirect
-	golang.org/x/oauth2 v0.8.0 // indirect
+	golang.org/x/oauth2 v0.10.0 // indirect
 	golang.org/x/sync v0.3.0 // indirect
 	golang.org/x/term v0.11.0 // indirect
 	golang.org/x/text v0.12.0 // indirect
@@ -107,7 +107,7 @@ require (
 	golang.zx2c4.com/wireguard v0.0.0-20220407013110-ef5c587f782d // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230526203410-71b5a4ffd15e // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230711160842-782d3b101e98 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
