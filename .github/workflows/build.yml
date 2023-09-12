@@ -46,7 +46,7 @@ jobs:
         run: az acr login -n ${{ secrets.AZURE_REGISTRY }}
       - name: Docker meta
         id: daemon # you'll use this in the next step
-        uses: docker/metadata-action@v4
+        uses: docker/metadata-action@v5
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -56,7 +56,7 @@ jobs:
           bake-target: daemon-tags
       - name: Docker meta
         id: controller # you'll use this in the next step
-        uses: docker/metadata-action@v4
+        uses: docker/metadata-action@v5
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -66,7 +66,7 @@ jobs:
           bake-target: controller-tags
       - name: Docker meta
         id: cnimanager # you'll use this in the next step
-        uses: docker/metadata-action@v4
+        uses: docker/metadata-action@v5
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -76,7 +76,7 @@ jobs:
           bake-target: cnimanager-tags
       - name: Docker meta
         id: cniplugin # you'll use this in the next step
-        uses: docker/metadata-action@v4
+        uses: docker/metadata-action@v5
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -86,7 +86,7 @@ jobs:
           bake-target: cni-tags
       - name: Docker meta
         id: cniipamplugin # you'll use this in the next step
-        uses: docker/metadata-action@v4
+        uses: docker/metadata-action@v5
         with:
           # list of Docker images to use as base name for tags
           images: |
