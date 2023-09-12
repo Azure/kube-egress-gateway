@@ -95,7 +95,7 @@ jobs:
             type=semver,pattern={{raw}}
           bake-target: cni-ipam-tags
       - name: Build and push
-        uses: docker/bake-action@v3
+        uses: docker/bake-action@v4
         with:
           push: ${{ github.event_name != 'pull_request' }}
           files: |
