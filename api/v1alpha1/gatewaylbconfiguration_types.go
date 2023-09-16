@@ -42,7 +42,11 @@ type GatewayLBConfigurationSpec struct {
 
 	// Profile of the gateway VMSS to apply the gateway configuration.
 	// +optional
-	GatewayVMSSProfile `json:"gatewayVmssProfile,omitempty"`
+	GatewayVmssProfile `json:"gatewayVmssProfile,omitempty"`
+
+	// Whether to provision public IP prefixes for outbound.
+	//+kubebuilder:default=true
+	ProvisionPublicIps bool `json:"provisionPublicIps"`
 
 	// BYO Resource ID of public IP prefix to be used as outbound.
 	// +optional
@@ -55,13 +59,13 @@ type GatewayLBConfigurationStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Gateway IP for wireguard connection.
-	FrontendIP string `json:"frontendIP,omitempty"`
+	FrontendIp string `json:"frontendIp,omitempty"`
 
 	// Listening port of the gateway side wireguard daemon.
 	ServerPort int32 `json:"serverPort,omitempty"`
 
-	// Public IP Prefix CIDR used for this gateway configuration.
-	PublicIpPrefix string `json:"publicIpPrefix,omitempty"`
+	// Egress IP Prefix CIDR used for this gateway configuration.
+	EgressIpPrefix string `json:"egressIpPrefix,omitempty"`
 }
 
 //+kubebuilder:object:root=true

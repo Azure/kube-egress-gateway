@@ -117,10 +117,10 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 	})
 
 	prefix := "nil"
-	if gwConfig.Status.PublicIpPrefix != "" {
-		prefix = gwConfig.Status.PublicIpPrefix
+	if gwConfig.Status.EgressIpPrefix != "" {
+		prefix = gwConfig.Status.EgressIpPrefix
 	}
-	r.Recorder.Eventf(gwConfig, corev1.EventTypeNormal, "Reconciled", "StaticGatewayConfiguration provisioned with pip prefix %s", prefix)
+	r.Recorder.Eventf(gwConfig, corev1.EventTypeNormal, "Reconciled", "StaticGatewayConfiguration provisioned with egress prefix %s", prefix)
 	log.Info("staticGatewayConfiguration reconciled")
 	return err
 }
@@ -229,7 +229,8 @@ func (r *StaticGatewayConfigurationReconciler) reconcileGatewayLBConfig(
 	}
 	if _, err := controllerutil.CreateOrPatch(ctx, r, lbConfig, func() error {
 		lbConfig.Spec.GatewayNodepoolName = gwConfig.Spec.GatewayNodepoolName
-		lbConfig.Spec.GatewayVMSSProfile = gwConfig.Spec.GatewayVMSSProfile
+		lbConfig.Spec.GatewayVmssProfile = gwConfig.Spec.GatewayVmssProfile
+		lbConfig.Spec.ProvisionPublicIps = gwConfig.Spec.ProvisionPublicIps
 		lbConfig.Spec.PublicIpPrefixId = gwConfig.Spec.PublicIpPrefixId
 		return controllerutil.SetControllerReference(gwConfig, lbConfig, r.Client.Scheme())
 	}); err != nil {
@@ -237,9 +238,9 @@ func (r *StaticGatewayConfigurationReconciler) reconcileGatewayLBConfig(
 		return err
 	}
 	if lbConfig.DeletionTimestamp.IsZero() && lbConfig.Status != nil {
-		gwConfig.Status.WireguardServerIP = lbConfig.Status.FrontendIP
+		gwConfig.Status.WireguardServerIp = lbConfig.Status.FrontendIp
 		gwConfig.Status.WireguardServerPort = lbConfig.Status.ServerPort
-		gwConfig.Status.PublicIpPrefix = lbConfig.Status.PublicIpPrefix
+		gwConfig.Status.EgressIpPrefix = lbConfig.Status.EgressIpPrefix
 	}
 
 	return nil

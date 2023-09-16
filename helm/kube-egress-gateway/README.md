@@ -11,13 +11,7 @@ Clone this repository, kube-egress-gateway chart is maintained in `helm/kube-egr
 git clone https://github.com/Azure/kube-egress-gateway.git
 ```
 
-The `kube-egress-gateway` project relies on [cert-manager](https://cert-manager.io/) to provide webhook certificate issuance and rotation. You can install it separately (recommended) or install it as a subchart included in this Helm chart.
-
-### Option 1 (RECOMMENDED)
-
-We recommend users to install cert-manager before installing this chart. 
-
-To manually install cert-manager, you can follow [cert-manager official doc](https://cert-manager.io/docs/installation/helm/#option-1-installing-crds-with-kubectl).
+The `kube-egress-gateway` project relies on [cert-manager](https://cert-manager.io/) to provide webhook certificate issuance and rotation. You can install cert-manager following their [installation guide](https://cert-manager.io/docs/installation/).
 
 Then to install `kube-egress-gateway`, you may run below `helm` command:
 
@@ -32,22 +26,6 @@ $ helm install \
 ```
 
 See more details about azure_config.yaml in [azure cloud configurations](#azure-cloud-configurations)
-
-### Option 2
-
-You may also install cert-manager as a subchart with `enabled` set to `true`:
-
-```bash
-$ helm install \
-  kube-egress-gateway ./helm/kube-egress-gateway \
-  --namespace kube-egress-gateway-system \
-  --create-namespace \
-  --set common.imageRepository=mcr.microsoft.com/oss/kubernetes \
-  --set common.imageTag=v1.0.0 \
-  --set cert-manager.enabled=true \ # to enable cert-manager installation
-  --set cert-manager.namespace=<your desired namespace> \ # to install cert-manager components in specified namespace, default to cert-manager
-  -f azure_config.yaml
-```
 
 # Configurable values
 
@@ -150,7 +128,3 @@ The Helm chart installs 5 components with different images: gateway-controller-m
 | `gatewayCNIIpam.imageName` | `kube-egress-gateway-cni-ipam` | Name of gatewayCNI-Ipam image. |
 | `gatewayCNIIpam.imageTag` | | Tag of gatewayCNI-Ipam image. |
 | `gatewayCNIIpam.imagePullPolicy` | `IfNotPresent` | Image pull policy for gatewayCNI-Ipam's image. |
-
-## cert-manager configurations
-
-`kube-egress-gateway` relies on `cert-manager` to provide webhook certificate issuance and renewal. For configurations to cert-manager itself, please refer to [cert-manager official website](https://cert-manager.io/docs/installation/helm/). By default cert-manager subchart is disabled. To enable, add `--set cert-manager.enabled=true` in your `helm install` command. To deploy cert-manager components in a specific namespace, add `--set cert-manager.namespace=<your desired namespace>` in your `helm install` command. The default namespace is `cert-manager`.

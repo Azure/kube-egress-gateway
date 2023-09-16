@@ -62,7 +62,7 @@ var _ = Describe("Server", func() {
 			},
 			Status: current.StaticGatewayConfigurationStatus{
 				GatewayWireguardProfile: current.GatewayWireguardProfile{
-					WireguardServerIP:   "192.168.1.1/32",
+					WireguardServerIp:   "192.168.1.1/32",
 					WireguardPublicKey:  "somerandompublickey",
 					WireguardServerPort: 54321,
 				},
@@ -134,8 +134,9 @@ var _ = Describe("Server", func() {
 				resp, err := service.NicAdd(context.Background(), nicAddInputRequest)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(resp.PublicKey).To(Equal(gatewayProfile.Status.GatewayWireguardProfile.WireguardPublicKey))
-				Expect(resp.EndpointIp).To(Equal(gatewayProfile.Status.GatewayWireguardProfile.WireguardServerIP))
+				Expect(resp.EndpointIp).To(Equal(gatewayProfile.Status.GatewayWireguardProfile.WireguardServerIp))
 				Expect(resp.ListenPort).To(Equal(gatewayProfile.Status.GatewayWireguardProfile.WireguardServerPort))
+				Expect(resp.DefaultRoute).To(Equal(cniprotocol.DefaultRoute_DEFAULT_ROUTE_STATIC_EGRESS_GATEWAY))
 				podEndpoint := &current.PodWireguardEndpoint{}
 				err = fakeClient.Get(context.Background(), client.ObjectKey{
 					Name:      nicAddInputRequest.PodConfig.PodName,
@@ -145,6 +146,15 @@ var _ = Describe("Server", func() {
 				Expect(podEndpoint.Spec.StaticGatewayConfiguration).To(Equal(gatewayProfile.Name))
 				Expect(podEndpoint.Spec.PodWireguardPublicKey).To(Equal(nicAddInputRequest.PublicKey))
 				Expect(podEndpoint.Spec.PodIpAddress).To(Equal(nicAddInputRequest.AllowedIp))
+			})
+		})
+		When("gateway has azureNetworking as default route", func() {
+			It("should return default route as azureNetworking", func() {
+				gatewayProfile.Spec.DefaultRoute = current.RouteAzureNetworking
+				fakeClient.Update(context.Background(), gatewayProfile) //nolint:errcheck
+				resp, err := service.NicAdd(context.Background(), nicAddInputRequest)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(resp.DefaultRoute).To(Equal(cniprotocol.DefaultRoute_DEFAULT_ROUTE_AZURE_NETWORKING))
 			})
 		})
 		When("gateway is not found", func() {

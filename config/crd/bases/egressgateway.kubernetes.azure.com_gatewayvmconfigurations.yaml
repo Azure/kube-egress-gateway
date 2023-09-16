@@ -54,9 +54,15 @@ spec:
                     description: Resource group of the VMSS. Must be in the same subscription.
                     type: string
                 type: object
+              provisionPublicIps:
+                default: true
+                description: Whether to provision public IP prefixes for outbound.
+                type: boolean
               publicIpPrefixId:
                 description: BYO Resource ID of public IP prefix to be used as outbound.
                 type: string
+            required:
+            - provisionPublicIps
             type: object
           status:
             description: GatewayVMConfigurationStatus defines the observed state of

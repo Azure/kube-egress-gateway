@@ -95,12 +95,13 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 			},
 			Spec: egressgatewayv1alpha1.StaticGatewayConfigurationSpec{
 				GatewayNodepoolName: "testgw",
-				GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
-					VMSSResourceGroup:  "vmssRG",
-					VMSSName:           "vmss",
+				GatewayVmssProfile: egressgatewayv1alpha1.GatewayVmssProfile{
+					VmssResourceGroup:  "vmssRG",
+					VmssName:           "vmss",
 					PublicIpPrefixSize: 31,
 				},
-				PublicIpPrefixId: "testPipPrefix",
+				PublicIpPrefixId:   "testPipPrefix",
+				ProvisionPublicIps: true,
 			},
 		}
 		Expect(k8sClient.Create(ctx, gwConfig)).ToNot(HaveOccurred())
@@ -150,7 +151,9 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 				return k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), lbConfig)
 			}, timeout, interval).ShouldNot(HaveOccurred())
 			Expect(lbConfig.Spec.GatewayNodepoolName).To(BeEquivalentTo(gwConfig.Spec.GatewayNodepoolName))
-			Expect(lbConfig.Spec.GatewayVMSSProfile).To(BeEquivalentTo(gwConfig.Spec.GatewayVMSSProfile))
+			Expect(lbConfig.Spec.GatewayVmssProfile).To(BeEquivalentTo(gwConfig.Spec.GatewayVmssProfile))
+			Expect(lbConfig.Spec.ProvisionPublicIps).To(BeEquivalentTo(gwConfig.Spec.ProvisionPublicIps))
+			Expect(lbConfig.Spec.PublicIpPrefixId).To(BeEquivalentTo(gwConfig.Spec.PublicIpPrefixId))
 
 			owner := metav1.GetControllerOf(lbConfig)
 			Expect(owner).NotTo(BeNil())
@@ -160,7 +163,7 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 			Eventually(func() error {
 				return k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), updatedGWConfig)
 			}, timeout, interval).ShouldNot(HaveOccurred())
-			Expect(updatedGWConfig.Status.WireguardServerIP).To(BeEmpty())
+			Expect(updatedGWConfig.Status.WireguardServerIp).To(BeEmpty())
 			Expect(updatedGWConfig.Status.WireguardServerPort).To(BeZero())
 		})
 	})
@@ -170,9 +173,9 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 			lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{}
 			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), lbConfig)).ToNot(HaveOccurred())
 			lbConfig.Status = &egressgatewayv1alpha1.GatewayLBConfigurationStatus{
-				FrontendIP:     "1.1.1.1",
+				FrontendIp:     "1.1.1.1",
 				ServerPort:     6000,
-				PublicIpPrefix: "1.2.3.4/31",
+				EgressIpPrefix: "1.2.3.4/31",
 			}
 			Expect(k8sClient.Status().Update(ctx, lbConfig)).ToNot(HaveOccurred())
 		})
@@ -184,9 +187,9 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 					return nil, err
 				}
 				return map[string]interface{}{
-					"ip":     updatedGWConfig.Status.WireguardServerIP,
+					"ip":     updatedGWConfig.Status.WireguardServerIp,
 					"port":   updatedGWConfig.Status.WireguardServerPort,
-					"prefix": updatedGWConfig.Status.PublicIpPrefix,
+					"prefix": updatedGWConfig.Status.EgressIpPrefix,
 				}, nil
 			}, timeout, interval).Should(BeEquivalentTo(map[string]interface{}{
 				"ip":     "1.1.1.1",
@@ -201,11 +204,13 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 			updateGWConfig := &egressgatewayv1alpha1.StaticGatewayConfiguration{}
 			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), updateGWConfig)).ToNot(HaveOccurred())
 			updateGWConfig.Spec.GatewayNodepoolName = "testgw1"
-			updateGWConfig.Spec.GatewayVMSSProfile = egressgatewayv1alpha1.GatewayVMSSProfile{
-				VMSSResourceGroup:  "vmssRG1",
-				VMSSName:           "vmss1",
+			updateGWConfig.Spec.GatewayVmssProfile = egressgatewayv1alpha1.GatewayVmssProfile{
+				VmssResourceGroup:  "vmssRG1",
+				VmssName:           "vmss1",
 				PublicIpPrefixSize: 30,
 			}
+			updateGWConfig.Spec.ProvisionPublicIps = false
+			updateGWConfig.Spec.PublicIpPrefixId = ""
 			Expect(k8sClient.Update(ctx, updateGWConfig)).ToNot(HaveOccurred())
 		})
 
@@ -216,16 +221,20 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 					return nil, err
 				}
 				return map[string]interface{}{
-					"np":   lbConfig.Spec.GatewayNodepoolName,
-					"rg":   lbConfig.Spec.VMSSResourceGroup,
-					"vmss": lbConfig.Spec.VMSSName,
-					"size": lbConfig.Spec.PublicIpPrefixSize,
+					"np":        lbConfig.Spec.GatewayNodepoolName,
+					"rg":        lbConfig.Spec.VmssResourceGroup,
+					"vmss":      lbConfig.Spec.VmssName,
+					"size":      lbConfig.Spec.PublicIpPrefixSize,
+					"prefixId":  lbConfig.Spec.PublicIpPrefixId,
+					"provision": lbConfig.Spec.ProvisionPublicIps,
 				}, nil
 			}, timeout, interval).Should(BeEquivalentTo(map[string]interface{}{
-				"np":   "testgw1",
-				"rg":   "vmssRG1",
-				"vmss": "vmss1",
-				"size": int32(30),
+				"np":        "testgw1",
+				"rg":        "vmssRG1",
+				"vmss":      "vmss1",
+				"size":      int32(30),
+				"prefixId":  "",
+				"provision": false,
 			}))
 		})
 

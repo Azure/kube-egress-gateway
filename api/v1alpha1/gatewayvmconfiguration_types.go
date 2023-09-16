@@ -42,7 +42,11 @@ type GatewayVMConfigurationSpec struct {
 
 	// Profile of the gateway VMSS to apply the gateway configuration.
 	// +optional
-	GatewayVMSSProfile `json:"gatewayVmssProfile,omitempty"`
+	GatewayVmssProfile `json:"gatewayVmssProfile,omitempty"`
+
+	// Whether to provision public IP prefixes for outbound.
+	//+kubebuilder:default=true
+	ProvisionPublicIps bool `json:"provisionPublicIps"`
 
 	// BYO Resource ID of public IP prefix to be used as outbound.
 	// +optional

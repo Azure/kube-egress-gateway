@@ -41,6 +41,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient/mock_publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
@@ -93,11 +94,12 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				},
 				Spec: egressgatewayv1alpha1.GatewayVMConfigurationSpec{
 					GatewayNodepoolName: "testgw",
-					GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
-						VMSSResourceGroup:  vmssRG,
-						VMSSName:           vmssName,
+					GatewayVmssProfile: egressgatewayv1alpha1.GatewayVmssProfile{
+						VmssResourceGroup:  vmssRG,
+						VmssName:           vmssName,
 						PublicIpPrefixSize: 31,
 					},
+					ProvisionPublicIps: true,
 				},
 			}
 		})
@@ -221,6 +223,15 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				r = &GatewayVMConfigurationReconciler{AzureManager: az, Recorder: recorder}
 				vmConfig.Spec.PublicIpPrefixId = ""
+			})
+
+			It("should return nil if public ip prefix is not required", func() {
+				vmConfig.Spec.ProvisionPublicIps = false
+				prefix, prefixID, isManaged, err := r.ensurePublicIPPrefix(context.TODO(), 31, vmConfig)
+				Expect(prefix).To(BeEmpty())
+				Expect(prefixID).To(BeEmpty())
+				Expect(isManaged).To(BeFalse())
+				Expect(err).To(BeNil())
 			})
 
 			It("should return error if prefix ID provided is not valid", func() {
@@ -530,7 +541,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 
 			It("should return error if vmss does not have properties", func() {
 				existingVMSS := &compute.VirtualMachineScaleSet{}
-				err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(err).To(Equal(fmt.Errorf("vmss has empty network profile")))
 			})
 
@@ -544,7 +555,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						},
 					},
 				}
-				err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(errors.Unwrap(err)).To(Equal(fmt.Errorf("vmss(vm) primary network interface not found")))
 			})
 
@@ -552,7 +563,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				existingVMSS := getEmptyVMSS()
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, vmssName, gomock.Any()).Return(nil, fmt.Errorf("failed"))
-				err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(errors.Unwrap(err)).To(Equal(fmt.Errorf("failed")))
 			})
 
@@ -563,7 +574,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, vmssName, gomock.Any()).Return(expectedVMSS, nil)
 				mockVMSSVMClient := az.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), testRG, vmssName).Return(nil, fmt.Errorf("failed"))
-				err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(errors.Unwrap(err)).To(Equal(fmt.Errorf("failed")))
 			})
 
@@ -575,7 +586,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				mockVMSSVMClient := az.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
 				vms := []*compute.VirtualMachineScaleSetVM{&compute.VirtualMachineScaleSetVM{InstanceID: to.Ptr("0")}}
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), testRG, vmssName).Return(vms, nil)
-				err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(err).To(Equal(fmt.Errorf("vmss vm(0) has empty network profile")))
 			})
 
@@ -594,7 +605,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					},
 				}}
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), testRG, vmssName).Return(vms, nil)
-				err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(errors.Unwrap(err)).To(Equal(fmt.Errorf("vmss(vm) primary network interface not found")))
 			})
 
@@ -607,7 +618,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				vms := []*compute.VirtualMachineScaleSetVM{getEmptyVMSSVM()}
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), testRG, vmssName).Return(vms, nil)
 				mockVMSSVMClient.EXPECT().Update(gomock.Any(), testRG, vmssName, "0", gomock.Any()).Return(nil, fmt.Errorf("failed"))
-				err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(errors.Unwrap(err)).To(Equal(fmt.Errorf("failed")))
 			})
 
@@ -631,7 +642,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						expectedVM.InstanceID = to.Ptr("0")
 						return expectedVM, nil
 					})
-				err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(err).To(BeNil())
 			})
 
@@ -642,7 +653,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				vms := []*compute.VirtualMachineScaleSetVM{existingVM}
 				mockVMSSVMClient := az.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), testRG, vmssName).Return(vms, nil)
-				err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(err).To(BeNil())
 			})
 
@@ -670,7 +681,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						expectedVM.InstanceID = to.Ptr("0")
 						return expectedVM, nil
 					})
-				err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(err).To(BeNil())
 			})
 
@@ -694,7 +705,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						Expect(vm).To(Equal(to.Val(expectedVM)))
 						return expectedVM, nil
 					})
-				err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", false)
+				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", false)
 				Expect(err).To(BeNil())
 			})
 
@@ -704,7 +715,95 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				vms := []*compute.VirtualMachineScaleSetVM{existingVM}
 				mockVMSSVMClient := az.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), testRG, vmssName).Return(vms, nil)
-				err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", false)
+				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", false)
+				Expect(err).To(BeNil())
+			})
+
+			It("should configure vmss and vm without publicIPConfiguration and return vmss instace private IPs when ipPrefixID is empty", func() {
+				existingVMSS, expectedVMSS := getEmptyVMSS(), getConfiguredVMSSWithoutPublicIPConfig()
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, vmssName, gomock.Any()).
+					DoAndReturn(func(ctx context.Context, rg, vmssName string, vmss compute.VirtualMachineScaleSet) (*compute.VirtualMachineScaleSet, error) {
+						Expect(vmss).To(Equal(to.Val(expectedVMSS)))
+						expectedVMSS.Name = to.Ptr(vmssName)
+						return expectedVMSS, nil
+					})
+				mockVMSSVMClient := az.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
+				vms := []*compute.VirtualMachineScaleSetVM{getEmptyVMSSVM()}
+				expectedVM := getConfiguredVMSSVMWithoutPublicIPConfig()
+				mockVMSSVMClient.EXPECT().List(gomock.Any(), testRG, vmssName).Return(vms, nil)
+				mockVMSSVMClient.EXPECT().Update(gomock.Any(), testRG, vmssName, "0", gomock.Any()).
+					DoAndReturn(func(ctx context.Context, rg, vmssName, instanceID string, vm compute.VirtualMachineScaleSetVM) (*compute.VirtualMachineScaleSetVM, error) {
+						Expect(vm).To(Equal(to.Val(expectedVM)))
+						expectedVM.InstanceID = to.Ptr("0")
+						return expectedVM, nil
+					})
+				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
+				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), testRG, vmssName, "0", "nic", gomock.Any()).Return(
+					network.InterfacesClientGetVirtualMachineScaleSetNetworkInterfaceResponse{
+						Interface: getConfiguredVMSSVMInterface(),
+					}, nil)
+				privateIPs, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "", true)
+				Expect(len(privateIPs)).To(Equal(1))
+				Expect(privateIPs[0]).To(Equal("10.0.0.6"))
+				Expect(err).To(BeNil())
+			})
+
+			It("should remove vmss and vm publicIPConfiguration and return vmss instace private IPs when ipPrefixID is updated to be empty", func() {
+				existingVMSS, expectedVMSS := getConfiguredVMSSWithNameAndUID(), getConfiguredVMSSWithoutPublicIPConfig()
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, vmssName, gomock.Any()).
+					DoAndReturn(func(ctx context.Context, rg, vmssName string, vmss compute.VirtualMachineScaleSet) (*compute.VirtualMachineScaleSet, error) {
+						Expect(vmss).To(Equal(to.Val(expectedVMSS)))
+						expectedVMSS.Name = to.Ptr(vmssName)
+						return expectedVMSS, nil
+					})
+				mockVMSSVMClient := az.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
+				existingVM := getConfiguredVMSSVM()
+				existingVM.InstanceID = to.Ptr("0")
+				vms := []*compute.VirtualMachineScaleSetVM{existingVM}
+				expectedVM := getConfiguredVMSSVMWithoutPublicIPConfig()
+				mockVMSSVMClient.EXPECT().List(gomock.Any(), testRG, vmssName).Return(vms, nil)
+				mockVMSSVMClient.EXPECT().Update(gomock.Any(), testRG, vmssName, "0", gomock.Any()).
+					DoAndReturn(func(ctx context.Context, rg, vmssName, instanceID string, vm compute.VirtualMachineScaleSetVM) (*compute.VirtualMachineScaleSetVM, error) {
+						Expect(vm).To(Equal(to.Val(expectedVM)))
+						expectedVM.InstanceID = to.Ptr("0")
+						return expectedVM, nil
+					})
+				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
+				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), testRG, vmssName, "0", "nic", gomock.Any()).Return(
+					network.InterfacesClientGetVirtualMachineScaleSetNetworkInterfaceResponse{
+						Interface: getConfiguredVMSSVMInterface(),
+					}, nil)
+				privateIPs, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "", true)
+				Expect(len(privateIPs)).To(Equal(1))
+				Expect(privateIPs[0]).To(Equal("10.0.0.6"))
+				Expect(err).To(BeNil())
+			})
+
+			It("should remove vmss and vm secondary IPConfig without publicIPConfiguration when it should be deleted", func() {
+				existingVMSS, expectedVMSS := getConfiguredVMSSWithoutPublicIPConfig(), getEmptyVMSS()
+				existingVMSS.Name = to.Ptr(vmssName)
+				existingVMSS.Properties.UniqueID = to.Ptr(testVMSSUID)
+				expectedVMSS.Name = nil
+				expectedVMSS.Properties.UniqueID = nil
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, vmssName, gomock.Any()).
+					DoAndReturn(func(ctx context.Context, rg, vmssName string, vmss compute.VirtualMachineScaleSet) (*compute.VirtualMachineScaleSet, error) {
+						Expect(vmss).To(Equal(to.Val(expectedVMSS)))
+						return expectedVMSS, nil
+					})
+				mockVMSSVMClient := az.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
+				existingVM, expectedVM := getConfiguredVMSSVMWithoutPublicIPConfig(), getEmptyVMSSVM()
+				existingVM.InstanceID = to.Ptr("0")
+				expectedVM.InstanceID = nil
+				mockVMSSVMClient.EXPECT().List(gomock.Any(), testRG, vmssName).Return([]*compute.VirtualMachineScaleSetVM{existingVM}, nil)
+				mockVMSSVMClient.EXPECT().Update(gomock.Any(), testRG, vmssName, "0", gomock.Any()).
+					DoAndReturn(func(ctx context.Context, rg, vmssName, instanceID string, vm compute.VirtualMachineScaleSetVM) (*compute.VirtualMachineScaleSetVM, error) {
+						Expect(vm).To(Equal(to.Val(expectedVM)))
+						return expectedVM, nil
+					})
+				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "", false)
 				Expect(err).To(BeNil())
 			})
 		})
@@ -714,6 +813,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				controllerutil.AddFinalizer(vmConfig, consts.VMConfigFinalizerName)
 				vmConfig.Spec.PublicIpPrefixId = "/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix"
+				vmConfig.Spec.ProvisionPublicIps = true
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(vmConfig).WithRuntimeObjects(vmConfig).Build()
 				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
 			})
@@ -819,7 +919,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				getErr = getResource(cl, foundVMConfig)
 				Expect(getErr).To(BeNil())
 				Expect(foundVMConfig.Status.EgressIpPrefix).To(Equal("1.2.3.4/31"))
-				assertEqualEvents([]string{"Normal Reconciled GatewayVMConfiguration provisioned with pip prefix 1.2.3.4/31"}, recorder.Events)
+				assertEqualEvents([]string{"Normal Reconciled GatewayVMConfiguration provisioned with egress prefix 1.2.3.4/31"}, recorder.Events)
 			})
 		})
 
@@ -930,6 +1030,7 @@ func getEmptyVMSSVM() *compute.VirtualMachineScaleSetVM {
 			NetworkProfileConfiguration: &compute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
 				NetworkInterfaceConfigurations: []*compute.VirtualMachineScaleSetNetworkConfiguration{
 					{
+						Name: to.Ptr("nic"),
 						Properties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
 							Primary: to.Ptr(true),
 							IPConfigurations: []*compute.VirtualMachineScaleSetIPConfiguration{
@@ -958,7 +1059,7 @@ func getConfiguredVMSSWithNameAndUID() *compute.VirtualMachineScaleSet {
 	return vmss
 }
 
-func getConfiguredVMSS() *compute.VirtualMachineScaleSet {
+func getConfiguredVMSSWithoutPublicIPConfig() *compute.VirtualMachineScaleSet {
 	return &compute.VirtualMachineScaleSet{
 		Location: to.Ptr("location"),
 		Properties: &compute.VirtualMachineScaleSetProperties{
@@ -985,15 +1086,7 @@ func getConfiguredVMSS() *compute.VirtualMachineScaleSet {
 										Properties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
 											Primary:                 to.Ptr(false),
 											PrivateIPAddressVersion: to.Ptr(compute.IPVersionIPv4),
-											PublicIPAddressConfiguration: &compute.VirtualMachineScaleSetPublicIPAddressConfiguration{
-												Name: to.Ptr("testns_test"),
-												Properties: &compute.VirtualMachineScaleSetPublicIPAddressConfigurationProperties{
-													PublicIPPrefix: &compute.SubResource{
-														ID: to.Ptr("prefix"),
-													},
-												},
-											},
-											Subnet: &compute.APIEntityReference{ID: to.Ptr("subnet")},
+											Subnet:                  &compute.APIEntityReference{ID: to.Ptr("subnet")},
 										},
 									},
 								},
@@ -1006,12 +1099,28 @@ func getConfiguredVMSS() *compute.VirtualMachineScaleSet {
 	}
 }
 
-func getConfiguredVMSSVM() *compute.VirtualMachineScaleSetVM {
+func getConfiguredVMSS() *compute.VirtualMachineScaleSet {
+	vmss := getConfiguredVMSSWithoutPublicIPConfig()
+	vmss.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations[0].
+		Properties.IPConfigurations[1].Properties.PublicIPAddressConfiguration =
+		&compute.VirtualMachineScaleSetPublicIPAddressConfiguration{
+			Name: to.Ptr("testns_test"),
+			Properties: &compute.VirtualMachineScaleSetPublicIPAddressConfigurationProperties{
+				PublicIPPrefix: &compute.SubResource{
+					ID: to.Ptr("prefix"),
+				},
+			},
+		}
+	return vmss
+}
+
+func getConfiguredVMSSVMWithoutPublicIPConfig() *compute.VirtualMachineScaleSetVM {
 	return &compute.VirtualMachineScaleSetVM{
 		Properties: &compute.VirtualMachineScaleSetVMProperties{
 			NetworkProfileConfiguration: &compute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
 				NetworkInterfaceConfigurations: []*compute.VirtualMachineScaleSetNetworkConfiguration{
 					{
+						Name: to.Ptr("nic"),
 						Properties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
 							Primary: to.Ptr(true),
 							IPConfigurations: []*compute.VirtualMachineScaleSetIPConfiguration{
@@ -1031,19 +1140,39 @@ func getConfiguredVMSSVM() *compute.VirtualMachineScaleSetVM {
 									Properties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
 										Primary:                 to.Ptr(false),
 										PrivateIPAddressVersion: to.Ptr(compute.IPVersionIPv4),
-										PublicIPAddressConfiguration: &compute.VirtualMachineScaleSetPublicIPAddressConfiguration{
-											Name: to.Ptr("testns_test"),
-											Properties: &compute.VirtualMachineScaleSetPublicIPAddressConfigurationProperties{
-												PublicIPPrefix: &compute.SubResource{
-													ID: to.Ptr("prefix"),
-												},
-											},
-										},
-										Subnet: &compute.APIEntityReference{ID: to.Ptr("subnet")},
+										Subnet:                  &compute.APIEntityReference{ID: to.Ptr("subnet")},
 									},
 								},
 							},
 						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func getConfiguredVMSSVM() *compute.VirtualMachineScaleSetVM {
+	vm := getConfiguredVMSSVMWithoutPublicIPConfig()
+	vm.Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations[0].Properties.IPConfigurations[1].Properties.PublicIPAddressConfiguration = &compute.VirtualMachineScaleSetPublicIPAddressConfiguration{
+		Name: to.Ptr("testns_test"),
+		Properties: &compute.VirtualMachineScaleSetPublicIPAddressConfigurationProperties{
+			PublicIPPrefix: &compute.SubResource{
+				ID: to.Ptr("prefix"),
+			},
+		},
+	}
+	return vm
+}
+
+func getConfiguredVMSSVMInterface() network.Interface {
+	return network.Interface{
+		Properties: &network.InterfacePropertiesFormat{
+			IPConfigurations: []*network.InterfaceIPConfiguration{
+				{
+					Name: to.Ptr("testns_test"),
+					Properties: &network.InterfaceIPConfigurationPropertiesFormat{
+						PrivateIPAddress: to.Ptr("10.0.0.6"),
 					},
 				},
 			},

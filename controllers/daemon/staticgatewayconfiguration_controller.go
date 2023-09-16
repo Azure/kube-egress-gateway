@@ -181,7 +181,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 	}
 
 	// add lb ip (if not exists) to eth0
-	if err := r.reconcileIlbIPOnHost(ctx, gwConfig.Status.GatewayWireguardProfile.WireguardServerIP, false /* deleting */); err != nil {
+	if err := r.reconcileIlbIPOnHost(ctx, gwConfig.Status.GatewayWireguardProfile.WireguardServerIp, false /* deleting */); err != nil {
 		return err
 	}
 
@@ -397,7 +397,7 @@ func (r *StaticGatewayConfigurationReconciler) getVMIP(
 
 func isReady(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) bool {
 	wgProfile := gwConfig.Status.GatewayWireguardProfile
-	return gwConfig.Status.PublicIpPrefix != "" && wgProfile.WireguardServerIP != "" &&
+	return gwConfig.Status.EgressIpPrefix != "" && wgProfile.WireguardServerIp != "" &&
 		wgProfile.WireguardServerPort != 0 && wgProfile.WireguardPublicKey != "" &&
 		wgProfile.WireguardPrivateKeySecretRef != nil
 }
@@ -407,9 +407,9 @@ func applyToNode(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) boo
 		name, ok := nodeTags[consts.AKSNodepoolTagKey]
 		return ok && strings.EqualFold(name, gwConfig.Spec.GatewayNodepoolName)
 	} else {
-		vmssProfile := gwConfig.Spec.GatewayVMSSProfile
-		return strings.EqualFold(vmssProfile.VMSSName, nodeMeta.Compute.VMScaleSetName) &&
-			strings.EqualFold(vmssProfile.VMSSResourceGroup, nodeMeta.Compute.ResourceGroupName)
+		vmssProfile := gwConfig.Spec.GatewayVmssProfile
+		return strings.EqualFold(vmssProfile.VmssName, nodeMeta.Compute.VMScaleSetName) &&
+			strings.EqualFold(vmssProfile.VmssResourceGroup, nodeMeta.Compute.ResourceGroupName)
 	}
 }
 
@@ -986,7 +986,7 @@ func (r *StaticGatewayConfigurationReconciler) updateGatewayNodeStatus(
 }
 
 func getGatewayNamespaceName(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) string {
-	return fmt.Sprintf("gw-%s-%s", string(gwConfig.GetUID()), strings.Replace(gwConfig.Status.GatewayWireguardProfile.WireguardServerIP, ".", "_", -1))
+	return fmt.Sprintf("gw-%s-%s", string(gwConfig.GetUID()), strings.Replace(gwConfig.Status.GatewayWireguardProfile.WireguardServerIp, ".", "_", -1))
 }
 
 func getVethHostLinkName(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) string {

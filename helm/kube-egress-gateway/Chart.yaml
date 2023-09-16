@@ -10,10 +10,3 @@ maintainers:
 sources:
 - https://github.com/Azure/kube-egress-gateway
 version: 0.1.0
-
-dependencies:
-  - name: cert-manager
-    version: v1.12.0
-    repository: https://charts.jetstack.io
-    alias: cert-manager
-    condition: cert-manager.enabled

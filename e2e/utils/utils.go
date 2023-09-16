@@ -47,7 +47,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"github.com/Azure/kube-egress-gateway/api/v1alpha1"
-	current "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 )
 
@@ -65,7 +64,7 @@ var (
 func CreateK8sClient() (k8sClient client.Client, podLogClient clientset.Interface, err error) {
 	apischeme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(apischeme))
-	utilruntime.Must(current.AddToScheme(apischeme))
+	utilruntime.Must(v1alpha1.AddToScheme(apischeme))
 	restConfig := config.GetConfigOrDie()
 	k8sClient, err = client.New(restConfig, client.Options{Scheme: apischeme})
 	if err != nil {
@@ -155,8 +154,8 @@ func WaitStaticGatewayProvision(sgw *v1alpha1.StaticGatewayConfiguration, c clie
 			}
 			return false, err
 		}
-		if len(sgw.Status.PublicIpPrefix) > 0 {
-			pipPrefix = sgw.Status.PublicIpPrefix
+		if len(sgw.Status.EgressIpPrefix) > 0 {
+			pipPrefix = sgw.Status.EgressIpPrefix
 			return true, nil
 		}
 		return false, nil
