@@ -32,6 +32,12 @@ message PodInfo{
   string pod_namespace = 2;
 }
 
+enum DefaultRoute {
+  DEFAULT_ROUTE_UNSPECIFIED = 0;
+  DEFAULT_ROUTE_STATIC_EGRESS_GATEWAY = 1;
+  DEFAULT_ROUTE_AZURE_NETWORKING = 2;
+}
+
 // CNIAddRequest is the request for cni add function.
 message NicAddRequest {
   PodInfo pod_config = 1;
@@ -47,6 +53,7 @@ message NicAddResponse {
   int32  listen_port = 2;
   string public_key = 3;
   repeated string exception_cidrs = 4;
+  DefaultRoute default_route = 5;
 }
 
 // CNIDeleteRequest is the request for cni del function.

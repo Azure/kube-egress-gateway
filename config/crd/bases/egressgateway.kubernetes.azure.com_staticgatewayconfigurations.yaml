@@ -36,8 +36,16 @@ spec:
             description: StaticGatewayConfigurationSpec defines the desired state
               of StaticGatewayConfiguration
             properties:
-              excludeCIDRs:
-                description: CIDRs to be excluded from outbound.
+              defaultRoute:
+                default: staticEgressGateway
+                description: Pod default route, should be either azureNetworking (pod's
+                  eth0) or staticEgressGateway (default).
+                enum:
+                - azureNetworking
+                - staticEgressGateway
+                type: string
+              excludeCidrs:
+                description: CIDRs to be excluded from the default route.
                 items:
                   type: string
                 type: array
@@ -60,14 +68,24 @@ spec:
                     description: Resource group of the VMSS. Must be in the same subscription.
                     type: string
                 type: object
+              provisionPublicIps:
+                default: true
+                description: Whether to provision public IP prefixes for outbound.
+                type: boolean
               publicIpPrefixId:
                 description: BYO Resource ID of public IP prefix to be used as outbound.
+                  This can only be specified when provisionPublicIps is true.
                 type: string
+            required:
+            - provisionPublicIps
             type: object
           status:
             description: StaticGatewayConfigurationStatus defines the observed state
               of StaticGatewayConfiguration
             properties:
+              egressIpPrefix:
+                description: Egress IP Prefix CIDR used for this gateway configuration.
+                type: string
               gatewayWireguardProfile:
                 description: Gateway side wireguard profile.
                 properties:
@@ -112,7 +130,7 @@ spec:
                   wireguardPublicKey:
                     description: Gateway side wireguard public key.
                     type: string
-                  wireguardServerIP:
+                  wireguardServerIp:
                     description: Gateway IP for wireguard connection.
                     type: string
                   wireguardServerPort:
@@ -120,9 +138,6 @@ spec:
                     format: int32
                     type: integer
                 type: object
-              publicIpPrefix:
-                description: Public IP Prefix CIDR used for this gateway configuration.
-                type: string
             type: object
         type: object
     served: true

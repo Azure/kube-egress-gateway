@@ -139,7 +139,8 @@ func (r *GatewayVMConfigurationReconciler) reconcile(
 		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcileVMSS(ctx, vmConfig, vmss, ipPrefixID, true); err != nil {
+	var privateIPs []string
+	if privateIPs, err = r.reconcileVMSS(ctx, vmConfig, vmss, ipPrefixID, true); err != nil {
 		log.Error(err, "failed to reconcile VMSS")
 		return ctrl.Result{}, err
 	}
@@ -150,10 +151,15 @@ func (r *GatewayVMConfigurationReconciler) reconcile(
 			return ctrl.Result{}, err
 		}
 	}
+
 	if vmConfig.Status == nil {
 		vmConfig.Status = &egressgatewayv1alpha1.GatewayVMConfigurationStatus{}
 	}
-	vmConfig.Status.EgressIpPrefix = ipPrefix
+	if vmConfig.Spec.ProvisionPublicIps {
+		vmConfig.Status.EgressIpPrefix = ipPrefix
+	} else {
+		vmConfig.Status.EgressIpPrefix = strings.Join(privateIPs, ",")
+	}
 
 	if !equality.Semantic.DeepEqual(existing, vmConfig) {
 		log.Info(fmt.Sprintf("Updating GatewayVMConfiguration %s/%s", vmConfig.Namespace, vmConfig.Name))
@@ -166,7 +172,7 @@ func (r *GatewayVMConfigurationReconciler) reconcile(
 	if vmConfig.Status != nil && vmConfig.Status.EgressIpPrefix != "" {
 		prefix = vmConfig.Status.EgressIpPrefix
 	}
-	r.Recorder.Eventf(vmConfig, corev1.EventTypeNormal, "Reconciled", "GatewayVMConfiguration provisioned with pip prefix %s", prefix)
+	r.Recorder.Eventf(vmConfig, corev1.EventTypeNormal, "Reconciled", "GatewayVMConfiguration provisioned with egress prefix %s", prefix)
 	log.Info("GatewayVMConfiguration reconciled")
 	return ctrl.Result{}, nil
 }
@@ -189,7 +195,7 @@ func (r *GatewayVMConfigurationReconciler) ensureDeleted(
 		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcileVMSS(ctx, vmConfig, vmss, "", false); err != nil {
+	if _, err := r.reconcileVMSS(ctx, vmConfig, vmss, "", false); err != nil {
 		log.Error(err, "failed to reconcile VMSS")
 		return ctrl.Result{}, err
 	}
@@ -235,7 +241,7 @@ func (r *GatewayVMConfigurationReconciler) getGatewayVMSS(
 			}
 		}
 	} else {
-		vmss, err := r.GetVMSS(vmConfig.Spec.VMSSResourceGroup, vmConfig.Spec.VMSSName)
+		vmss, err := r.GetVMSS(vmConfig.Spec.VmssResourceGroup, vmConfig.Spec.VmssName)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -259,6 +265,13 @@ func (r *GatewayVMConfigurationReconciler) ensurePublicIPPrefix(
 	vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
 ) (string, string, bool, error) {
 	log := log.FromContext(ctx)
+
+	// no need to provision public ip prefix is only private egress is needed
+	if !vmConfig.Spec.ProvisionPublicIps {
+		// return isManaged as false so that previously created managed public ip prefix can be deleted
+		return "", "", false, nil
+	}
+
 	if vmConfig.Spec.PublicIpPrefixId != "" {
 		// if there is public prefix ip specified, prioritize this one
 		matches := publicIPPrefixRE.FindStringSubmatch(vmConfig.Spec.PublicIpPrefixId)
@@ -349,21 +362,21 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSS(
 	vmss *compute.VirtualMachineScaleSet,
 	ipPrefixID string,
 	wantIPConfig bool,
-) error {
+) ([]string, error) {
 	log := log.FromContext(ctx)
 	ipConfigName := managedSubresourceName(vmConfig)
 	needUpdate := false
 
 	if vmss.Properties == nil || vmss.Properties.VirtualMachineProfile == nil ||
 		vmss.Properties.VirtualMachineProfile.NetworkProfile == nil {
-		return fmt.Errorf("vmss has empty network profile")
+		return nil, fmt.Errorf("vmss has empty network profile")
 	}
 
 	lbBackendpoolID := r.GetLBBackendAddressPoolID(to.Val(vmss.Properties.UniqueID))
 	interfaces := vmss.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
 	needUpdate, err := r.reconcileVMSSNetworkInterface(ctx, ipConfigName, ipPrefixID, to.Val(lbBackendpoolID), wantIPConfig, interfaces)
 	if err != nil {
-		return fmt.Errorf("failed to reconcile vmss interface(%s): %w", to.Val(vmss.Name), err)
+		return nil, fmt.Errorf("failed to reconcile vmss interface(%s): %w", to.Val(vmss.Name), err)
 	}
 
 	if needUpdate {
@@ -377,21 +390,27 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSS(
 			},
 		}
 		if _, err := r.CreateOrUpdateVMSS("", to.Val(vmss.Name), newVmss); err != nil {
-			return fmt.Errorf("failed to update vmss(%s): %w", to.Val(vmss.Name), err)
+			return nil, fmt.Errorf("failed to update vmss(%s): %w", to.Val(vmss.Name), err)
 		}
 	}
 
 	// check and update VMSS instances
+	var privateIPs []string
 	instances, err := r.ListVMSSInstances("", to.Val(vmss.Name))
 	if err != nil {
-		return fmt.Errorf("failed to get vm instances from vmss(%s): %w", to.Val(vmss.Name), err)
+		return nil, fmt.Errorf("failed to get vm instances from vmss(%s): %w", to.Val(vmss.Name), err)
 	}
 	for _, instance := range instances {
-		if err := r.reconcileVMSSVM(ctx, vmConfig, to.Val(vmss.Name), instance, ipPrefixID, to.Val(lbBackendpoolID), wantIPConfig); err != nil {
-			return err
+		privateIP, err := r.reconcileVMSSVM(ctx, vmConfig, to.Val(vmss.Name), instance, ipPrefixID, to.Val(lbBackendpoolID), wantIPConfig)
+		if err != nil {
+			return nil, err
+		}
+		if wantIPConfig && ipPrefixID == "" {
+			privateIPs = append(privateIPs, privateIP)
 		}
 	}
-	return nil
+
+	return privateIPs, nil
 }
 
 func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
@@ -402,18 +421,18 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 	ipPrefixID string,
 	lbBackendpoolID string,
 	wantIPConfig bool,
-) error {
+) (string, error) {
 	log := log.FromContext(ctx)
 	ipConfigName := managedSubresourceName(vmConfig)
 
 	if vm.Properties == nil || vm.Properties.NetworkProfileConfiguration == nil {
-		return fmt.Errorf("vmss vm(%s) has empty network profile", to.Val(vm.InstanceID))
+		return "", fmt.Errorf("vmss vm(%s) has empty network profile", to.Val(vm.InstanceID))
 	}
 
 	interfaces := vm.Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations
 	needUpdate, err := r.reconcileVMSSNetworkInterface(ctx, ipConfigName, ipPrefixID, lbBackendpoolID, wantIPConfig, interfaces)
 	if err != nil {
-		return fmt.Errorf("failed to reconcile vm interface(%s): %w", to.Val(vm.InstanceID), err)
+		return "", fmt.Errorf("failed to reconcile vm interface(%s): %w", to.Val(vm.InstanceID), err)
 	}
 	if needUpdate {
 		log.Info("Updating vmss instance", "vmInstanceID", to.Val(vm.InstanceID))
@@ -425,10 +444,36 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 			},
 		}
 		if _, err := r.UpdateVMSSInstance("", vmssName, to.Val(vm.InstanceID), newVM); err != nil {
-			return fmt.Errorf("failed to update vmss instance(%s): %w", to.Val(vm.InstanceID), err)
+			return "", fmt.Errorf("failed to update vmss instance(%s): %w", to.Val(vm.InstanceID), err)
 		}
 	}
-	return nil
+
+	privateIP := ""
+	if wantIPConfig && ipPrefixID == "" {
+		// to reduce arm api call, only get private IPs when ipConfig is created and no public ip prefix is specified
+	out:
+		for _, nic := range interfaces {
+			if nic.Properties != nil && to.Val(nic.Properties.Primary) {
+				vmNic, err := r.GetVMSSInterface("", vmssName, to.Val(vm.InstanceID), to.Val(nic.Name))
+				if err != nil {
+					return "", fmt.Errorf("failed to get vmss(%s) instance(%s) nic(%s): %w", vmssName, to.Val(vm.InstanceID), to.Val(nic.Name), err)
+				}
+				if vmNic.Properties == nil || vmNic.Properties.IPConfigurations == nil {
+					return "", fmt.Errorf("vmss(%s) instance(%s) nic(%s) has empty ip configurations", vmssName, to.Val(vm.InstanceID), to.Val(nic.Name))
+				}
+				for _, ipConfig := range vmNic.Properties.IPConfigurations {
+					if ipConfig != nil && ipConfig.Properties != nil && strings.EqualFold(to.Val(ipConfig.Name), ipConfigName) {
+						privateIP = to.Val(ipConfig.Properties.PrivateIPAddress)
+						break out
+					}
+				}
+			}
+		}
+		if privateIP == "" {
+			return "", fmt.Errorf("failed to find private IP from vmss(%s), instance(%s), ipConfig(%s)", vmssName, to.Val(vm.InstanceID), ipConfigName)
+		}
+	}
+	return privateIP, nil
 }
 
 func (r *GatewayVMConfigurationReconciler) reconcileVMSSNetworkInterface(
@@ -536,19 +581,24 @@ func (r *GatewayVMConfigurationReconciler) getExpectedIPConfig(
 			}
 		}
 	}
+
+	var pipConfig *compute.VirtualMachineScaleSetPublicIPAddressConfiguration
+	if ipPrefixID != "" {
+		pipConfig = &compute.VirtualMachineScaleSetPublicIPAddressConfiguration{
+			Name: to.Ptr(ipConfigName),
+			Properties: &compute.VirtualMachineScaleSetPublicIPAddressConfigurationProperties{
+				PublicIPPrefix: &compute.SubResource{
+					ID: to.Ptr(ipPrefixID),
+				},
+			},
+		}
+	}
 	return &compute.VirtualMachineScaleSetIPConfiguration{
 		Name: to.Ptr(ipConfigName),
 		Properties: &compute.VirtualMachineScaleSetIPConfigurationProperties{
-			Primary:                 to.Ptr(false),
-			PrivateIPAddressVersion: to.Ptr(compute.IPVersionIPv4),
-			PublicIPAddressConfiguration: &compute.VirtualMachineScaleSetPublicIPAddressConfiguration{
-				Name: to.Ptr(ipConfigName),
-				Properties: &compute.VirtualMachineScaleSetPublicIPAddressConfigurationProperties{
-					PublicIPPrefix: &compute.SubResource{
-						ID: to.Ptr(ipPrefixID),
-					},
-				},
-			},
+			Primary:                      to.Ptr(false),
+			PrivateIPAddressVersion:      to.Ptr(compute.IPVersionIPv4),
+			PublicIPAddressConfiguration: pipConfig,
 			Subnet: &compute.APIEntityReference{
 				ID: subnetID,
 			},

@@ -32,19 +32,31 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// GatewayVMSSProfile finds an existing gateway VMSS (virtual machine scale set).
-type GatewayVMSSProfile struct {
+// GatewayVmssProfile finds an existing gateway VMSS (virtual machine scale set).
+type GatewayVmssProfile struct {
 	// Resource group of the VMSS. Must be in the same subscription.
-	VMSSResourceGroup string `json:"vmssResourceGroup,omitempty"`
+	VmssResourceGroup string `json:"vmssResourceGroup,omitempty"`
 
 	// Name of the VMSS
-	VMSSName string `json:"vmssName,omitempty"`
+	VmssName string `json:"vmssName,omitempty"`
 
 	// Public IP prefix size to be applied to this VMSS.
 	//+kubebuilder:validation:Minimum=0
 	//+kubebuilder:validation:Maximum=31
 	PublicIpPrefixSize int32 `json:"publicIpPrefixSize,omitempty"`
 }
+
+// RouteType defines the type of defaultRoute.
+// +kubebuilder:validation:Enum=azureNetworking;staticEgressGateway
+type RouteType string
+
+const (
+	// RouteStaticEgressGateway defines static egress gateway as the default route.
+	RouteStaticEgressGateway RouteType = "staticEgressGateway"
+
+	// RouteAzureNetworking defines azure networking as the default route.
+	RouteAzureNetworking RouteType = "azureNetworking"
+)
 
 // StaticGatewayConfigurationSpec defines the desired state of StaticGatewayConfiguration
 type StaticGatewayConfigurationSpec struct {
@@ -57,20 +69,28 @@ type StaticGatewayConfigurationSpec struct {
 
 	// Profile of the gateway VMSS to apply the gateway configuration.
 	// +optional
-	GatewayVMSSProfile `json:"gatewayVmssProfile,omitempty"`
+	GatewayVmssProfile `json:"gatewayVmssProfile,omitempty"`
 
-	// BYO Resource ID of public IP prefix to be used as outbound.
+	// Pod default route, should be either azureNetworking (pod's eth0) or staticEgressGateway (default).
+	//+kubebuilder:default=staticEgressGateway
+	DefaultRoute RouteType `json:"defaultRoute,omitempty"`
+
+	// Whether to provision public IP prefixes for outbound.
+	//+kubebuilder:default=true
+	ProvisionPublicIps bool `json:"provisionPublicIps"`
+
+	// BYO Resource ID of public IP prefix to be used as outbound. This can only be specified when provisionPublicIps is true.
 	// +optional
 	PublicIpPrefixId string `json:"publicIpPrefixId,omitempty"`
 
-	// CIDRs to be excluded from outbound.
-	ExcludeCIDRs []string `json:"excludeCIDRs,omitempty"`
+	// CIDRs to be excluded from the default route.
+	ExcludeCidrs []string `json:"excludeCidrs,omitempty"`
 }
 
 // GatewayWireguardProfile provides details about gateway side wireguard configuration.
 type GatewayWireguardProfile struct {
 	// Gateway IP for wireguard connection.
-	WireguardServerIP string `json:"wireguardServerIP,omitempty"`
+	WireguardServerIp string `json:"wireguardServerIp,omitempty"`
 
 	// Listening port of the gateway side wireguard daemon.
 	WireguardServerPort int32 `json:"wireguardServerPort,omitempty"`
@@ -87,8 +107,8 @@ type StaticGatewayConfigurationStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Public IP Prefix CIDR used for this gateway configuration.
-	PublicIpPrefix string `json:"publicIpPrefix,omitempty"`
+	// Egress IP Prefix CIDR used for this gateway configuration.
+	EgressIpPrefix string `json:"egressIpPrefix,omitempty"`
 
 	// Gateway side wireguard profile.
 	GatewayWireguardProfile `json:"gatewayWireguardProfile,omitempty"`

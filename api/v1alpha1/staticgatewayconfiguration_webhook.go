@@ -80,37 +80,43 @@ func (r *StaticGatewayConfiguration) ValidateDelete() (admission.Warnings, error
 }
 
 func (r *StaticGatewayConfiguration) validateSGC() error {
-	// need to validate either GatewayNodepoolName or GatewayVMSSProfile is provided, but not both
+	// need to validate either GatewayNodepoolName or GatewayVmssProfile is provided, but not both
 	var allErrs field.ErrorList
 
 	if r.Spec.GatewayNodepoolName == "" && r.vmssProfileIsEmpty() {
 		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewaynodepoolname"),
-			fmt.Sprintf("GatewayNodepoolName: %s, GatewayVMSSProfile: %#v", r.Spec.GatewayNodepoolName, r.Spec.GatewayVMSSProfile),
-			"Either GatewayNodepoolName or GatewayVMSSProfile must be provided"))
+			fmt.Sprintf("GatewayNodepoolName: %s, GatewayVmssProfile: %#v", r.Spec.GatewayNodepoolName, r.Spec.GatewayVmssProfile),
+			"Either GatewayNodepoolName or GatewayVmssProfile must be provided"))
 	}
 
 	if r.Spec.GatewayNodepoolName != "" && !r.vmssProfileIsEmpty() {
 		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewaynodepoolname"),
-			fmt.Sprintf("GatewayNodepoolName: %s, GatewayVMSSProfile: %#v", r.Spec.GatewayNodepoolName, r.Spec.GatewayVMSSProfile),
-			"Only one of GatewayNodepoolName and GatewayVMSSProfile should be provided"))
+			fmt.Sprintf("GatewayNodepoolName: %s, GatewayVmssProfile: %#v", r.Spec.GatewayNodepoolName, r.Spec.GatewayVmssProfile),
+			"Only one of GatewayNodepoolName and GatewayVmssProfile should be provided"))
 	}
 
 	if !r.vmssProfileIsEmpty() {
-		if r.Spec.GatewayVMSSProfile.VMSSResourceGroup == "" {
+		if r.Spec.GatewayVmssProfile.VmssResourceGroup == "" {
 			allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewayvmssprofile").Child("vmssresourcegroup"),
-				r.Spec.GatewayVMSSProfile.VMSSResourceGroup,
+				r.Spec.GatewayVmssProfile.VmssResourceGroup,
 				"Gateway vmss resource group is empty"))
 		}
-		if r.Spec.GatewayVMSSProfile.VMSSName == "" {
+		if r.Spec.GatewayVmssProfile.VmssName == "" {
 			allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewayvmssprofile").Child("vmssname"),
-				r.Spec.GatewayVMSSProfile.VMSSName,
+				r.Spec.GatewayVmssProfile.VmssName,
 				"Gateway vmss name is empty"))
 		}
-		if r.Spec.GatewayVMSSProfile.PublicIpPrefixSize < 0 || r.Spec.GatewayVMSSProfile.PublicIpPrefixSize > 31 {
+		if r.Spec.GatewayVmssProfile.PublicIpPrefixSize < 0 || r.Spec.GatewayVmssProfile.PublicIpPrefixSize > 31 {
 			allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewayvmssprofile").Child("publicipprefixsize"),
-				r.Spec.GatewayVMSSProfile.PublicIpPrefixSize,
+				r.Spec.GatewayVmssProfile.PublicIpPrefixSize,
 				"Gateway vmss public ip prefix size should be between 0 and 31 inclusively"))
 		}
+	}
+
+	if !r.Spec.ProvisionPublicIps && r.Spec.PublicIpPrefixId != "" {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("publicipprefixid"),
+			r.Spec.PublicIpPrefixId,
+			"PublicIpPrefixId should be empty when ProvisionPublicIps is false"))
 	}
 
 	if len(allErrs) == 0 {
@@ -122,7 +128,7 @@ func (r *StaticGatewayConfiguration) validateSGC() error {
 }
 
 func (r *StaticGatewayConfiguration) vmssProfileIsEmpty() bool {
-	return r.Spec.GatewayVMSSProfile.VMSSResourceGroup == "" &&
-		r.Spec.GatewayVMSSProfile.VMSSName == "" &&
-		r.Spec.GatewayVMSSProfile.PublicIpPrefixSize == 0
+	return r.Spec.GatewayVmssProfile.VmssResourceGroup == "" &&
+		r.Spec.GatewayVmssProfile.VmssName == "" &&
+		r.Spec.GatewayVmssProfile.PublicIpPrefixSize == 0
 }

@@ -56,14 +56,15 @@ func init() {
 	}
 }
 
-func SetPodRoutes(ifName string, exceptionCidrs []string, sysctlDir string, result *current.Result) error {
-	// 1. removes existing routes
-	// 2. add original default route gateway to eth0
-	// 3. routes exceptional cidrs (traffic avoiding gateway) to base interface (eth0)
-	// 4. add default route to wireguard interface
+func SetPodRoutes(ifName string, exceptionCidrs []string, defaultToGateway bool, sysctlDir string, result *current.Result) error {
 	eth0Link, err := routesRunner.netlink.LinkByName("eth0")
 	if err != nil {
 		return fmt.Errorf("failed to retrieve eth0 interface: %w", err)
+	}
+
+	wgLink, err := routesRunner.netlink.LinkByName(ifName)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve wireguard interface: %w", err)
 	}
 
 	routes, err := routesRunner.netlink.RouteList(eth0Link, nl.FAMILY_ALL)
@@ -77,54 +78,19 @@ func SetPodRoutes(ifName string, exceptionCidrs []string, sysctlDir string, resu
 		if route.Dst == nil && route.Family == nl.FAMILY_V4 {
 			defaultRoute = &route
 		}
-		if err := routesRunner.netlink.RouteDel(&route); err != nil {
-			return fmt.Errorf("failed to delete route (%s): %w", route, err)
-		}
 	}
-	result.Routes = nil
-
 	if defaultRoute == nil {
 		return errors.New("failed to find default route")
 	}
 
-	gatewayDestination := net.IPNet{IP: defaultRoute.Gw, Mask: net.CIDRMask(32, 32)}
-	err = routesRunner.netlink.RouteReplace(&netlink.Route{
-		Dst:       &gatewayDestination,
+	eth0RouteTmpl := netlink.Route{
+		Gw:        defaultRoute.Gw,
 		LinkIndex: eth0Link.Attrs().Index,
-		Scope:     netlink.SCOPE_LINK,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to add original gateway route: %w", err)
-	}
-	result.Routes = append(result.Routes, &types.Route{Dst: gatewayDestination})
-
-	for _, exception := range exceptionCidrs {
-		_, cidr, err := net.ParseCIDR(exception)
-		if err != nil {
-			return fmt.Errorf("failed to parse cidr (%s): %w", exception, err)
-		}
-		gatewayRoute := netlink.Route{
-			Dst:       cidr,
-			Gw:        defaultRoute.Gw,
-			LinkIndex: eth0Link.Attrs().Index,
-			Protocol:  unix.RTPROT_STATIC,
-		}
-		err = routesRunner.netlink.RouteReplace(&gatewayRoute)
-		if err != nil {
-			return fmt.Errorf("failed to add route (%s): %w", gatewayRoute, err)
-		}
-		result.Routes = append(result.Routes, &types.Route{Dst: *cidr, GW: defaultRoute.Gw})
+		Protocol:  unix.RTPROT_STATIC,
 	}
 
-	wgLink, err := routesRunner.netlink.LinkByName(ifName)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve wireguard interface: %w", err)
-	}
-
-	_, defaultRouteCidr, _ := net.ParseCIDR("0.0.0.0/0")
-	wgDefaultRoute := netlink.Route{
-		Dst: defaultRouteCidr,
-		Gw:  nil,
+	wgRouteTmpl := netlink.Route{
+		Gw: nil,
 		Via: &netlink.Via{
 			Addr:       net.ParseIP("fe80::1"),
 			AddrFamily: nl.FAMILY_V6,
@@ -133,11 +99,61 @@ func SetPodRoutes(ifName string, exceptionCidrs []string, sysctlDir string, resu
 		Scope:     netlink.SCOPE_UNIVERSE,
 		Family:    nl.FAMILY_V4,
 	}
-	result.Routes = append(result.Routes, &types.Route{Dst: *defaultRouteCidr, GW: net.ParseIP("fe80::1")})
 
-	err = routesRunner.netlink.RouteReplace(&wgDefaultRoute)
-	if err != nil {
-		return fmt.Errorf("failed to add default wireguard route (%s): %w", wgDefaultRoute, err)
+	if defaultToGateway {
+		// 1. removes existing routes
+		// 2. add original default route gateway to eth0
+		// 3. routes exceptional cidrs (traffic avoiding gateway) to base interface (eth0)
+		// 4. add default route to wireguard interface
+		for _, route := range routes {
+			if err := routesRunner.netlink.RouteDel(&route); err != nil {
+				return fmt.Errorf("failed to delete route (%s): %w", route, err)
+			}
+		}
+		result.Routes = nil
+
+		gatewayDestination := net.IPNet{IP: defaultRoute.Gw, Mask: net.CIDRMask(32, 32)}
+		err = routesRunner.netlink.RouteReplace(&netlink.Route{
+			Dst:       &gatewayDestination,
+			LinkIndex: eth0Link.Attrs().Index,
+			Scope:     netlink.SCOPE_LINK,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to add original gateway route: %w", err)
+		}
+		result.Routes = append(result.Routes, &types.Route{Dst: gatewayDestination})
+
+		_, defaultRouteCidr, _ := net.ParseCIDR("0.0.0.0/0")
+		wgDefaultRoute := wgRouteTmpl
+		wgDefaultRoute.Dst = defaultRouteCidr
+		result.Routes = append(result.Routes, &types.Route{Dst: *defaultRouteCidr, GW: net.ParseIP("fe80::1")})
+
+		err = routesRunner.netlink.RouteReplace(&wgDefaultRoute)
+		if err != nil {
+			return fmt.Errorf("failed to add default wireguard route (%s): %w", wgDefaultRoute, err)
+		}
+	}
+
+	for _, exception := range exceptionCidrs {
+		_, cidr, err := net.ParseCIDR(exception)
+		if err != nil {
+			return fmt.Errorf("failed to parse cidr (%s): %w", exception, err)
+		}
+		var gatewayRoute netlink.Route
+		var gwIP net.IP
+		if defaultToGateway {
+			gatewayRoute = eth0RouteTmpl
+			gwIP = defaultRoute.Gw
+		} else {
+			gatewayRoute = wgRouteTmpl
+			gwIP = net.ParseIP("fe80::1")
+		}
+		gatewayRoute.Dst = cidr
+		err = routesRunner.netlink.RouteReplace(&gatewayRoute)
+		if err != nil {
+			return fmt.Errorf("failed to add route (%s): %w", gatewayRoute, err)
+		}
+		result.Routes = append(result.Routes, &types.Route{Dst: *cidr, GW: gwIP})
 	}
 
 	err = addRoutingForIngress(eth0Link, *defaultRoute, sysctlDir)

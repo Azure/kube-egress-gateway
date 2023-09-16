@@ -105,9 +105,9 @@ var _ = Describe("Daemon PodWireguardEndpoint controller unit tests", func() {
 				UID:       testUID,
 			},
 			Spec: egressgatewayv1alpha1.StaticGatewayConfigurationSpec{
-				GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
-					VMSSResourceGroup:  vmssRG,
-					VMSSName:           vmssName,
+				GatewayVmssProfile: egressgatewayv1alpha1.GatewayVmssProfile{
+					VmssResourceGroup:  vmssRG,
+					VmssName:           vmssName,
 					PublicIpPrefixSize: 31,
 				},
 			},
@@ -511,9 +511,9 @@ var _ = Describe("Daemon PodWireguardEndpoint controller unit tests", func() {
 						UID:       "1234567891",
 					},
 					Spec: egressgatewayv1alpha1.StaticGatewayConfigurationSpec{
-						GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
-							VMSSResourceGroup:  vmssRG,
-							VMSSName:           vmssName,
+						GatewayVmssProfile: egressgatewayv1alpha1.GatewayVmssProfile{
+							VmssResourceGroup:  vmssRG,
+							VmssName:           vmssName,
 							PublicIpPrefixSize: 31,
 						},
 					},

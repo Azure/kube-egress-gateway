@@ -110,11 +110,12 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				},
 				Spec: egressgatewayv1alpha1.GatewayLBConfigurationSpec{
 					GatewayNodepoolName: "testgw",
-					GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
-						VMSSResourceGroup:  "vmssRG",
-						VMSSName:           "vmss",
+					GatewayVmssProfile: egressgatewayv1alpha1.GatewayVmssProfile{
+						VmssResourceGroup:  "vmssRG",
+						VmssName:           "vmss",
 						PublicIpPrefixSize: 31,
 					},
+					ProvisionPublicIps: true,
 				},
 			}
 		})
@@ -340,7 +341,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(BeNil())
-				assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and pip prefix()"}, recorder.Events)
+				assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and egress prefix()"}, recorder.Events)
 			})
 
 			Context("reconcile lbRule, lbProbe and vmConfig", func() {
@@ -368,9 +369,9 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 
 					getErr = getResource(cl, foundLBConfig)
 					Expect(getErr).To(BeNil())
-					Expect(foundLBConfig.Status.FrontendIP).To(Equal("10.0.0.4"))
+					Expect(foundLBConfig.Status.FrontendIp).To(Equal("10.0.0.4"))
 					Expect(foundLBConfig.Status.ServerPort).To(Equal(int32(6000)))
-					assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and pip prefix()"}, recorder.Events)
+					assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and egress prefix()"}, recorder.Events)
 				})
 
 				It("should not update LB when lb rule and probe are expected", func() {
@@ -380,9 +381,9 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					res, reconcileErr = r.Reconcile(context.TODO(), req)
 					Expect(reconcileErr).To(BeNil())
 					Expect(res).To(Equal(ctrl.Result{}))
-					Expect(foundLBConfig.Status.FrontendIP).To(Equal("10.0.0.4"))
+					Expect(foundLBConfig.Status.FrontendIp).To(Equal("10.0.0.4"))
 					Expect(foundLBConfig.Status.ServerPort).To(Equal(int32(6000)))
-					assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and pip prefix()"}, recorder.Events)
+					assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and egress prefix()"}, recorder.Events)
 				})
 
 				It("should drop incorrect lbRule and create new one", func() {
@@ -400,9 +401,9 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 
 					getErr = getResource(cl, foundLBConfig)
 					Expect(getErr).To(BeNil())
-					Expect(foundLBConfig.Status.FrontendIP).To(Equal("10.0.0.4"))
+					Expect(foundLBConfig.Status.FrontendIp).To(Equal("10.0.0.4"))
 					Expect(foundLBConfig.Status.ServerPort).To(Equal(int32(6000)))
-					assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and pip prefix()"}, recorder.Events)
+					assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and egress prefix()"}, recorder.Events)
 				})
 
 				It("should drop incorrect lbProbe and create new one", func() {
@@ -437,9 +438,9 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 
 						getErr = getResource(cl, foundLBConfig)
 						Expect(getErr).To(BeNil())
-						Expect(foundLBConfig.Status.FrontendIP).To(Equal("10.0.0.4"))
+						Expect(foundLBConfig.Status.FrontendIp).To(Equal("10.0.0.4"))
 						Expect(foundLBConfig.Status.ServerPort).To(Equal(int32(6000)))
-						assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and pip prefix()"}, recorder.Events)
+						assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and egress prefix()"}, recorder.Events)
 					}
 				})
 
@@ -464,9 +465,9 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 
 					getErr = getResource(cl, foundLBConfig)
 					Expect(getErr).To(BeNil())
-					Expect(foundLBConfig.Status.FrontendIP).To(Equal("10.0.0.4"))
+					Expect(foundLBConfig.Status.FrontendIp).To(Equal("10.0.0.4"))
 					Expect(foundLBConfig.Status.ServerPort).To(Equal(int32(6001)))
-					assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6001), and pip prefix()"}, recorder.Events)
+					assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6001), and egress prefix()"}, recorder.Events)
 				})
 			})
 		})
@@ -497,8 +498,9 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				Expect(err).To(BeNil())
 
 				Expect(foundVMConfig.Spec.GatewayNodepoolName).To(Equal(lbConfig.Spec.GatewayNodepoolName))
-				Expect(foundVMConfig.Spec.GatewayVMSSProfile).To(Equal(lbConfig.Spec.GatewayVMSSProfile))
+				Expect(foundVMConfig.Spec.GatewayVmssProfile).To(Equal(lbConfig.Spec.GatewayVmssProfile))
 				Expect(foundVMConfig.Spec.PublicIpPrefixId).To(Equal(lbConfig.Spec.PublicIpPrefixId))
+				Expect(foundVMConfig.Spec.ProvisionPublicIps).To(Equal(lbConfig.Spec.ProvisionPublicIps))
 
 				existing := metav1.GetControllerOf(foundVMConfig)
 				Expect(existing).NotTo(BeNil())
@@ -506,8 +508,8 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 
 				getErr = getResource(cl, foundLBConfig)
 				Expect(getErr).To(BeNil())
-				Expect(foundLBConfig.Status.PublicIpPrefix).To(BeEmpty())
-				assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and pip prefix()"}, recorder.Events)
+				Expect(foundLBConfig.Status.EgressIpPrefix).To(BeEmpty())
+				assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and egress prefix()"}, recorder.Events)
 			})
 
 			It("should update status from existing vmConfig", func() {
@@ -518,12 +520,13 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					},
 					Spec: egressgatewayv1alpha1.GatewayVMConfigurationSpec{
 						GatewayNodepoolName: "testgw",
-						GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
-							VMSSResourceGroup:  "vmssRG",
-							VMSSName:           "vmss",
+						GatewayVmssProfile: egressgatewayv1alpha1.GatewayVmssProfile{
+							VmssResourceGroup:  "vmssRG",
+							VmssName:           "vmss",
 							PublicIpPrefixSize: 31,
 						},
-						PublicIpPrefixId: "testPipPrefix",
+						PublicIpPrefixId:   "testPipPrefix",
+						ProvisionPublicIps: true,
 					},
 					Status: &egressgatewayv1alpha1.GatewayVMConfigurationStatus{
 						EgressIpPrefix: "1.2.3.4/31",
@@ -538,8 +541,8 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 
 				getErr = getResource(cl, foundLBConfig)
 				Expect(getErr).To(BeNil())
-				Expect(foundLBConfig.Status.PublicIpPrefix).To(Equal("1.2.3.4/31"))
-				assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and pip prefix(1.2.3.4/31)"}, recorder.Events)
+				Expect(foundLBConfig.Status.EgressIpPrefix).To(Equal("1.2.3.4/31"))
+				assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and egress prefix(1.2.3.4/31)"}, recorder.Events)
 			})
 
 			It("should update existing vmConfig accordingly", func() {
@@ -550,9 +553,9 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					},
 					Spec: egressgatewayv1alpha1.GatewayVMConfigurationSpec{
 						GatewayNodepoolName: "testgw1",
-						GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
-							VMSSResourceGroup:  "vmssRG1",
-							VMSSName:           "vmss1",
+						GatewayVmssProfile: egressgatewayv1alpha1.GatewayVmssProfile{
+							VmssResourceGroup:  "vmssRG1",
+							VmssName:           "vmss1",
 							PublicIpPrefixSize: 30,
 						},
 						PublicIpPrefixId: "testPipPrefix1",
@@ -571,7 +574,8 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				getErr = getResource(cl, foundVMConfig)
 				Expect(getErr).To(BeNil())
 				Expect(foundVMConfig.Spec.GatewayNodepoolName).To(Equal(lbConfig.Spec.GatewayNodepoolName))
-				assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and pip prefix(1.2.3.4/31)"}, recorder.Events)
+				Expect(foundVMConfig.Spec.ProvisionPublicIps).To(Equal(lbConfig.Spec.ProvisionPublicIps))
+				assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and egress prefix(1.2.3.4/31)"}, recorder.Events)
 			})
 		})
 

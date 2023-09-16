@@ -150,7 +150,7 @@ func (r *GatewayLBConfigurationReconciler) reconcile(
 	if lbConfig.Status == nil {
 		lbConfig.Status = &egressgatewayv1alpha1.GatewayLBConfigurationStatus{}
 	}
-	lbConfig.Status.FrontendIP = ip
+	lbConfig.Status.FrontendIp = ip
 	lbConfig.Status.ServerPort = port
 
 	if !equality.Semantic.DeepEqual(existing, lbConfig) {
@@ -162,14 +162,14 @@ func (r *GatewayLBConfigurationReconciler) reconcile(
 
 	frontend, po, prefix := "nil", "nil", "nil"
 	if lbConfig.Status != nil {
-		frontend = lbConfig.Status.FrontendIP
+		frontend = lbConfig.Status.FrontendIp
 		po = fmt.Sprintf("%d", lbConfig.Status.ServerPort)
-		prefix = lbConfig.Status.PublicIpPrefix
+		prefix = lbConfig.Status.EgressIpPrefix
 	}
 	r.Recorder.Eventf(lbConfig,
 		corev1.EventTypeNormal,
 		"Reconciled",
-		"GatewayLBConfiguration updated with frontendIP(%s), port(%s), and pip prefix(%s)",
+		"GatewayLBConfiguration updated with frontendIP(%s), port(%s), and egress prefix(%s)",
 		frontend, po, prefix,
 	)
 	log.Info("GatewayLBConfiguration reconciled")
@@ -267,7 +267,7 @@ func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
 			}
 		}
 	} else {
-		vmss, err := r.GetVMSS(lbConfig.Spec.VMSSResourceGroup, lbConfig.Spec.VMSSName)
+		vmss, err := r.GetVMSS(lbConfig.Spec.VmssResourceGroup, lbConfig.Spec.VmssName)
 		if err != nil {
 			return nil, err
 		}
@@ -679,7 +679,8 @@ func (r *GatewayLBConfigurationReconciler) reconcileGatewayVMConfig(
 	}
 	if _, err := controllerutil.CreateOrPatch(ctx, r, vmConfig, func() error {
 		vmConfig.Spec.GatewayNodepoolName = lbConfig.Spec.GatewayNodepoolName
-		vmConfig.Spec.GatewayVMSSProfile = lbConfig.Spec.GatewayVMSSProfile
+		vmConfig.Spec.GatewayVmssProfile = lbConfig.Spec.GatewayVmssProfile
+		vmConfig.Spec.ProvisionPublicIps = lbConfig.Spec.ProvisionPublicIps
 		vmConfig.Spec.PublicIpPrefixId = lbConfig.Spec.PublicIpPrefixId
 		return controllerutil.SetControllerReference(lbConfig, vmConfig, r.Client.Scheme())
 	}); err != nil {
@@ -692,7 +693,7 @@ func (r *GatewayLBConfigurationReconciler) reconcileGatewayVMConfig(
 		if lbConfig.Status == nil {
 			lbConfig.Status = &egressgatewayv1alpha1.GatewayLBConfigurationStatus{}
 		}
-		lbConfig.Status.PublicIpPrefix = vmConfig.Status.EgressIpPrefix
+		lbConfig.Status.EgressIpPrefix = vmConfig.Status.EgressIpPrefix
 	}
 
 	return nil

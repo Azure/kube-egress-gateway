@@ -28,6 +28,7 @@ import (
 	"context"
 	"net"
 	"regexp"
+	"strings"
 
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 	. "github.com/onsi/ginkgo/v2"
@@ -79,7 +80,7 @@ var _ = Describe("Test staticGatewayConfiguration deployment", func() {
 		testns = ""
 	})
 
-	It("should let pod egress from the egress gateway", func() {
+	It("should let pod egress from the egress gateway and not affect pod not using the gateway", func() {
 		rg, vmss, _, prefixLen, err := utils.GetGatewayVmssProfile(k8sClient)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -90,11 +91,12 @@ var _ = Describe("Test staticGatewayConfiguration deployment", func() {
 				Namespace: testns,
 			},
 			Spec: v1alpha1.StaticGatewayConfigurationSpec{
-				GatewayVMSSProfile: v1alpha1.GatewayVMSSProfile{
-					VMSSResourceGroup:  rg,
-					VMSSName:           vmss,
+				GatewayVmssProfile: v1alpha1.GatewayVmssProfile{
+					VmssResourceGroup:  rg,
+					VmssName:           vmss,
 					PublicIpPrefixSize: prefixLen,
 				},
+				ProvisionPublicIps: true,
 			},
 		}
 		err = utils.CreateK8sObject(sgw, k8sClient)
@@ -114,43 +116,17 @@ var _ = Describe("Test staticGatewayConfiguration deployment", func() {
 		By("Checking pod egress IP belongs to egress gateway outbound IP range")
 		_, ipNet, _ := net.ParseCIDR(pipPrefix)
 		Expect(ipNet.Contains(net.ParseIP(podEgressIP))).To(BeTrue())
-	})
-
-	It("should not affect pod not using egress gateway", func() {
-		rg, vmss, _, prefixLen, err := utils.GetGatewayVmssProfile(k8sClient)
-		Expect(err).NotTo(HaveOccurred())
-
-		By("Creating a StaticGatewayConfiguration")
-		sgw := &v1alpha1.StaticGatewayConfiguration{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "sgw1",
-				Namespace: testns,
-			},
-			Spec: v1alpha1.StaticGatewayConfigurationSpec{
-				GatewayVMSSProfile: v1alpha1.GatewayVMSSProfile{
-					VMSSResourceGroup:  rg,
-					VMSSName:           vmss,
-					PublicIpPrefixSize: prefixLen,
-				},
-			},
-		}
-		err = utils.CreateK8sObject(sgw, k8sClient)
-		Expect(err).NotTo(HaveOccurred())
-		pipPrefix, err := utils.WaitStaticGatewayProvision(sgw, k8sClient)
-		Expect(err).NotTo(HaveOccurred())
-		utils.Logf("Got egress gateway prefix: %s", pipPrefix)
 
 		By("Creating a test pod NOT using egress gateway")
-		pod := utils.CreateCurlPodManifest(testns, "", "ifconfig.me")
-		err = utils.CreateK8sObject(pod, k8sClient)
+		pod2 := utils.CreateCurlPodManifest(testns, "", "ifconfig.me")
+		err = utils.CreateK8sObject(pod2, k8sClient)
 		Expect(err).NotTo(HaveOccurred())
-		podEgressIP, err := utils.GetExpectedPodLog(pod, podLogClient, podIPRE)
+		podEgressIP2, err := utils.GetExpectedPodLog(pod2, podLogClient, podIPRE)
 		Expect(err).NotTo(HaveOccurred())
-		utils.Logf("Get pod egress IP: %s", podEgressIP)
+		utils.Logf("Get pod egress IP: %s", podEgressIP2)
 
 		By("Checking pod egress IP DOES NOT belong to egress gateway outbound IP range")
-		_, ipNet, _ := net.ParseCIDR(pipPrefix)
-		Expect(ipNet.Contains(net.ParseIP(podEgressIP))).To(BeFalse())
+		Expect(ipNet.Contains(net.ParseIP(podEgressIP2))).To(BeFalse())
 	})
 
 	It("should support BYO public ip prefix as gateway configuration", func() {
@@ -187,12 +163,13 @@ var _ = Describe("Test staticGatewayConfiguration deployment", func() {
 				Namespace: testns,
 			},
 			Spec: v1alpha1.StaticGatewayConfigurationSpec{
-				GatewayVMSSProfile: v1alpha1.GatewayVMSSProfile{
-					VMSSResourceGroup:  rg,
-					VMSSName:           vmss,
+				GatewayVmssProfile: v1alpha1.GatewayVmssProfile{
+					VmssResourceGroup:  rg,
+					VmssName:           vmss,
 					PublicIpPrefixSize: prefixLen,
 				},
-				PublicIpPrefixId: to.Val(prefix.ID),
+				ProvisionPublicIps: true,
+				PublicIpPrefixId:   to.Val(prefix.ID),
 			},
 		}
 		err = utils.CreateK8sObject(sgw, k8sClient)
@@ -217,11 +194,12 @@ var _ = Describe("Test staticGatewayConfiguration deployment", func() {
 				Namespace: testns,
 			},
 			Spec: v1alpha1.StaticGatewayConfigurationSpec{
-				GatewayVMSSProfile: v1alpha1.GatewayVMSSProfile{
-					VMSSResourceGroup:  rg,
-					VMSSName:           vmss,
+				GatewayVmssProfile: v1alpha1.GatewayVmssProfile{
+					VmssResourceGroup:  rg,
+					VmssName:           vmss,
 					PublicIpPrefixSize: prefixLen,
 				},
+				ProvisionPublicIps: true,
 			},
 		}
 		err = utils.CreateK8sObject(sgw, k8sClient)
@@ -267,12 +245,13 @@ var _ = Describe("Test staticGatewayConfiguration deployment", func() {
 				Namespace: testns,
 			},
 			Spec: v1alpha1.StaticGatewayConfigurationSpec{
-				GatewayVMSSProfile: v1alpha1.GatewayVMSSProfile{
-					VMSSResourceGroup:  rg,
-					VMSSName:           vmss,
+				GatewayVmssProfile: v1alpha1.GatewayVmssProfile{
+					VmssResourceGroup:  rg,
+					VmssName:           vmss,
 					PublicIpPrefixSize: prefixLen,
 				},
-				ExcludeCIDRs: cidrs,
+				ExcludeCidrs:       cidrs,
+				ProvisionPublicIps: true,
 			},
 		}
 		err = utils.CreateK8sObject(sgw, k8sClient)
@@ -306,11 +285,12 @@ var _ = Describe("Test staticGatewayConfiguration deployment", func() {
 					Namespace: testns,
 				},
 				Spec: v1alpha1.StaticGatewayConfigurationSpec{
-					GatewayVMSSProfile: v1alpha1.GatewayVMSSProfile{
-						VMSSResourceGroup:  rg,
-						VMSSName:           vmss,
+					GatewayVmssProfile: v1alpha1.GatewayVmssProfile{
+						VmssResourceGroup:  rg,
+						VmssName:           vmss,
 						PublicIpPrefixSize: prefixLen,
 					},
+					ProvisionPublicIps: true,
 				},
 			}
 			utils.Logf("Creating gateway %s", name)
@@ -335,6 +315,46 @@ var _ = Describe("Test staticGatewayConfiguration deployment", func() {
 			_, ipNet, _ := net.ParseCIDR(prefixes[name])
 			Expect(ipNet.Contains(net.ParseIP(podEgressIP))).To(BeTrue())
 		}
+	})
+
+	It("should allow default route as AzureNetworking and disabling public egress", func() {
+		rg, vmss, _, prefixLen, err := utils.GetGatewayVmssProfile(k8sClient)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Creating a StaticGatewayConfiguration")
+		sgw := &v1alpha1.StaticGatewayConfiguration{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "sgw1",
+				Namespace: testns,
+			},
+			Spec: v1alpha1.StaticGatewayConfigurationSpec{
+				GatewayVmssProfile: v1alpha1.GatewayVmssProfile{
+					VmssResourceGroup:  rg,
+					VmssName:           vmss,
+					PublicIpPrefixSize: prefixLen,
+				},
+				ProvisionPublicIps: false,
+				DefaultRoute:       "azureNetworking",
+			},
+		}
+		err = utils.CreateK8sObject(sgw, k8sClient)
+		Expect(err).NotTo(HaveOccurred())
+		egressPrefix, err := utils.WaitStaticGatewayProvision(sgw, k8sClient)
+		Expect(err).NotTo(HaveOccurred())
+		egressIPs := strings.Split(egressPrefix, ",")
+		Expect(len(egressIPs)).To(BeNumerically(">", 1)) // should be equal to gateway node count
+		utils.Logf("Got egress gateway prefix: %v", egressIPs)
+
+		By("Creating a test pod using the gateway")
+		pod := utils.CreateCurlPodManifest(testns, "sgw1", "ifconfig.me")
+		err = utils.CreateK8sObject(pod, k8sClient)
+		Expect(err).NotTo(HaveOccurred())
+		podEgressIP, err := utils.GetExpectedPodLog(pod, podLogClient, podIPRE)
+		Expect(err).NotTo(HaveOccurred())
+		utils.Logf("Get pod egress IP: %s", podEgressIP)
+
+		By("Checking pod egress IP DOES NOT belong to egress gateway outbound IP range")
+		Expect(egressIPs).ShouldNot(ContainElement(podEgressIP))
 	})
 })
 

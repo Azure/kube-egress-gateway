@@ -185,9 +185,9 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 					UID:       testUID,
 				},
 				Spec: egressgatewayv1alpha1.StaticGatewayConfigurationSpec{
-					GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
-						VMSSResourceGroup:  vmssRG,
-						VMSSName:           vmssName,
+					GatewayVmssProfile: egressgatewayv1alpha1.GatewayVmssProfile{
+						VmssResourceGroup:  vmssRG,
+						VmssName:           vmssName,
 						PublicIpPrefixSize: 31,
 					},
 				},
@@ -234,7 +234,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			mnl.EXPECT().LinkByName("eth0").Return(eth0, nil)
 			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{}, nil)
 			mnl.EXPECT().AddrAdd(eth0, &netlink.Addr{IPNet: getIPNetWithActualIP(ilbIPCidr)}).Return(nil)
-			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig.Status.GatewayWireguardProfile.WireguardServerIP, false)
+			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig.Status.GatewayWireguardProfile.WireguardServerIp, false)
 			Expect(err).To(BeNil())
 		})
 
@@ -243,7 +243,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
 			mnl.EXPECT().LinkByName("eth0").Return(eth0, nil)
 			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(ilbIPCidr)}}, nil)
-			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig.Status.GatewayWireguardProfile.WireguardServerIP, false)
+			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig.Status.GatewayWireguardProfile.WireguardServerIp, false)
 			Expect(err).To(BeNil())
 		})
 
@@ -253,7 +253,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			mnl.EXPECT().LinkByName("eth0").Return(eth0, nil)
 			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(ilbIPCidr)}}, nil)
 			mnl.EXPECT().AddrDel(eth0, &netlink.Addr{IPNet: getIPNetWithActualIP(ilbIPCidr)}).Return(nil)
-			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig.Status.GatewayWireguardProfile.WireguardServerIP, true)
+			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig.Status.GatewayWireguardProfile.WireguardServerIp, true)
 			Expect(err).To(BeNil())
 		})
 
@@ -262,7 +262,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
 			mnl.EXPECT().LinkByName("eth0").Return(eth0, nil)
 			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{}, nil)
-			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig.Status.GatewayWireguardProfile.WireguardServerIP, true)
+			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig.Status.GatewayWireguardProfile.WireguardServerIp, true)
 			Expect(err).To(BeNil())
 		})
 
@@ -653,9 +653,9 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 					UID:       testUID,
 				},
 				Spec: egressgatewayv1alpha1.StaticGatewayConfigurationSpec{
-					GatewayVMSSProfile: egressgatewayv1alpha1.GatewayVMSSProfile{
-						VMSSResourceGroup:  vmssRG,
-						VMSSName:           vmssName,
+					GatewayVmssProfile: egressgatewayv1alpha1.GatewayVmssProfile{
+						VmssResourceGroup:  vmssRG,
+						VmssName:           vmssName,
 						PublicIpPrefixSize: 31,
 					},
 				},
@@ -793,9 +793,9 @@ func getMockAzureManager(ctrl *gomock.Controller) *azmanager.AzureManager {
 
 func getTestGwConfigStatus() egressgatewayv1alpha1.StaticGatewayConfigurationStatus {
 	return egressgatewayv1alpha1.StaticGatewayConfigurationStatus{
-		PublicIpPrefix: "1.2.3.4/31",
+		EgressIpPrefix: "1.2.3.4/31",
 		GatewayWireguardProfile: egressgatewayv1alpha1.GatewayWireguardProfile{
-			WireguardServerIP:   ilbIP,
+			WireguardServerIp:   ilbIP,
 			WireguardServerPort: 6000,
 			WireguardPublicKey:  pubK,
 			WireguardPrivateKeySecretRef: &corev1.ObjectReference{
