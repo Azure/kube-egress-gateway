@@ -24,6 +24,7 @@ SOFTWARE
 package cmd
 
 import (
+	"context"
 	goflag "flag"
 	"fmt"
 	"os"
@@ -35,16 +36,21 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	azcorelog "github.com/Azure/azure-sdk-for-go/sdk/azcore/log"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	controllers "github.com/Azure/kube-egress-gateway/controllers/manager"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	//+kubebuilder:scaffold:imports
 )
@@ -72,7 +78,6 @@ var (
 	cloudConfigFile      string
 	cloudConfig          config.CloudConfig
 	scheme               = runtime.NewScheme()
-	setupLog             = ctrl.Log.WithName("setup")
 	metricsPort          int
 	enableLeaderElection bool
 	probePort            int
@@ -106,6 +111,12 @@ func init() {
 
 	utilruntime.Must(egressgatewayv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
+
+	logger := zap.New(zap.UseFlagOptions(&zapOpts))
+	ctrl.SetLogger(logger)
+	azcorelog.SetListener(func(event azcorelog.Event, msg string) {
+		logger.WithValues("event", event).Info(msg)
+	})
 }
 
 // initCloudConfig reads in cloud config file and ENV variables if set.
@@ -128,9 +139,9 @@ func initCloudConfig() {
 }
 
 func startControllers(cmd *cobra.Command, args []string) {
-
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
 	var err error
+	var setupLog = ctrl.Log.WithName("setup")
+
 	options := ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
@@ -151,6 +162,9 @@ func startControllers(cmd *cobra.Command, args []string) {
 		// if you are doing or is intended to do any operation such as perform cleanups
 		// after the manager stops then its usage might be unsafe.
 		LeaderElectionReleaseOnCancel: true,
+		BaseContext: func() context.Context {
+			return ctrl.LoggerInto(context.Background(), ctrl.Log)
+		},
 	}
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), options)
 	if err != nil {
@@ -168,21 +182,36 @@ func startControllers(cmd *cobra.Command, args []string) {
 		setupLog.Error(err, "cloud configuration is invalid")
 		os.Exit(1)
 	}
-
-	var factory azureclients.AzureClientsFactory
+	var authProvider *azclient.AuthProvider
+	authProvider, err = azclient.NewAuthProvider(azclient.AzureAuthConfig{
+		TenantID:                    cloudConfig.TenantID,
+		AADClientID:                 cloudConfig.AADClientID,
+		AADClientSecret:             cloudConfig.AADClientSecret,
+		UserAssignedIdentityID:      cloudConfig.UserAssignedIdentityID,
+		UseManagedIdentityExtension: cloudConfig.UseUserAssignedIdentity,
+	}, &arm.ClientOptions{
+		AuxiliaryTenants: []string{cloudConfig.TenantID},
+		ClientOptions: azcore.ClientOptions{
+			Telemetry: policy.TelemetryOptions{
+				ApplicationID: cloudConfig.UserAgent,
+			},
+		},
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to create auth provider")
+		os.Exit(1)
+	}
+	var cred azcore.TokenCredential
 	if cloudConfig.UseUserAssignedIdentity {
-		factory, err = azureclients.NewAzureClientsFactoryWithManagedIdentity(cloudConfig.Cloud, cloudConfig.SubscriptionID, cloudConfig.UserAssignedIdentityID)
-		if err != nil {
-			setupLog.Error(err, "unable to create azure clients")
-			os.Exit(1)
-		}
+		cred = authProvider.ManagedIdentityCredential
 	} else {
-		factory, err = azureclients.NewAzureClientsFactoryWithClientSecret(cloudConfig.Cloud, cloudConfig.SubscriptionID, cloudConfig.TenantID,
-			cloudConfig.AADClientID, cloudConfig.AADClientSecret)
-		if err != nil {
-			setupLog.Error(err, "unable to create azure clients")
-			os.Exit(1)
-		}
+		cred = authProvider.ClientSecretCredential
+	}
+	var factory azclient.ClientFactory
+	factory, err = azclient.NewClientFactory(&azclient.ClientFactoryConfig{SubscriptionID: cloudConfig.SubscriptionID}, &azclient.ARMClientConfig{Cloud: cloudConfig.Cloud}, cred)
+	if err != nil {
+		setupLog.Error(err, "unable to create client factory")
+		os.Exit(1)
 	}
 	az, err := azmanager.CreateAzureManager(&cloudConfig, factory)
 	if err != nil {

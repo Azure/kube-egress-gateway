@@ -46,8 +46,14 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
+	mockinterfaceclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
+	mockloadbalancerclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
+	mockazclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
+	mockpublicipprefixclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient/mock_publicipprefixclient"
+	mocksubnetclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient/mock_subnetclient"
+	mockvirtualmachinescalesetclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
+	mockvirtualmachinescalesetvmclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -55,7 +61,6 @@ import (
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/imds"
@@ -276,9 +281,9 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 
 		It("should retrieve vm ips", func() {
 			vm, nic := getTestVM(), getTestNic()
-			mockVMSSVMClient := r.AzureManager.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
+			mockVMSSVMClient := r.AzureManager.VmssVMClient.(*mockvirtualmachinescalesetvmclient.MockInterface)
 			mockVMSSVMClient.EXPECT().Get(gomock.Any(), vmssRG, vmssName, "0").Return(vm, nil)
-			mockInterfaceClient := r.AzureManager.InterfaceClient.(*mock_interfaceclient.MockInterface)
+			mockInterfaceClient := r.AzureManager.InterfaceClient.(*mockinterfaceclient.MockInterface)
 			mockInterfaceClient.EXPECT().
 				GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "primary", gomock.Any()).
 				Return(network.InterfacesClientGetVirtualMachineScaleSetNetworkInterfaceResponse{Interface: *nic}, nil)
@@ -293,7 +298,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
 			mnl.EXPECT().LinkByName("eth0").Return(eth0, nil)
 			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(ilbIPCidr)}}, nil)
-			mockVMSSVMClient := r.AzureManager.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
+			mockVMSSVMClient := r.AzureManager.VmssVMClient.(*mockvirtualmachinescalesetvmclient.MockInterface)
 			mockVMSSVMClient.EXPECT().Get(gomock.Any(), vmssRG, vmssName, "0").Return(nil, fmt.Errorf("failed"))
 			_, reconcileErr = r.Reconcile(context.TODO(), req)
 			Expect(errors.Unwrap(reconcileErr)).To(Equal(fmt.Errorf("failed")))
@@ -322,8 +327,8 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			vm, nic := getTestVM(), getTestNic()
 			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
-			mockVMSSVMClient := r.AzureManager.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockInterfaceClient := r.AzureManager.InterfaceClient.(*mock_interfaceclient.MockInterface)
+			mockVMSSVMClient := r.AzureManager.VmssVMClient.(*mockvirtualmachinescalesetvmclient.MockInterface)
+			mockInterfaceClient := r.AzureManager.InterfaceClient.(*mockinterfaceclient.MockInterface)
 			gomock.InOrder(
 				mnl.EXPECT().LinkByName("eth0").Return(eth0, nil),
 				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(ilbIPCidr)}}, nil),
@@ -344,7 +349,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			mipt := r.IPTables.(*mockiptableswrapper.MockInterface)
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
 			mockVMSSVMClient := r.AzureManager.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockInterfaceClient := r.AzureManager.InterfaceClient.(*mock_interfaceclient.MockInterface)
+			mockInterfaceClient := r.AzureManager.InterfaceClient.(*mockinterfaceclient.MockInterface)
 			gomock.InOrder(
 				mnl.EXPECT().LinkByName("eth0").Return(eth0, nil),
 				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(ilbIPCidr)}}, nil),
@@ -787,7 +792,14 @@ func getMockAzureManager(ctrl *gomock.Controller) *azmanager.AzureManager {
 		ResourceGroup:    "rg",
 		LoadBalancerName: "lb",
 	}
-	az, _ := azmanager.CreateAzureManager(conf, azureclients.NewMockAzureClientsFactory(ctrl))
+	factory := mockazclient.NewMockClientFactory(ctrl)
+	factory.EXPECT().GetLoadBalancerClient().Return(mockloadbalancerclient.NewMockInterface(ctrl))
+	factory.EXPECT().GetVirtualMachineScaleSetClient().Return(mockvirtualmachinescalesetclient.NewMockInterface(ctrl))
+	factory.EXPECT().GetVirtualMachineScaleSetVMClient().Return(mockvirtualmachinescalesetvmclient.NewMockInterface(ctrl))
+	factory.EXPECT().GetPublicIPPrefixClient().Return(mockpublicipprefixclient.NewMockInterface(ctrl))
+	factory.EXPECT().GetInterfaceClient().Return(mockinterfaceclient.NewMockInterface(ctrl))
+	factory.EXPECT().GetSubnetClient().Return(mocksubnetclient.NewMockInterface(ctrl))
+	az, _ := azmanager.CreateAzureManager(conf, factory)
 	return az
 }
 

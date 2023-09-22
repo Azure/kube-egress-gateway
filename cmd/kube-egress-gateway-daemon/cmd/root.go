@@ -37,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -46,10 +47,12 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	controllers "github.com/Azure/kube-egress-gateway/controllers/daemon"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/healthprobe"
 )
@@ -158,20 +161,31 @@ func startControllers(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	var factory azureclients.AzureClientsFactory
+	var authProvider *azclient.AuthProvider
+	authProvider, err = azclient.NewAuthProvider(azclient.AzureAuthConfig{
+		TenantID:                    cloudConfig.TenantID,
+		AADClientID:                 cloudConfig.AADClientID,
+		AADClientSecret:             cloudConfig.AADClientSecret,
+		UserAssignedIdentityID:      cloudConfig.UserAssignedIdentityID,
+		UseManagedIdentityExtension: cloudConfig.UseUserAssignedIdentity,
+	}, &arm.ClientOptions{
+		AuxiliaryTenants: []string{cloudConfig.TenantID},
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to create auth provider")
+		os.Exit(1)
+	}
+	var cred azcore.TokenCredential
 	if cloudConfig.UseUserAssignedIdentity {
-		factory, err = azureclients.NewAzureClientsFactoryWithManagedIdentity(cloudConfig.Cloud, cloudConfig.SubscriptionID, cloudConfig.UserAssignedIdentityID)
-		if err != nil {
-			setupLog.Error(err, "unable to create azure clients")
-			os.Exit(1)
-		}
+		cred = authProvider.ManagedIdentityCredential
 	} else {
-		factory, err = azureclients.NewAzureClientsFactoryWithClientSecret(cloudConfig.Cloud, cloudConfig.SubscriptionID, cloudConfig.TenantID,
-			cloudConfig.AADClientID, cloudConfig.AADClientSecret)
-		if err != nil {
-			setupLog.Error(err, "unable to create azure clients")
-			os.Exit(1)
-		}
+		cred = authProvider.ClientSecretCredential
+	}
+
+	factory, err := azclient.NewClientFactory(&azclient.ClientFactoryConfig{SubscriptionID: cloudConfig.SubscriptionID}, &azclient.ARMClientConfig{Cloud: cloudConfig.Cloud}, cred)
+	if err != nil {
+		setupLog.Error(err, "unable to create client factory")
+		os.Exit(1)
 	}
 	az, err := azmanager.CreateAzureManager(&cloudConfig, factory)
 	if err != nil {

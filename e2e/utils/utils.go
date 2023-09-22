@@ -42,12 +42,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+
 	"github.com/Azure/kube-egress-gateway/api/v1alpha1"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 )
 
 const (
@@ -74,7 +76,7 @@ func CreateK8sClient() (k8sClient client.Client, podLogClient clientset.Interfac
 	return
 }
 
-func CreateAzureClients() (azureclients.AzureClientsFactory, error) {
+func CreateAzureClients() (azclient.ClientFactory, error) {
 	var subscriptionID, tenantID, clientID, clientSecret string
 	if subscriptionID = os.Getenv("AZURE_SUBSCRIPTION_ID"); subscriptionID == "" {
 		return nil, fmt.Errorf("AZURE_SUBSCRIPTION_ID is not set")
@@ -88,8 +90,18 @@ func CreateAzureClients() (azureclients.AzureClientsFactory, error) {
 	if clientSecret = os.Getenv("AZURE_CLIENT_SECRET"); clientSecret == "" {
 		return nil, fmt.Errorf("AZURE_CLIENT_SECRET is not set")
 	}
+	authProvider, err := azclient.NewAuthProvider(azclient.AzureAuthConfig{
+		TenantID:        tenantID,
+		AADClientID:     clientID,
+		AADClientSecret: clientSecret,
+	}, &arm.ClientOptions{
+		AuxiliaryTenants: []string{tenantID},
+	})
+	if err != nil {
+		return nil, err
+	}
 	// only test in Public Cloud
-	return azureclients.NewAzureClientsFactoryWithClientSecret("AzurePublicCloud", subscriptionID, tenantID, clientID, clientSecret)
+	return azclient.NewClientFactory(&azclient.ClientFactoryConfig{SubscriptionID: subscriptionID}, &azclient.ARMClientConfig{Cloud: ""}, authProvider.ClientSecretCredential)
 }
 
 func CreateNamespace(namespaceName string, c client.Client) error {

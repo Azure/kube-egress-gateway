@@ -32,14 +32,19 @@ import (
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	mockinterfaceclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
+	mockloadbalancerclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
+	mockazclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient/mock_publicipprefixclient"
+	mockpublicipprefixclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient/mock_publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient/mock_subnetclient"
+	mocksubnetclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient/mock_subnetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
+	mockvirtualmachinescalesetclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
+	mockvirtualmachinescalesetvmclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
 
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 )
@@ -125,7 +130,7 @@ func TestGetLB(t *testing.T) {
 		config := getTestCloudConfig("", "", "")
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
-		mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
+		mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
 		mockLoadBalancerClient.EXPECT().Get(gomock.Any(), "testRG", "testLB", gomock.Any()).Return(test.lb, test.testErr)
 		lb, err := az.GetLB(context.Background())
 		assert.Equal(t, to.Val(lb), to.Val(test.lb), "TestCase[%d]: %s", i, test.desc)
@@ -155,7 +160,7 @@ func TestCreateOrUpdateLB(t *testing.T) {
 		config := getTestCloudConfig("", "", "")
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
-		mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
+		mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
 		mockLoadBalancerClient.EXPECT().CreateOrUpdate(gomock.Any(), "testRG", "testLB", to.Val(test.lb)).Return(test.lb, test.testErr)
 		ret, err := az.CreateOrUpdateLB(context.Background(), to.Val(test.lb))
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
@@ -184,7 +189,7 @@ func TestDeleteLB(t *testing.T) {
 		config := getTestCloudConfig("", "", "")
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
-		mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
+		mockLoadBalancerClient := az.LoadBalancerClient.(*mockloadbalancerclient.MockInterface)
 		mockLoadBalancerClient.EXPECT().Delete(gomock.Any(), "testRG", "testLB").Return(test.testErr)
 		err := az.DeleteLB(context.Background())
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
@@ -740,7 +745,7 @@ func TestGetVMSSInterface(t *testing.T) {
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		if test.expectedCall {
-			mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
+			mockInterfaceClient := az.InterfaceClient.(*mockinterfaceclient.MockInterface)
 			if test.nic != nil {
 				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), test.expectedRG, test.vmssName, test.instanceID, test.nicName, gomock.Any()).Return(network.InterfacesClientGetVirtualMachineScaleSetNetworkInterfaceResponse{Interface: *test.nic}, test.testErr)
 			} else {
@@ -783,8 +788,15 @@ func TestGetSubnet(t *testing.T) {
 	}
 }
 
-func getMockFactory(ctrl *gomock.Controller) azureclients.AzureClientsFactory {
-	return azureclients.NewMockAzureClientsFactory(ctrl)
+func getMockFactory(ctrl *gomock.Controller) azclient.ClientFactory {
+	factory := mockazclient.NewMockClientFactory(ctrl)
+	factory.EXPECT().GetLoadBalancerClient().Return(mockloadbalancerclient.NewMockInterface(ctrl))
+	factory.EXPECT().GetVirtualMachineScaleSetClient().Return(mockvirtualmachinescalesetclient.NewMockInterface(ctrl))
+	factory.EXPECT().GetVirtualMachineScaleSetVMClient().Return(mockvirtualmachinescalesetvmclient.NewMockInterface(ctrl))
+	factory.EXPECT().GetPublicIPPrefixClient().Return(mockpublicipprefixclient.NewMockInterface(ctrl))
+	factory.EXPECT().GetInterfaceClient().Return(mockinterfaceclient.NewMockInterface(ctrl))
+	factory.EXPECT().GetSubnetClient().Return(mocksubnetclient.NewMockInterface(ctrl))
+	return factory
 }
 
 func getTestCloudConfig(userAgent, lbRG, vnetRG string) *config.CloudConfig {

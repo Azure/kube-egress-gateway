@@ -36,11 +36,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	clientset "k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/e2e/utils"
-	"github.com/Azure/kube-egress-gateway/pkg/azureclients"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 )
 
@@ -54,7 +54,7 @@ var _ = Describe("Test staticGatewayConfiguration deployment", func() {
 	var k8sClient client.Client
 	// there is no easy way to get pod log with controller-runtime client, use client-go client instead
 	var podLogClient clientset.Interface
-	var azureClientFactory azureclients.AzureClientsFactory
+	var azureClientFactory azclient.ClientFactory
 	var testns string
 
 	BeforeEach(func() {
@@ -133,7 +133,7 @@ var _ = Describe("Test staticGatewayConfiguration deployment", func() {
 		rg, vmss, loc, prefixLen, err := utils.GetGatewayVmssProfile(k8sClient)
 		Expect(err).NotTo(HaveOccurred())
 		By("Creating a pip prefix")
-		pipPrefixClient, err := azureClientFactory.GetPublicIPPrefixesClient()
+		pipPrefixClient := azureClientFactory.GetPublicIPPrefixClient()
 		Expect(err).NotTo(HaveOccurred())
 		prefixName := "test-prefix-" + string(uuid.NewUUID())[0:4]
 		testPrefix := network.PublicIPPrefix{
