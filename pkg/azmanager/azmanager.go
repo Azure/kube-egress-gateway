@@ -27,8 +27,8 @@ import (
 	"context"
 	"fmt"
 
-	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v4"
-	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
+	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
+	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"

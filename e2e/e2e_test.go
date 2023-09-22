@@ -29,7 +29,7 @@ import (
 	"net"
 	"regexp"
 
-	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v3"
+	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
