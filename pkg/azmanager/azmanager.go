@@ -143,80 +143,80 @@ func (az *AzureManager) GetLBProbeID(name string) *string {
 	return to.Ptr(fmt.Sprintf(LBProbeIDTemplate, az.SubscriptionID(), az.LoadBalancerResourceGroup, az.LoadBalancerName(), name))
 }
 
-func (az *AzureManager) GetLB() (*network.LoadBalancer, error) {
-	lb, err := az.LoadBalancerClient.Get(context.Background(), az.LoadBalancerResourceGroup, az.LoadBalancerName(), nil)
+func (az *AzureManager) GetLB(ctx context.Context) (*network.LoadBalancer, error) {
+	lb, err := az.LoadBalancerClient.Get(ctx, az.LoadBalancerResourceGroup, az.LoadBalancerName(), nil)
 	if err != nil {
 		return nil, err
 	}
 	return lb, nil
 }
 
-func (az *AzureManager) CreateOrUpdateLB(lb network.LoadBalancer) (*network.LoadBalancer, error) {
-	ret, err := az.LoadBalancerClient.CreateOrUpdate(context.Background(), az.LoadBalancerResourceGroup, to.Val(lb.Name), lb)
+func (az *AzureManager) CreateOrUpdateLB(ctx context.Context, lb network.LoadBalancer) (*network.LoadBalancer, error) {
+	ret, err := az.LoadBalancerClient.CreateOrUpdate(ctx, az.LoadBalancerResourceGroup, to.Val(lb.Name), lb)
 	if err != nil {
 		return nil, err
 	}
 	return ret, nil
 }
 
-func (az *AzureManager) DeleteLB() error {
-	if err := az.LoadBalancerClient.Delete(context.Background(), az.LoadBalancerResourceGroup, az.LoadBalancerName()); err != nil {
+func (az *AzureManager) DeleteLB(ctx context.Context) error {
+	if err := az.LoadBalancerClient.Delete(ctx, az.LoadBalancerResourceGroup, az.LoadBalancerName()); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (az *AzureManager) ListVMSS() ([]*compute.VirtualMachineScaleSet, error) {
-	vmssList, err := az.VmssClient.List(context.Background(), az.ResourceGroup)
+func (az *AzureManager) ListVMSS(ctx context.Context) ([]*compute.VirtualMachineScaleSet, error) {
+	vmssList, err := az.VmssClient.List(ctx, az.ResourceGroup)
 	if err != nil {
 		return nil, err
 	}
 	return vmssList, nil
 }
 
-func (az *AzureManager) GetVMSS(resourceGroup, vmssName string) (*compute.VirtualMachineScaleSet, error) {
+func (az *AzureManager) GetVMSS(ctx context.Context, resourceGroup, vmssName string) (*compute.VirtualMachineScaleSet, error) {
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
 	if vmssName == "" {
 		return nil, fmt.Errorf("vmss name is empty")
 	}
-	vmss, err := az.VmssClient.Get(context.Background(), resourceGroup, vmssName)
+	vmss, err := az.VmssClient.Get(ctx, resourceGroup, vmssName)
 	if err != nil {
 		return nil, err
 	}
 	return vmss, nil
 }
 
-func (az *AzureManager) CreateOrUpdateVMSS(resourceGroup, vmssName string, vmss compute.VirtualMachineScaleSet) (*compute.VirtualMachineScaleSet, error) {
+func (az *AzureManager) CreateOrUpdateVMSS(ctx context.Context, resourceGroup, vmssName string, vmss compute.VirtualMachineScaleSet) (*compute.VirtualMachineScaleSet, error) {
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
 	if vmssName == "" {
 		return nil, fmt.Errorf("vmss name is empty")
 	}
-	retVmss, err := az.VmssClient.CreateOrUpdate(context.Background(), resourceGroup, vmssName, vmss)
+	retVmss, err := az.VmssClient.CreateOrUpdate(ctx, resourceGroup, vmssName, vmss)
 	if err != nil {
 		return nil, err
 	}
 	return retVmss, nil
 }
 
-func (az *AzureManager) ListVMSSInstances(resourceGroup, vmssName string) ([]*compute.VirtualMachineScaleSetVM, error) {
+func (az *AzureManager) ListVMSSInstances(ctx context.Context, resourceGroup, vmssName string) ([]*compute.VirtualMachineScaleSetVM, error) {
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
 	if vmssName == "" {
 		return nil, fmt.Errorf("vmss name is empty")
 	}
-	vms, err := az.VmssVMClient.List(context.Background(), resourceGroup, vmssName)
+	vms, err := az.VmssVMClient.List(ctx, resourceGroup, vmssName)
 	if err != nil {
 		return nil, err
 	}
 	return vms, nil
 }
 
-func (az *AzureManager) GetVMSSInstance(resourceGroup, vmssName, instanceID string) (*compute.VirtualMachineScaleSetVM, error) {
+func (az *AzureManager) GetVMSSInstance(ctx context.Context, resourceGroup, vmssName, instanceID string) (*compute.VirtualMachineScaleSetVM, error) {
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
@@ -226,14 +226,14 @@ func (az *AzureManager) GetVMSSInstance(resourceGroup, vmssName, instanceID stri
 	if instanceID == "" {
 		return nil, fmt.Errorf("vmss instanceID is empty")
 	}
-	vm, err := az.VmssVMClient.Get(context.Background(), resourceGroup, vmssName, instanceID)
+	vm, err := az.VmssVMClient.Get(ctx, resourceGroup, vmssName, instanceID)
 	if err != nil {
 		return nil, err
 	}
 	return vm, nil
 }
 
-func (az *AzureManager) UpdateVMSSInstance(resourceGroup, vmssName, instanceID string, vm compute.VirtualMachineScaleSetVM) (*compute.VirtualMachineScaleSetVM, error) {
+func (az *AzureManager) UpdateVMSSInstance(ctx context.Context, resourceGroup, vmssName, instanceID string, vm compute.VirtualMachineScaleSetVM) (*compute.VirtualMachineScaleSetVM, error) {
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
@@ -243,52 +243,52 @@ func (az *AzureManager) UpdateVMSSInstance(resourceGroup, vmssName, instanceID s
 	if instanceID == "" {
 		return nil, fmt.Errorf("vmss instanceID is empty")
 	}
-	retVM, err := az.VmssVMClient.Update(context.Background(), resourceGroup, vmssName, instanceID, vm)
+	retVM, err := az.VmssVMClient.Update(ctx, resourceGroup, vmssName, instanceID, vm)
 	if err != nil {
 		return nil, err
 	}
 	return retVM, nil
 }
 
-func (az *AzureManager) GetPublicIPPrefix(resourceGroup, prefixName string) (*network.PublicIPPrefix, error) {
+func (az *AzureManager) GetPublicIPPrefix(ctx context.Context, resourceGroup, prefixName string) (*network.PublicIPPrefix, error) {
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
 	if prefixName == "" {
 		return nil, fmt.Errorf("public ip prefix name is empty")
 	}
-	prefix, err := az.PublicIPPrefixClient.Get(context.Background(), resourceGroup, prefixName, nil)
+	prefix, err := az.PublicIPPrefixClient.Get(ctx, resourceGroup, prefixName, nil)
 	if err != nil {
 		return nil, err
 	}
 	return prefix, nil
 }
 
-func (az *AzureManager) CreateOrUpdatePublicIPPrefix(resourceGroup, prefixName string, ipPrefix network.PublicIPPrefix) (*network.PublicIPPrefix, error) {
+func (az *AzureManager) CreateOrUpdatePublicIPPrefix(ctx context.Context, resourceGroup, prefixName string, ipPrefix network.PublicIPPrefix) (*network.PublicIPPrefix, error) {
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
 	if prefixName == "" {
 		return nil, fmt.Errorf("public ip prefix name is empty")
 	}
-	prefix, err := az.PublicIPPrefixClient.CreateOrUpdate(context.Background(), resourceGroup, prefixName, ipPrefix)
+	prefix, err := az.PublicIPPrefixClient.CreateOrUpdate(ctx, resourceGroup, prefixName, ipPrefix)
 	if err != nil {
 		return nil, err
 	}
 	return prefix, nil
 }
 
-func (az *AzureManager) DeletePublicIPPrefix(resourceGroup, prefixName string) error {
+func (az *AzureManager) DeletePublicIPPrefix(ctx context.Context, resourceGroup, prefixName string) error {
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
 	if prefixName == "" {
 		return fmt.Errorf("public ip prefix name is empty")
 	}
-	return az.PublicIPPrefixClient.Delete(context.Background(), resourceGroup, prefixName)
+	return az.PublicIPPrefixClient.Delete(ctx, resourceGroup, prefixName)
 }
 
-func (az *AzureManager) GetVMSSInterface(resourceGroup, vmssName, instanceID, interfaceName string) (*network.Interface, error) {
+func (az *AzureManager) GetVMSSInterface(ctx context.Context, resourceGroup, vmssName, instanceID, interfaceName string) (*network.Interface, error) {
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
@@ -301,15 +301,15 @@ func (az *AzureManager) GetVMSSInterface(resourceGroup, vmssName, instanceID, in
 	if interfaceName == "" {
 		return nil, fmt.Errorf("interface name is empty")
 	}
-	nicResp, err := az.InterfaceClient.GetVirtualMachineScaleSetNetworkInterface(context.Background(), resourceGroup, vmssName, instanceID, interfaceName, nil)
+	nicResp, err := az.InterfaceClient.GetVirtualMachineScaleSetNetworkInterface(ctx, resourceGroup, vmssName, instanceID, interfaceName, nil)
 	if err != nil {
 		return nil, err
 	}
 	return &nicResp.Interface, nil
 }
 
-func (az *AzureManager) GetSubnet() (*network.Subnet, error) {
-	subnet, err := az.SubnetClient.Get(context.Background(), az.VnetResourceGroup, az.VnetName, az.SubnetName, nil)
+func (az *AzureManager) GetSubnet(ctx context.Context) (*network.Subnet, error) {
+	subnet, err := az.SubnetClient.Get(ctx, az.VnetResourceGroup, az.VnetName, az.SubnetName, nil)
 	if err != nil {
 		return nil, err
 	}

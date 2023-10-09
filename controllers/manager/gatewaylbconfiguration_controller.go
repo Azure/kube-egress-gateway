@@ -238,8 +238,8 @@ func getLBPropertyName(
 	return names, nil
 }
 
-func (r *GatewayLBConfigurationReconciler) getGatewayLB() (*network.LoadBalancer, error) {
-	lb, err := r.GetLB()
+func (r *GatewayLBConfigurationReconciler) getGatewayLB(ctx context.Context) (*network.LoadBalancer, error) {
+	lb, err := r.GetLB(ctx)
 	if err == nil {
 		return lb, nil
 	}
@@ -251,10 +251,11 @@ func (r *GatewayLBConfigurationReconciler) getGatewayLB() (*network.LoadBalancer
 }
 
 func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
+	ctx context.Context,
 	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
 ) (*compute.VirtualMachineScaleSet, error) {
 	if lbConfig.Spec.GatewayNodepoolName != "" {
-		vmssList, err := r.ListVMSS()
+		vmssList, err := r.ListVMSS(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -267,7 +268,7 @@ func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
 			}
 		}
 	} else {
-		vmss, err := r.GetVMSS(lbConfig.Spec.VmssResourceGroup, lbConfig.Spec.VmssName)
+		vmss, err := r.GetVMSS(ctx, lbConfig.Spec.VmssResourceGroup, lbConfig.Spec.VmssName)
 		if err != nil {
 			return nil, err
 		}
@@ -288,7 +289,7 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 	deleteFrontend := false
 
 	// get LoadBalancer
-	lb, err := r.getGatewayLB()
+	lb, err := r.getGatewayLB(ctx)
 	if err != nil {
 		log.Error(err, "failed to get LoadBalancer")
 		return "", 0, err
@@ -313,7 +314,7 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 
 	// get gateway VMSS
 	// we need this because each gateway vmss needs one fronendConfig and one backendpool
-	vmss, err := r.getGatewayVMSS(lbConfig)
+	vmss, err := r.getGatewayVMSS(ctx, lbConfig)
 	if err != nil {
 		log.Error(err, "failed to get vmss")
 		return "", 0, err
@@ -337,7 +338,7 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 	}
 	if frontendIP == "" {
 		if needLB {
-			subnet, err := r.GetSubnet()
+			subnet, err := r.GetSubnet(ctx)
 			if err != nil {
 				log.Error(err, "failed to get subnet")
 				return "", 0, err
@@ -487,7 +488,7 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 
 		if len(lb.Properties.FrontendIPConfigurations) == 0 {
 			log.Info("Deleting load balancer")
-			if err := r.DeleteLB(); err != nil {
+			if err := r.DeleteLB(ctx); err != nil {
 				log.Error(err, "failed to delete LB")
 				return "", 0, err
 			}
@@ -497,7 +498,7 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 
 	if updateLB {
 		log.Info("Updating load balancer")
-		updatedLB, err := r.CreateOrUpdateLB(*lb)
+		updatedLB, err := r.CreateOrUpdateLB(ctx, *lb)
 		if err != nil {
 			log.Error(err, "failed to update LB")
 			return "", 0, err

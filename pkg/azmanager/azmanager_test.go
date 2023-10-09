@@ -24,6 +24,7 @@ SOFTWARE
 package azmanager
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -126,7 +127,7 @@ func TestGetLB(t *testing.T) {
 		az, _ := CreateAzureManager(config, factory)
 		mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 		mockLoadBalancerClient.EXPECT().Get(gomock.Any(), "testRG", "testLB", gomock.Any()).Return(test.lb, test.testErr)
-		lb, err := az.GetLB()
+		lb, err := az.GetLB(context.Background())
 		assert.Equal(t, to.Val(lb), to.Val(test.lb), "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
 	}
@@ -156,7 +157,7 @@ func TestCreateOrUpdateLB(t *testing.T) {
 		az, _ := CreateAzureManager(config, factory)
 		mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 		mockLoadBalancerClient.EXPECT().CreateOrUpdate(gomock.Any(), "testRG", "testLB", to.Val(test.lb)).Return(test.lb, test.testErr)
-		ret, err := az.CreateOrUpdateLB(to.Val(test.lb))
+		ret, err := az.CreateOrUpdateLB(context.Background(), to.Val(test.lb))
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
 		if test.testErr == nil {
 			assert.Equal(t, to.Val(test.lb), to.Val(ret), "TestCase[%d]: %s", i, test.desc)
@@ -185,7 +186,7 @@ func TestDeleteLB(t *testing.T) {
 		az, _ := CreateAzureManager(config, factory)
 		mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 		mockLoadBalancerClient.EXPECT().Delete(gomock.Any(), "testRG", "testLB").Return(test.testErr)
-		err := az.DeleteLB()
+		err := az.DeleteLB(context.Background())
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
 	}
 }
@@ -213,7 +214,7 @@ func TestListVMSS(t *testing.T) {
 		az, _ := CreateAzureManager(config, factory)
 		mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 		mockVMSSClient.EXPECT().List(gomock.Any(), "testRG").Return(test.vmssList, test.testErr)
-		vmssList, err := az.ListVMSS()
+		vmssList, err := az.ListVMSS(context.Background())
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, len(vmssList), len(test.vmssList), "TestCase[%d]: %s", i, test.desc)
 		for j, vmss := range vmssList {
@@ -270,7 +271,7 @@ func TestGetVMSS(t *testing.T) {
 			mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 			mockVMSSClient.EXPECT().Get(gomock.Any(), test.expectedRG, test.vmssName).Return(test.vmss, test.testErr)
 		}
-		vmss, err := az.GetVMSS(test.rg, test.vmssName)
+		vmss, err := az.GetVMSS(context.Background(), test.rg, test.vmssName)
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, to.Val(vmss), to.Val(test.vmss), "TestCase[%d]: %s", i, test.desc)
 	}
@@ -324,7 +325,7 @@ func TestCreateOrUpdateVMSS(t *testing.T) {
 			mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 			mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), test.expectedRG, test.vmssName, to.Val(test.vmss)).Return(test.vmss, test.testErr)
 		}
-		vmss, err := az.CreateOrUpdateVMSS(test.rg, test.vmssName, to.Val(test.vmss))
+		vmss, err := az.CreateOrUpdateVMSS(context.Background(), test.rg, test.vmssName, to.Val(test.vmss))
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, to.Val(vmss), to.Val(test.vmss), "TestCase[%d]: %s", i, test.desc)
 	}
@@ -378,7 +379,7 @@ func TestListVMSSInstances(t *testing.T) {
 			mockVMSSVMClient := az.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
 			mockVMSSVMClient.EXPECT().List(gomock.Any(), test.expectedRG, test.vmssName).Return(test.vms, test.testErr)
 		}
-		vms, err := az.ListVMSSInstances(test.rg, test.vmssName)
+		vms, err := az.ListVMSSInstances(context.Background(), test.rg, test.vmssName)
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, len(vms), len(test.vms), "TestCase[%d]: %s", i, test.desc)
 		for j, vm := range vms {
@@ -445,7 +446,7 @@ func TestGetVMSSInstance(t *testing.T) {
 			mockVMSSVMClient := az.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
 			mockVMSSVMClient.EXPECT().Get(gomock.Any(), test.expectedRG, test.vmssName, test.instanceID).Return(test.vm, test.testErr)
 		}
-		vm, err := az.GetVMSSInstance(test.rg, test.vmssName, test.instanceID)
+		vm, err := az.GetVMSSInstance(context.Background(), test.rg, test.vmssName, test.instanceID)
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, to.Val(vm), to.Val(test.vm), "TestCase[%d]: %s", i, test.desc)
 	}
@@ -509,7 +510,7 @@ func TestUpdateVMSSInstance(t *testing.T) {
 			mockVMSSVMClient := az.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
 			mockVMSSVMClient.EXPECT().Update(gomock.Any(), test.expectedRG, test.vmssName, test.instanceID, to.Val(test.vm)).Return(test.vm, test.testErr)
 		}
-		vm, err := az.UpdateVMSSInstance(test.rg, test.vmssName, test.instanceID, to.Val(test.vm))
+		vm, err := az.UpdateVMSSInstance(context.Background(), test.rg, test.vmssName, test.instanceID, to.Val(test.vm))
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, to.Val(vm), to.Val(test.vm), "TestCase[%d]: %s", i, test.desc)
 	}
@@ -563,7 +564,7 @@ func TestGetPublicIPPrefix(t *testing.T) {
 			mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 			mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), test.expectedRG, test.prefixName, gomock.Any()).Return(test.prefix, test.testErr)
 		}
-		prefix, err := az.GetPublicIPPrefix(test.rg, test.prefixName)
+		prefix, err := az.GetPublicIPPrefix(context.Background(), test.rg, test.prefixName)
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, to.Val(prefix), to.Val(test.prefix), "TestCase[%d]: %s", i, test.desc)
 	}
@@ -617,7 +618,7 @@ func TestCreateOrUpdatePublicIPPrefix(t *testing.T) {
 			mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 			mockPublicIPPrefixClient.EXPECT().CreateOrUpdate(gomock.Any(), test.expectedRG, test.prefixName, to.Val(test.prefix)).Return(test.prefix, test.testErr)
 		}
-		prefix, err := az.CreateOrUpdatePublicIPPrefix(test.rg, test.prefixName, to.Val(test.prefix))
+		prefix, err := az.CreateOrUpdatePublicIPPrefix(context.Background(), test.rg, test.prefixName, to.Val(test.prefix))
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, to.Val(prefix), to.Val(test.prefix), "TestCase[%d]: %s", i, test.desc)
 	}
@@ -668,7 +669,7 @@ func TestDeletePublicIPPrefix(t *testing.T) {
 			mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
 			mockPublicIPPrefixClient.EXPECT().Delete(gomock.Any(), test.expectedRG, test.prefixName).Return(test.testErr)
 		}
-		err := az.DeletePublicIPPrefix(test.rg, test.prefixName)
+		err := az.DeletePublicIPPrefix(context.Background(), test.rg, test.prefixName)
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
 	}
 }
@@ -747,7 +748,7 @@ func TestGetVMSSInterface(t *testing.T) {
 
 			}
 		}
-		nic, err := az.GetVMSSInterface(test.rg, test.vmssName, test.instanceID, test.nicName)
+		nic, err := az.GetVMSSInterface(context.Background(), test.rg, test.vmssName, test.instanceID, test.nicName)
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, to.Val(nic), to.Val(test.nic), "TestCase[%d]: %s", i, test.desc)
 	}
@@ -776,7 +777,7 @@ func TestGetSubnet(t *testing.T) {
 		az, _ := CreateAzureManager(config, factory)
 		mockSubnetClient := az.SubnetClient.(*mock_subnetclient.MockInterface)
 		mockSubnetClient.EXPECT().Get(gomock.Any(), "testRG", "testVnet", "testSubnet", gomock.Any()).Return(test.subnet, test.testErr)
-		subnet, err := az.GetSubnet()
+		subnet, err := az.GetSubnet(context.Background())
 		assert.Equal(t, to.Val(subnet), to.Val(test.subnet), "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
 	}
