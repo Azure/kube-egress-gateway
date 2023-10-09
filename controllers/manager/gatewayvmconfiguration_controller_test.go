@@ -206,7 +206,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 							c.vmss,
 						}, c.returnedErr)
 					}
-					foundVmss, len, err := r.getGatewayVMSS(vmConfig)
+					foundVmss, len, err := r.getGatewayVMSS(context.Background(), vmConfig)
 					if c.expectedErr != nil {
 						Expect(err).To(Equal(c.expectedErr), "TestCase[%d]: %s", i, c.desc)
 					} else {

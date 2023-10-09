@@ -343,7 +343,7 @@ func (r *StaticGatewayConfigurationReconciler) getVMIP(
 	if subscriptionID != r.SubscriptionID() {
 		return "", "", fmt.Errorf("node subscription(%s) is different from configured subscription(%s)", subscriptionID, r.SubscriptionID())
 	}
-	vm, err := r.GetVMSSInstance(resourceGroupName, vmssName, instanceID)
+	vm, err := r.GetVMSSInstance(ctx, resourceGroupName, vmssName, instanceID)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to get vmss instance: %w", err)
 	}
@@ -364,7 +364,7 @@ func (r *StaticGatewayConfigurationReconciler) getVMIP(
 	if nicName == "" {
 		return "", "", fmt.Errorf("failed to find primary interface of vmss instance(%s_%s)", vmssName, instanceID)
 	}
-	nic, err := r.GetVMSSInterface(resourceGroupName, vmssName, instanceID, nicName)
+	nic, err := r.GetVMSSInterface(ctx, resourceGroupName, vmssName, instanceID, nicName)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to get vmss instance primary interface: %w", err)
 	}
