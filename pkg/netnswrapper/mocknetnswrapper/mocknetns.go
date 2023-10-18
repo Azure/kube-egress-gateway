@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+
 package mocknetnswrapper
 
 import "github.com/containernetworking/plugins/pkg/ns"

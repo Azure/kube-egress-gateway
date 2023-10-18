@@ -24,9 +24,16 @@ status:
     wireguardPublicKey: ***
     wireguardServerIP: 10.243.0.6 # ilb private IP in your vnet
     wireguardServerPort: 6000
-  publicIpPrefix: 1.2.3.4/31 # egress public IP prefix
+  egressIpPrefix: 1.2.3.4/31 # egress public IP prefix
 ```
-The controller creates a secret storing the gateway side wireguard private key with the same namespace and name as your `StaticGatewayConfiguration`. This information is displayed in `.status.gatewayWireguardProfile.wireguardPrivateKeySecretRef` field. `wireguardPublicKey` is base64 encoded wireguard public key used by the gateway. `wireguardServerIP` is the gateway ILB frontend IP. This IP comes from the subnet provided in Azure cloud config. `wireguardServerPort` is LoadBalancing rule frontend and backend port. All `StaticGatewayConfiguration`s deployed to the same gateway VMSS share the same ILB frontend and backend but have separate LoadBalancing rules with different ports. And most importantly, `publicIpPrefix` is the egress source IPNet of the pods using this gateway. If you see any of these not showing in status, check `kube-egress-gateway-controller-manager` log and see if you can identify any error:
+The controller creates a secret storing the gateway side wireguard private key with the same namespace and name as your `StaticGatewayConfiguration`. This information is displayed in `.status.gatewayWireguardProfile.wireguardPrivateKeySecretRef` field. `wireguardPublicKey` is base64 encoded wireguard public key used by the gateway. `wireguardServerIP` is the gateway ILB frontend IP. This IP comes from the subnet provided in Azure cloud config. `wireguardServerPort` is LoadBalancing rule frontend and backend port. All `StaticGatewayConfiguration`s deployed to the same gateway VMSS share the same ILB frontend and backend but have separate LoadBalancing rules with different ports. And most importantly, `egressIpPrefix` is the egress source IPNet of the pods using this gateway. If you see any of these not showing in status, you can describe the CR objects and see if there are error events:
+```bash
+$ kubectl describe staticcgatewayconfiguration -n <your namespace> <your sgw name>
+$ kubectl describe gatewaylbconfiguration -n <your namespace> <your sgw name> # gatewaylbconfiguration and gatewayvmconfiguration are two internal CRDs to reconcile gateway ilb and vmss status.
+$ kubectl describe gatewayvmconfiguration -n <your namespace> <your sgw name>
+```
+
+Furthermore, you can check `kube-egress-gateway-controller-manager` log and see if there's any error:
 ```bash
 $ kubectl logs -f -n kube-egress-gateway-system kube-egress-gateway-controller-manager-**********-*****
 ```
