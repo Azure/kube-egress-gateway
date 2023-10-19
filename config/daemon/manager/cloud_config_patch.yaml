@@ -16,4 +16,4 @@ spec:
       volumes:
       - name: daemon-config-volume
         configMap:
-          name: azure-cloud-config
+          name: kube-egress-gateway-azure-cloud-config

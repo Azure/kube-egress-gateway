@@ -61,19 +61,19 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   labels:
-    control-plane: cni-manager
+    kube-egress-gateway-control-plane: cni-manager
   name: kube-egress-gateway-cni-manager
   namespace: {{ .Release.Namespace }}
 spec:
   selector:
     matchLabels:
-      control-plane: cni-manager
+      kube-egress-gateway-control-plane: cni-manager
   template:
     metadata:
       annotations:
         kubectl.kubernetes.io/default-container: cni-manager
       labels:
-        control-plane: cni-manager
+        kube-egress-gateway-control-plane: cni-manager
     spec:
       containers:
       - args:

@@ -4,17 +4,17 @@ metadata:
   name: daemon-manager
   namespace: system
   labels:
-    control-plane: daemon-manager
+    kube-egress-gateway-control-plane: daemon-manager
 spec:
   selector:
     matchLabels:
-      control-plane: daemon-manager
+      kube-egress-gateway-control-plane: daemon-manager
   template:
     metadata:
       annotations:
         kubectl.kubernetes.io/default-container: daemon
       labels:
-        control-plane: daemon-manager
+        kube-egress-gateway-control-plane: daemon-manager
     spec:
       # securityContext:
       #   runAsNonRoot: true

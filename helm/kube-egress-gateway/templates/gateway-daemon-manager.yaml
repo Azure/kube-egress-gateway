@@ -87,29 +87,25 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   labels:
-    control-plane: daemon-manager
+    kube-egress-gateway-control-plane: daemon-manager
   name: kube-egress-gateway-daemon-manager
   namespace: {{ .Release.Namespace }}
 spec:
   selector:
     matchLabels:
-      control-plane: daemon-manager
+      kube-egress-gateway-control-plane: daemon-manager
   template:
     metadata:
       annotations:
         kubectl.kubernetes.io/default-container: daemon
       labels:
-        control-plane: daemon-manager
+        kube-egress-gateway-control-plane: daemon-manager
     spec:
       containers:
       - args:
         - --cloud-config=/azure/config/azure-cloud-config.json
-        {{- if hasKey .Values.gatewayDaemonManager "metricsBindPort" }}
         - --metrics-bind-port={{ .Values.gatewayDaemonManager.metricsBindPort }}
-        {{- end }}
-        {{- if hasKey .Values.gatewayDaemonManager "healthProbeBindPort" }}
         - --health-probe-bind-port={{ .Values.gatewayDaemonManager.healthProbeBindPort }}
-        {{- end }}
         command:
         - /kube-egress-gateway-daemon
         env:
@@ -175,5 +171,5 @@ spec:
         name: hostpath-var
       - name: azure-cloud-config
         secret:
-          secretName: azure-cloud-config
+          secretName: kube-egress-gateway-azure-cloud-config
 {{- end }}
