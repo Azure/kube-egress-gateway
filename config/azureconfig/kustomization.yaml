@@ -1,5 +1,5 @@
 configMapGenerator:
   - files:
       - azure.json
-    name: azure-cloud-config
+    name: kube-egress-gateway-azure-cloud-config
 

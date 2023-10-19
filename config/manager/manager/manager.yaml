@@ -4,18 +4,18 @@ metadata:
   name: controller-manager
   namespace: system
   labels:
-    control-plane: controller-manager
+    kube-egress-gateway-control-plane: controller-manager
 spec:
   selector:
     matchLabels:
-      control-plane: controller-manager
+      kube-egress-gateway-control-plane: controller-manager
   replicas: 1
   template:
     metadata:
       annotations:
         kubectl.kubernetes.io/default-container: manager
       labels:
-        control-plane: controller-manager
+        kube-egress-gateway-control-plane: controller-manager
     spec:
       securityContext:
         runAsNonRoot: true

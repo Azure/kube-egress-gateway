@@ -212,7 +212,7 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    control-plane: controller-manager
+    kube-egress-gateway-control-plane: controller-manager
   name: kube-egress-gateway-controller-manager-metrics-service
   namespace: {{ .Release.Namespace }}
 spec:
@@ -222,7 +222,7 @@ spec:
     protocol: TCP
     targetPort: https
   selector:
-    control-plane: controller-manager
+    kube-egress-gateway-control-plane: controller-manager
 ---
 apiVersion: v1
 kind: Service
@@ -235,37 +235,33 @@ spec:
     protocol: TCP
     targetPort: 9443
   selector:
-    control-plane: controller-manager
+    kube-egress-gateway-control-plane: controller-manager
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    control-plane: controller-manager
+    kube-egress-gateway-control-plane: controller-manager
   name: kube-egress-gateway-controller-manager
   namespace: {{ .Release.Namespace }}
 spec:
   replicas: {{ .Values.gatewayControllerManager.replicas }}
   selector:
     matchLabels:
-      control-plane: controller-manager
+      kube-egress-gateway-control-plane: controller-manager
   template:
     metadata:
       annotations:
         kubectl.kubernetes.io/default-container: manager
       labels:
-        control-plane: controller-manager
+        kube-egress-gateway-control-plane: controller-manager
     spec:
       containers:
       - args:
         - --cloud-config=/azure/config/azure-cloud-config.json
         - --leader-elect={{ .Values.gatewayControllerManager.leaderElect }}
-        {{- if hasKey .Values.gatewayControllerManager "metricsBindPort" }}
         - --metrics-bind-port={{ .Values.gatewayControllerManager.metricsBindPort }}
-        {{- end }}
-        {{- if hasKey .Values.gatewayControllerManager "healthProbeBindPort" }}
         - --health-probe-bind-port={{ .Values.gatewayControllerManager.healthProbeBindPort }}
-        {{- end }}
         command:
         - /kube-egress-gateway-controller
         image: {{ template "image.gatewayControllerManager" . }}
@@ -336,7 +332,7 @@ spec:
       volumes:
       - name: azure-cloud-config
         secret:
-          secretName: azure-cloud-config
+          secretName: kube-egress-gateway-azure-cloud-config
       - name: cert
         secret:
           defaultMode: 420

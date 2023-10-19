@@ -20,8 +20,8 @@ $ helm install \
   kube-egress-gateway ./helm/kube-egress-gateway \
   --namespace kube-egress-gateway-system \
   --create-namespace \
-  --set common.imageRepository=mcr.microsoft.com/oss/kubernetes \
-  --set common.imageTag=v1.0.0 \ 
+  --set common.imageRepository=mcr.microsoft.com/aks \
+  --set common.imageTag=v0.0.1 \ 
   -f azure_config.yaml
 ```
 

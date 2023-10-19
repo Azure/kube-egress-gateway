@@ -4,17 +4,17 @@ metadata:
   name: cni-manager
   namespace: system
   labels:
-    control-plane: cni-manager
+    kube-egress-gateway-control-plane: cni-manager
 spec:
   selector:
     matchLabels:
-      control-plane: cni-manager
+      kube-egress-gateway-control-plane: cni-manager
   template:
     metadata:
       annotations:
         kubectl.kubernetes.io/default-container: cni-manager
       labels:
-        control-plane: cni-manager
+        kube-egress-gateway-control-plane: cni-manager
     spec:
       initContainers:
         - name: cni-install

@@ -29,6 +29,7 @@ gatewayDaemonManager:
   imageName: "kube-egress-gateway-daemon"
   # imageTag: ""
   imagePullPolicy: "IfNotPresent"
+  metricsBindPort: 8080
   healthProbeBindPort: 8081
 
 gatewayCNI:
