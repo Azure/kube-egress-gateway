@@ -11,9 +11,10 @@ package mockwgctrlwrapper
 import (
 	reflect "reflect"
 
-	wgctrlwrapper "github.com/Azure/kube-egress-gateway/pkg/wgctrlwrapper"
 	gomock "github.com/golang/mock/gomock"
 	wgtypes "golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+
+	wgctrlwrapper "github.com/Azure/kube-egress-gateway/pkg/wgctrlwrapper"
 )
 
 // MockClient is a mock of Client interface.

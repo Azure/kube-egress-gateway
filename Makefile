@@ -82,6 +82,7 @@ e2e-test: manifests generate fmt vet envtest ## Run e2e tests.
 
 IMAGE_REGISTRY ?= local
 IMAGE_TAG ?= $(shell git rev-parse --short=7 HEAD)
+TARGET_PLATFORMS ?= linux/amd64,linux/arm64,linux/arm
 
 .PHONY: build
 build: generate fmt vet ## Build manager binary.
@@ -98,7 +99,7 @@ run: manifests generate fmt vet ## Run a controller from your host.
 
 .PHONY: docker-build
 docker-build: unit-test docker-builder-setup ## Build docker image with the manager.
-	TAG=$(IMAGE_TAG) IMAGE_REGISTRY=$(IMAGE_REGISTRY) docker buildx bake -f docker-bake.hcl -f docker-localtag-bake.hcl --progress auto --push
+	TAG=$(IMAGE_TAG) IMAGE_REGISTRY=$(IMAGE_REGISTRY) PLATFORMS=$(TARGET_PLATFORMS) docker buildx bake -f docker-bake.hcl -f docker-localtag-bake.hcl --progress auto --push
 
 .PHONY: docker-builder-setup
 docker-builder-setup:
