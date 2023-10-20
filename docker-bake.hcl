@@ -13,13 +13,14 @@ target "daemon-compile" {
     MAIN_ENTRY = "kube-egress-gateway-daemon",
   }
 }
+
 target "daemon" {
   inherits = ["daemon-tags"]
   dockerfile = "gwdaemon.Dockerfile"
   contexts = {
     baseimg = "target:daemon-compile"
   }
-  platforms = ["linux/amd64"]
+  platforms = ["linux/amd64", "linux/arm", "linux/arm64"]
   args = {
     MAIN_ENTRY = "kube-egress-gateway-daemon",
   }
@@ -27,6 +28,7 @@ target "daemon" {
 
 target "controller" {
   inherits = ["base","controller-tags"]
+  platforms = ["linux/amd64", "linux/arm", "linux/arm64"]
   args = {
     MAIN_ENTRY = "kube-egress-gateway-controller",
   }
@@ -45,6 +47,7 @@ target "cnimanager" {
   contexts = {
     baseimg = "target:cnimanager-compile"
   }
+  platforms = ["linux/amd64", "linux/arm", "linux/arm64"]
   args = {
     MAIN_ENTRY = "kube-egress-gateway-cnimanager",
     GRPC_HEALTH_PROBE_VERSION = "v0.4.14"
@@ -64,6 +67,7 @@ target "cni" {
   contexts = {
     baseimg = "target:cni-compile"
   }
+  platforms = ["linux/amd64", "linux/arm", "linux/arm64"]
 }
 
 target "cni-ipam-compile" {
@@ -79,4 +83,5 @@ target "cni-ipam" {
   contexts = {
     baseimg = "target:cni-ipam-compile"
   }
+  platforms = ["linux/amd64", "linux/arm", "linux/arm64"]
 }
