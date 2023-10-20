@@ -38,6 +38,7 @@ jobs:
       az account set -s $(AZURE_SUBSCRIPTION_ID)
     displayName: az login
   - bash: |
+      docker buildx create --name multi-arch-builder --bootstrap --use
       docker buildx ls
     displayName: list docker buildx
   - bash: |
