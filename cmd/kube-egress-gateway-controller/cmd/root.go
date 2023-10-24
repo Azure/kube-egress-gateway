@@ -24,7 +24,6 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-	azcorelog "github.com/Azure/azure-sdk-for-go/sdk/azcore/log"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
@@ -93,9 +92,6 @@ func init() {
 
 	logger := zap.New(zap.UseFlagOptions(&zapOpts))
 	ctrl.SetLogger(logger)
-	azcorelog.SetListener(func(event azcorelog.Event, msg string) {
-		logger.WithValues("event", event).Info(msg)
-	})
 }
 
 // initCloudConfig reads in cloud config file and ENV variables if set.
@@ -187,7 +183,7 @@ func startControllers(cmd *cobra.Command, args []string) {
 		cred = authProvider.ClientSecretCredential
 	}
 	var factory azclient.ClientFactory
-	factory, err = azclient.NewClientFactory(&azclient.ClientFactoryConfig{SubscriptionID: cloudConfig.SubscriptionID}, &azclient.ARMClientConfig{Cloud: cloudConfig.Cloud}, cred)
+	factory, err = azclient.NewClientFactory(&azclient.ClientFactoryConfig{SubscriptionID: cloudConfig.SubscriptionID}, &azclient.ARMClientConfig{Cloud: cloudConfig.Cloud, UserAgent: cloudConfig.UserAgent}, cred)
 	if err != nil {
 		setupLog.Error(err, "unable to create client factory")
 		os.Exit(1)
