@@ -98,6 +98,8 @@ jobs:
         uses: docker/bake-action@v4
         with:
           push: ${{ github.event_name != 'pull_request' }}
+          env:
+            PLATFORMS: linux/amd64,linux/arm64,linux/arm
           files: |
             docker-bake.hcl
             ${{ steps.daemon.outputs.bake-file }}
