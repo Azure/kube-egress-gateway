@@ -94,10 +94,18 @@ jobs:
           tags: |
             type=semver,pattern={{raw}}
           bake-target: cni-ipam-tags
+      - name: Set platform env for pr build
+        run: |
+          echo "TARGET_PLATFORMS=linux/amd64" >> $GITHUB_ENV
+        if: ${{ github.event_name == 'pull_request' }}
+      - name: Set platform env for release
+        run: |
+          echo "TARGET_PLATFORMS=linux/amd64,linux/arm64,linux/arm" >> $GITHUB_ENV
+        if: ${{ github.event_name != 'pull_request' }}
       - name: Build and push
         uses: docker/bake-action@v4
         env:
-          PLATFORMS: linux/amd64,linux/arm64,linux/arm
+          PLATFORMS: ${{env.TARGET_PLATFORMS}}
         with:
           push: ${{ github.event_name != 'pull_request' }}
           files: |
