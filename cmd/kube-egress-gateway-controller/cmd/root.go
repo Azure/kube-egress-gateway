@@ -122,10 +122,11 @@ func startControllers(cmd *cobra.Command, args []string) {
 		Metrics: metricsserver.Options{
 			BindAddress: ":" + strconv.Itoa(metricsPort),
 		},
-		WebhookServer:          webhook.NewServer(webhook.Options{Port: 9443}),
-		HealthProbeBindAddress: ":" + strconv.Itoa(probePort),
-		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "0a299682.microsoft.com",
+		WebhookServer:           webhook.NewServer(webhook.Options{Port: 9443}),
+		HealthProbeBindAddress:  ":" + strconv.Itoa(probePort),
+		LeaderElection:          enableLeaderElection,
+		LeaderElectionNamespace: "kube-system",
+		LeaderElectionID:        "0a299682.microsoft.com",
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
@@ -201,10 +202,10 @@ func startControllers(cmd *cobra.Command, args []string) {
 		setupLog.Error(err, "unable to create controller", "controller", "StaticGatewayConfiguration")
 		os.Exit(1)
 	}
-	if err = (&egressgatewayv1alpha1.StaticGatewayConfiguration{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "StaticGatewayConfiguration")
-		os.Exit(1)
-	}
+	//if err = (&egressgatewayv1alpha1.StaticGatewayConfiguration{}).SetupWebhookWithManager(mgr); err != nil {
+	//	setupLog.Error(err, "unable to create webhook", "webhook", "StaticGatewayConfiguration")
+	//	os.Exit(1)
+	//}
 	if err = (&controllers.GatewayLBConfigurationReconciler{
 		Client:       mgr.GetClient(),
 		AzureManager: az,
