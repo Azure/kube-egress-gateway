@@ -85,7 +85,7 @@ func (cfg *CloudConfig) Validate() error {
 	}
 
 	if cfg.LoadBalancerName == "" {
-		return fmt.Errorf("load balancer name is empty")
+		cfg.LoadBalancerName = "gateway-ilb"
 	}
 
 	if cfg.VnetName == "" {
