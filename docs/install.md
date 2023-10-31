@@ -60,21 +60,5 @@ kube-egress-gateway components communicates with Azure Resource Manager (ARM) to
     aadClientSecret: "<sp secret>"
     ```
 
-## Install cert-manager
-kube-egress-gateway relies on cert-manager to manage certificate for webhook. Refer to [cert-manager installation guide](https://cert-manager.io/docs/installation/) for how to install cert-manager.
-
-Simple steps to install cert-manager v1.12 with helm:
-```
-helm repo add jetstack https://charts.jetstack.io
-helm repo update
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.12.0/cert-manager.crds.yaml
-helm install \
-  cert-manager jetstack/cert-manager \
-  --namespace cert-manager \
-  --create-namespace \
-  --version v1.12.0 \
-  # --set installCRDs=true
-```
-
 ## Install kube-egress-gateway as Helm Chart
 See details [here](../helm/kube-egress-gateway/README.md). 

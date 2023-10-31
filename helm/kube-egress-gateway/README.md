@@ -11,9 +11,7 @@ Clone this repository, kube-egress-gateway chart is maintained in `helm/kube-egr
 git clone https://github.com/Azure/kube-egress-gateway.git
 ```
 
-The `kube-egress-gateway` project relies on [cert-manager](https://cert-manager.io/) to provide webhook certificate issuance and rotation. You can install cert-manager following their [installation guide](https://cert-manager.io/docs/installation/).
-
-Then to install `kube-egress-gateway`, you may run below `helm` command:
+To install `kube-egress-gateway`, you may run below `helm` command:
 
 ```bash
 $ helm install \

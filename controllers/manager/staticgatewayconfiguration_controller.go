@@ -11,6 +11,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -77,6 +79,10 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 	log := log.FromContext(ctx)
 	log.Info(fmt.Sprintf("Reconciling staticGatewayConfiguration %s/%s", gwConfig.Namespace, gwConfig.Name))
 
+	if err := validate(gwConfig); err != nil {
+		return err
+	}
+
 	_, err := controllerutil.CreateOrPatch(ctx, r, gwConfig, func() error {
 		// reconcile wireguard keypair
 		if err := r.reconcileWireguardKey(ctx, gwConfig); err != nil {
@@ -141,6 +147,60 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 
 	log.Info("staticGatewayConfiguration deletion reconciled")
 	return nil
+}
+
+func validate(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) error {
+	// need to validate either GatewayNodepoolName or GatewayVmssProfile is provided, but not both
+	var allErrs field.ErrorList
+
+	if gwConfig.Spec.GatewayNodepoolName == "" && vmssProfileIsEmpty(gwConfig) {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewaynodepoolname"),
+			fmt.Sprintf("GatewayNodepoolName: %s, GatewayVmssProfile: %#v", gwConfig.Spec.GatewayNodepoolName, gwConfig.Spec.GatewayVmssProfile),
+			"Either GatewayNodepoolName or GatewayVmssProfile must be provided"))
+	}
+
+	if gwConfig.Spec.GatewayNodepoolName != "" && !vmssProfileIsEmpty(gwConfig) {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewaynodepoolname"),
+			fmt.Sprintf("GatewayNodepoolName: %s, GatewayVmssProfile: %#v", gwConfig.Spec.GatewayNodepoolName, gwConfig.Spec.GatewayVmssProfile),
+			"Only one of GatewayNodepoolName and GatewayVmssProfile should be provided"))
+	}
+
+	if !vmssProfileIsEmpty(gwConfig) {
+		if gwConfig.Spec.GatewayVmssProfile.VmssResourceGroup == "" {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewayvmssprofile").Child("vmssresourcegroup"),
+				gwConfig.Spec.GatewayVmssProfile.VmssResourceGroup,
+				"Gateway vmss resource group is empty"))
+		}
+		if gwConfig.Spec.GatewayVmssProfile.VmssName == "" {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewayvmssprofile").Child("vmssname"),
+				gwConfig.Spec.GatewayVmssProfile.VmssName,
+				"Gateway vmss name is empty"))
+		}
+		if gwConfig.Spec.GatewayVmssProfile.PublicIpPrefixSize < 0 || gwConfig.Spec.GatewayVmssProfile.PublicIpPrefixSize > 31 {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewayvmssprofile").Child("publicipprefixsize"),
+				gwConfig.Spec.GatewayVmssProfile.PublicIpPrefixSize,
+				"Gateway vmss public ip prefix size should be between 0 and 31 inclusively"))
+		}
+	}
+
+	if !gwConfig.Spec.ProvisionPublicIps && gwConfig.Spec.PublicIpPrefixId != "" {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("publicipprefixid"),
+			gwConfig.Spec.PublicIpPrefixId,
+			"PublicIpPrefixId should be empty when ProvisionPublicIps is false"))
+	}
+
+	if len(allErrs) == 0 {
+		return nil
+	}
+	return apierrors.NewInvalid(
+		schema.GroupKind{Group: "egressgateway.kubernetes.azure.com", Kind: "StaticGatewayConfiguration"},
+		gwConfig.Name, allErrs)
+}
+
+func vmssProfileIsEmpty(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) bool {
+	return gwConfig.Spec.GatewayVmssProfile.VmssResourceGroup == "" &&
+		gwConfig.Spec.GatewayVmssProfile.VmssName == "" &&
+		gwConfig.Spec.GatewayVmssProfile.PublicIpPrefixSize == 0
 }
 
 func (r *StaticGatewayConfigurationReconciler) reconcileWireguardKey(
