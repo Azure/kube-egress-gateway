@@ -73,7 +73,6 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 				Namespace: testNamespace,
 			},
 			Spec: egressgatewayv1alpha1.StaticGatewayConfigurationSpec{
-				GatewayNodepoolName: "testgw",
 				GatewayVmssProfile: egressgatewayv1alpha1.GatewayVmssProfile{
 					VmssResourceGroup:  "vmssRG",
 					VmssName:           "vmss",
@@ -183,11 +182,7 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 			updateGWConfig := &egressgatewayv1alpha1.StaticGatewayConfiguration{}
 			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), updateGWConfig)).ToNot(HaveOccurred())
 			updateGWConfig.Spec.GatewayNodepoolName = "testgw1"
-			updateGWConfig.Spec.GatewayVmssProfile = egressgatewayv1alpha1.GatewayVmssProfile{
-				VmssResourceGroup:  "vmssRG1",
-				VmssName:           "vmss1",
-				PublicIpPrefixSize: 30,
-			}
+			updateGWConfig.Spec.GatewayVmssProfile = egressgatewayv1alpha1.GatewayVmssProfile{}
 			updateGWConfig.Spec.ProvisionPublicIps = false
 			updateGWConfig.Spec.PublicIpPrefixId = ""
 			Expect(k8sClient.Update(ctx, updateGWConfig)).ToNot(HaveOccurred())
@@ -209,9 +204,9 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 				}, nil
 			}, timeout, interval).Should(BeEquivalentTo(map[string]interface{}{
 				"np":        "testgw1",
-				"rg":        "vmssRG1",
-				"vmss":      "vmss1",
-				"size":      int32(30),
+				"rg":        "",
+				"vmss":      "",
+				"size":      int32(0),
 				"prefixId":  "",
 				"provision": false,
 			}))
@@ -244,6 +239,90 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 			Eventually(func() bool {
 				return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: testName}, lbConfig))
 			}, timeout, interval).Should(BeTrue())
+		})
+	})
+})
+
+var _ = Describe("test staticGatewayConfiguration validation", func() {
+	var (
+		gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration
+	)
+
+	BeforeEach(func() {
+		gwConfig = &egressgatewayv1alpha1.StaticGatewayConfiguration{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      testName,
+				Namespace: testNamespace,
+			},
+			Spec: egressgatewayv1alpha1.StaticGatewayConfigurationSpec{
+				GatewayVmssProfile: egressgatewayv1alpha1.GatewayVmssProfile{
+					VmssResourceGroup:  "vmssRG",
+					VmssName:           "vmss",
+					PublicIpPrefixSize: 31,
+				},
+				PublicIpPrefixId:   "testPipPrefix",
+				ProvisionPublicIps: true,
+			},
+		}
+	})
+
+	Context("validate GatewayNodepoolName", func() {
+		It("should pass when only GatewayNodepoolName is provided", func() {
+			gwConfig.Spec.GatewayNodepoolName = "testgw"
+			gwConfig.Spec.GatewayVmssProfile = egressgatewayv1alpha1.GatewayVmssProfile{}
+			err := validate(gwConfig)
+			Expect(err).ShouldNot(HaveOccurred())
+		})
+
+		It("should fail when both GatewayNodepoolName and GatewayVmssProfile are provided", func() {
+			gwConfig.Spec.GatewayNodepoolName = "testgw"
+			err := validate(gwConfig)
+			Expect(err).Should(HaveOccurred())
+		})
+
+		It("should pass when GatewayNodepoolName is not provided but GatewayVmssProfile is provided", func() {
+			err := validate(gwConfig)
+			Expect(err).ShouldNot(HaveOccurred())
+		})
+
+		It("should fail when neither GatewayNodepoolName nor GatewayVmssProfile is provided", func() {
+			gwConfig.Spec.GatewayVmssProfile = egressgatewayv1alpha1.GatewayVmssProfile{}
+			err := validate(gwConfig)
+			Expect(err).Should(HaveOccurred())
+		})
+	})
+
+	Context("validate GatewayVmssProfile", func() {
+		It("should fail when VmssResourceGroup is not provided", func() {
+			gwConfig.Spec.GatewayVmssProfile.VmssResourceGroup = ""
+			err := validate(gwConfig)
+			Expect(err).Should(HaveOccurred())
+		})
+
+		It("should fail when VmssName is not provided", func() {
+			gwConfig.Spec.GatewayVmssProfile.VmssName = ""
+			err := validate(gwConfig)
+			Expect(err).Should(HaveOccurred())
+		})
+
+		It("should fail when PublicIpPrefixSize < 0", func() {
+			gwConfig.Spec.GatewayVmssProfile.PublicIpPrefixSize = -1
+			err := validate(gwConfig)
+			Expect(err).Should(HaveOccurred())
+		})
+
+		It("should fail when PublicIpPrefixSize > 31", func() {
+			gwConfig.Spec.GatewayVmssProfile.PublicIpPrefixSize = 32
+			err := validate(gwConfig)
+			Expect(err).Should(HaveOccurred())
+		})
+	})
+
+	Context("validate publicIpPrefix provision", func() {
+		It("should fail when PublicIPPrefixId is provided but ProvisionPublicIps is false", func() {
+			gwConfig.Spec.ProvisionPublicIps = false
+			err := validate(gwConfig)
+			Expect(err).Should(HaveOccurred())
 		})
 	})
 })

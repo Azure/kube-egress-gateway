@@ -12,18 +12,6 @@ metadata:
   namespace: {{ .Release.Namespace }}
 rules:
 - apiGroups:
-  - ""
-  resources:
-  - configmaps
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
   - coordination.k8s.io
   resources:
   - leases
@@ -224,19 +212,6 @@ spec:
   selector:
     kube-egress-gateway-control-plane: controller-manager
 ---
-apiVersion: v1
-kind: Service
-metadata:
-  name: kube-egress-gateway-webhook-service
-  namespace: {{ .Release.Namespace }}
-spec:
-  ports:
-  - port: 443
-    protocol: TCP
-    targetPort: 9443
-  selector:
-    kube-egress-gateway-control-plane: controller-manager
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -273,10 +248,6 @@ spec:
           initialDelaySeconds: 15
           periodSeconds: 20
         name: manager
-        ports:
-        - containerPort: 9443
-          name: webhook-server
-          protocol: TCP
         readinessProbe:
           httpGet:
             path: /readyz
@@ -298,9 +269,6 @@ spec:
         volumeMounts:
         - mountPath: /azure/config
           name: azure-cloud-config
-          readOnly: true
-        - mountPath: /tmp/k8s-webhook-server/serving-certs
-          name: cert
           readOnly: true
       - args:
         - --secure-listen-address=0.0.0.0:8443
@@ -333,86 +301,4 @@ spec:
       - name: azure-cloud-config
         secret:
           secretName: kube-egress-gateway-azure-cloud-config
-      - name: cert
-        secret:
-          defaultMode: 420
-          secretName: webhook-server-cert
----
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: kube-egress-gateway-serving-cert
-  namespace: {{ .Release.Namespace }}
-spec:
-  dnsNames:
-  - kube-egress-gateway-webhook-service.kube-egress-gateway-system.svc
-  - kube-egress-gateway-webhook-service.kube-egress-gateway-system.svc.cluster.local
-  issuerRef:
-    kind: Issuer
-    name: kube-egress-gateway-selfsigned-issuer
-  secretName: webhook-server-cert
----
-apiVersion: cert-manager.io/v1
-kind: Issuer
-metadata:
-  name: kube-egress-gateway-selfsigned-issuer
-  namespace: {{ .Release.Namespace }}
-spec:
-  selfSigned: {}
----
-apiVersion: admissionregistration.k8s.io/v1
-kind: MutatingWebhookConfiguration
-metadata:
-  annotations:
-    cert-manager.io/inject-ca-from: kube-egress-gateway-system/kube-egress-gateway-serving-cert
-  name: kube-egress-gateway-mutating-webhook-configuration
-webhooks:
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: kube-egress-gateway-webhook-service
-      namespace: {{ .Release.Namespace }}
-      path: /mutate-egressgateway-kubernetes-azure-com-v1alpha1-staticgatewayconfiguration
-  failurePolicy: Fail
-  name: mstaticgatewayconfiguration.kb.io
-  rules:
-  - apiGroups:
-    - egressgateway.kubernetes.azure.com
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - staticgatewayconfigurations
-  sideEffects: None
----
-apiVersion: admissionregistration.k8s.io/v1
-kind: ValidatingWebhookConfiguration
-metadata:
-  annotations:
-    cert-manager.io/inject-ca-from: kube-egress-gateway-system/kube-egress-gateway-serving-cert
-  name: kube-egress-gateway-validating-webhook-configuration
-webhooks:
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: kube-egress-gateway-webhook-service
-      namespace: {{ .Release.Namespace }}
-      path: /validate-egressgateway-kubernetes-azure-com-v1alpha1-staticgatewayconfiguration
-  failurePolicy: Fail
-  name: vstaticgatewayconfiguration.kb.io
-  rules:
-  - apiGroups:
-    - egressgateway.kubernetes.azure.com
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - staticgatewayconfigurations
-  sideEffects: None
 {{- end }}

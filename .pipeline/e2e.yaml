@@ -56,17 +56,6 @@ jobs:
       AZURE_TENANT_ID: $(AZURE_TENANT_ID)
   - bash: |
       set -euo pipefail
-      kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.12.0/cert-manager.crds.yaml
-      helm repo add jetstack https://charts.jetstack.io
-      helm repo update
-      helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --version v1.12.0
-      kubectl wait --for=condition=ready pod -A -l app.kubernetes.io/instance=cert-manager --timeout=300s
-      kubectl get all -n cert-manager
-    displayName: install cert-manager
-    env:
-      KUBECONFIG: $(kubeconfig)
-  - bash: |
-      set -euo pipefail
       mv $(pwd)/azure.json $(pwd)/config/azureconfig/azure.json
       export EXCEPTION_CIDRS=${POD_CIDR}","${SERVICE_CIDR}
       IMAGE_REGISTRY=$(registry.url) make install

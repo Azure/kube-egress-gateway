@@ -20,7 +20,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
@@ -122,7 +121,6 @@ func startControllers(cmd *cobra.Command, args []string) {
 		Metrics: metricsserver.Options{
 			BindAddress: ":" + strconv.Itoa(metricsPort),
 		},
-		WebhookServer:          webhook.NewServer(webhook.Options{Port: 9443}),
 		HealthProbeBindAddress: ":" + strconv.Itoa(probePort),
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "0a299682.microsoft.com",
@@ -199,10 +197,6 @@ func startControllers(cmd *cobra.Command, args []string) {
 		Recorder: mgr.GetEventRecorderFor("staticGatewayConfiguration-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "StaticGatewayConfiguration")
-		os.Exit(1)
-	}
-	if err = (&egressgatewayv1alpha1.StaticGatewayConfiguration{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "StaticGatewayConfiguration")
 		os.Exit(1)
 	}
 	if err = (&controllers.GatewayLBConfigurationReconciler{
