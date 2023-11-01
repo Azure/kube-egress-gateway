@@ -9,35 +9,35 @@ import (
 
 type CloudConfig struct {
 	// azure cloud
-	Cloud string
+	Cloud string `json:"cloud,omitempty" mapstructure:"cloud,omitempty"`
 	// azure resource location
-	Location string
+	Location string `json:"location,omitempty" mapstructure:"location,omitempty"`
 	// subscription ID
-	SubscriptionID string
+	SubscriptionID string `json:"subscriptionID,omitempty" mapstructure:"subscriptionID,omitempty"`
 	// tenant ID
-	TenantID string
+	TenantID string `json:"tenantID,omitempty" mapstructure:"tenantID,omitempty"`
 	// use user assigned identity or not
-	UseUserAssignedIdentity bool
+	UseUserAssignedIdentity bool `json:"useUserAssignedIdentity,omitempty" mapstructure:"useUserAssignedIdentity,omitempty"`
 	// user assigned identity ID
-	UserAssignedIdentityID string
+	UserAssignedIdentityID string `json:"userAssignedIdentityID,omitempty" mapstructure:"userAssignedIdentityID,omitempty"`
 	// aad client ID
-	AADClientID string
+	AADClientID string `json:"aadClientID,omitempty" mapstructure:"aadClientID,omitempty"`
 	// aad client secret
-	AADClientSecret string
+	AADClientSecret string `json:"aadClientSecret,omitempty" mapstructure:"aadClientSecret,omitempty"`
 	// user agent for Azure customer usage attribution
-	UserAgent string
+	UserAgent string `json:"userAgent,omitempty" mapstructure:"userAgent,omitempty"`
 	// default resource group where the gateway nodes are deployed
-	ResourceGroup string
+	ResourceGroup string `json:"resourceGroup,omitempty" mapstructure:"resourceGroup,omitempty"`
 	// name of the gateway ILB
-	LoadBalancerName string
+	LoadBalancerName string `json:"gatewayLoadBalancerName,omitempty" mapstructure:"gatewayLoadBalancerName,omitempty"`
 	// resource group where the gateway ILB belongs
-	LoadBalancerResourceGroup string
+	LoadBalancerResourceGroup string `json:"loadBalancerResourceGroup,omitempty" mapstructure:"loadBalancerResourceGroup,omitempty"`
 	// name of the virtual network where the gateway ILB is deployed
-	VnetName string
+	VnetName string `json:"vnetName,omitempty" mapstructure:"vnetName,omitempty"`
 	// name of the resource group where the virtual network is deployed
-	VnetResourceGroup string
+	VnetResourceGroup string `json:"vnetResourceGroup,omitempty" mapstructure:"vnetResourceGroup,omitempty"`
 	// name of the subnet in the vnet where the gateway ILB is deployed
-	SubnetName string
+	SubnetName string `json:"subnetName,omitempty" mapstructure:"subnetName,omitempty"`
 }
 
 func (cfg *CloudConfig) TrimSpace() {
@@ -82,10 +82,6 @@ func (cfg *CloudConfig) Validate() error {
 
 	if cfg.ResourceGroup == "" {
 		return fmt.Errorf("resource group is empty")
-	}
-
-	if cfg.LoadBalancerName == "" {
-		return fmt.Errorf("load balancer name is empty")
 	}
 
 	if cfg.VnetName == "" {

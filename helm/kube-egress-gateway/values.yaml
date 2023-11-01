@@ -56,7 +56,7 @@ config:
     userAgent: "kube-egress-gateway-controller"
     resourceGroup: ""
     location: ""
-    loadBalancerName: "gateway-ilb"
+    gatewayLoadBalancerName: "kubeegressgateway-ilb"
     loadBalancerResourceGroup: ""
     vnetName: ""
     vnetResourceGroup: ""

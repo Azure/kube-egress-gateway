@@ -9,6 +9,9 @@ const (
 	// GatewayVMConfiguration finalizer name
 	VMConfigFinalizerName = "gateway-vm-configuration-controller.microsoft.com"
 
+	// Default gateway LoadBalancer name
+	DefaultGatewayLBName = "kubeegressgateway-ilb"
+
 	// Key name in the wireugard private key secret
 	WireguardSecretKeyName = "WireguardPrivateKey"
 

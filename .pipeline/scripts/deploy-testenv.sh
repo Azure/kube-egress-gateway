@@ -8,7 +8,7 @@ NETWORK_PLUGIN=${NETWORK_PLUGIN:-"kubenet"}
 DNS_SERVER_IP=${DNS_SERVER_IP:-"10.245.0.10"}
 POD_CIDR=${POD_CIRD:-"10.244.0.0/16"}
 SERVICE_CIDR=${SERVICE_CIDR:-"10.245.0.0/16"}
-LB_NAME=${LB_NAME:-"gateway-ilb"}
+LB_NAME=${LB_NAME:-"kubeegressgateway-ilb"}
 
 : "${AZURE_SUBSCRIPTION_ID:?Environment variable empty or not defined.}"
 : "${AZURE_TENANT_ID:?Environment variable empty or not defined.}"
@@ -99,7 +99,7 @@ cat << EOF > $(pwd)/azure.json
     "aadClientSecret": "${AZURE_CLIENT_SECRET}",
     "resourceGroup": "${AKS_NODE_RESOURCE_GROUP}",
     "location": "${LOCATION}",
-    "loadBalancerName": "${LB_NAME}",
+    "gatewayLoadBalancerName": "${LB_NAME}",
     "loadBalancerResourceGroup": "${RESOURCE_GROUP}",
     "vnetName": "${VNET_NAME}",
     "vnetResourceGroup": "${RESOURCE_GROUP}",
