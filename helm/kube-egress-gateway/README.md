@@ -45,7 +45,7 @@ Azure cloud configuration provides information including resource metadata and c
 | `config.azureCloudConfig.resourceGroup` | The name of the resource group where cluster resources are deployed. | |
 | `config.azureCloudConfig.userAgent` | The userAgent provided to Azure when accessing Azure resources. | |
 | `config.azureCloudConfig.location` | The azure region where resource group and its resources is deployed. | |
-| `config.azureCloudConfig.loadBalancerName` | The name of the load balancer in front of gateway VMSS for high availability. | Required, helm chart defaults to `gateway-ilb`. |
+| `config.azureCloudConfig.gatewayLoadBalancerName` | The name of the load balancer in front of gateway VMSS for high availability. | Required, helm chart defaults to `kubeegressgateway-ilb`. |
 | `config.azureCloudConfig.loadBalancerResourceGroup` | The resouce group where the load balancer to be deployed. | Optional. If not provided, it's the same as `config.azureCloudConfig.resourceGroup`. |
 | `config.azureCloudConfig.vnetName` | The name of the virtual network where load balancer frontend ip comes from. | |
 | `config.azureCloudConfig.vnetResourceGroup` | The resource group where the virtual network is deployed. | Optional. If not set, it's the same as `config.azureCloudConfig.resourceGroup`. |
@@ -66,7 +66,7 @@ config:
     userAgent: "kube-egress-gateway-controller"
     resourceGroup: "<resource group name>"
     location: "<resource group location>"
-    loadBalancerName: "gateway-ilb"
+    gatewayLoadBalancerName: "kubeegressgateway-ilb"
     loadBalancerResourceGroup: ""
     vnetName: "<virtual network name>"
     vnetResourceGroup: ""

@@ -25,6 +25,7 @@ import (
 	mockvirtualmachinescalesetvmclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
 
 	"github.com/Azure/kube-egress-gateway/pkg/config"
+	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 )
 
@@ -79,13 +80,17 @@ func TestGets(t *testing.T) {
 	assert.Nil(t, err, "CreateAzureManager() should not return error")
 	expectedFrontendID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/frontendIPConfigurations/%s",
 		config.SubscriptionID, config.LoadBalancerResourceGroup, config.LoadBalancerName, "test")
-	assert.Equal(t, to.Val(az.GetLBFrontendIPConfigurationID("test")), expectedFrontendID, "GetLBFrontendIPConfigurationID() should return expected result")
+	assert.Equal(t, expectedFrontendID, to.Val(az.GetLBFrontendIPConfigurationID("test")), "GetLBFrontendIPConfigurationID() should return expected result")
 	expectedLBBackendAddressPoolID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s",
 		config.SubscriptionID, config.LoadBalancerResourceGroup, config.LoadBalancerName, "test")
-	assert.Equal(t, to.Val(az.GetLBBackendAddressPoolID("test")), expectedLBBackendAddressPoolID, "GetLBBackendAddressPoolID() should return expected result")
+	assert.Equal(t, expectedLBBackendAddressPoolID, to.Val(az.GetLBBackendAddressPoolID("test")), "GetLBBackendAddressPoolID() should return expected result")
 	expectedLBProbeID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/probes/%s",
 		config.SubscriptionID, config.LoadBalancerResourceGroup, config.LoadBalancerName, "test")
-	assert.Equal(t, to.Val(az.GetLBProbeID("test")), expectedLBProbeID, "GetLBProbeID() should return expected result")
+	assert.Equal(t, expectedLBProbeID, to.Val(az.GetLBProbeID("test")), "GetLBProbeID() should return expected result")
+
+	assert.Equal(t, "testLB", az.LoadBalancerName(), "LoadBalancerName() should return loadBalancer name from config")
+	az.CloudConfig.LoadBalancerName = ""
+	assert.Equal(t, consts.DefaultGatewayLBName, az.LoadBalancerName(), "LoadBalancerName() should return default loadBalancer name if it's empty in config")
 }
 
 func TestGetLB(t *testing.T) {

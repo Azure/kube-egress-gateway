@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
 
 	"github.com/Azure/kube-egress-gateway/pkg/config"
+	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 )
 
@@ -78,6 +79,9 @@ func (az *AzureManager) Location() string {
 }
 
 func (az *AzureManager) LoadBalancerName() string {
+	if az.CloudConfig.LoadBalancerName == "" {
+		return consts.DefaultGatewayLBName
+	}
 	return az.CloudConfig.LoadBalancerName
 }
 
