@@ -109,7 +109,7 @@ jobs:
         with:
           push: ${{ github.event_name != 'pull_request' }}
           files: |
-            docker-bake.hcl
+            docker/docker-bake.hcl
             ${{ steps.daemon.outputs.bake-file }}
             ${{ steps.controller.outputs.bake-file }}
             ${{ steps.cnimanager.outputs.bake-file }}

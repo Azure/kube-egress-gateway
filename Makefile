@@ -100,11 +100,11 @@ run: manifests generate fmt vet ## Run a controller from your host.
 
 .PHONY: docker-build
 docker-build: unit-test docker-builder-setup ## Build docker image with the manager.
-	TAG=$(IMAGE_TAG) IMAGE_REGISTRY=$(IMAGE_REGISTRY) PLATFORMS=$(PLATFORMS) docker buildx bake -f docker-bake.hcl -f docker-localtag-bake.hcl --progress auto --push
+	TAG=$(IMAGE_TAG) IMAGE_REGISTRY=$(IMAGE_REGISTRY) PLATFORMS=$(PLATFORMS) docker buildx bake -f docker/docker-bake.hcl -f docker/docker-localtag-bake.hcl --progress auto --push
 
 .PHONY: docker-build-multi-arch
 docker-build-multi-arch: unit-test docker-builder-setup ## Build docker image with the manager.
-	TAG=$(IMAGE_TAG) IMAGE_REGISTRY=$(IMAGE_REGISTRY) PLATFORMS=$(PLATFORMS_MULTI_ARCH) docker buildx bake -f docker-bake.hcl -f docker-localtag-bake.hcl --progress auto --push
+	TAG=$(IMAGE_TAG) IMAGE_REGISTRY=$(IMAGE_REGISTRY) PLATFORMS=$(PLATFORMS_MULTI_ARCH) docker buildx bake -f docker/docker-bake.hcl -f  docker/docker-localtag-bake.hcl --progress auto --push
 
 .PHONY: docker-builder-setup
 docker-builder-setup:
