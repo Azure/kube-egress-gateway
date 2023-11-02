@@ -8,7 +8,7 @@ variable "PLATFORMS" {
 }
 
 target "base" {
-  dockerfile = "base.Dockerfile"
+  dockerfile = "docker/base.Dockerfile"
   platforms = [PLATFORMS]
 }
 
@@ -21,7 +21,7 @@ target "daemon-compile" {
 
 target "daemon" {
   inherits = ["daemon-tags"]
-  dockerfile = "gwdaemon.Dockerfile"
+  dockerfile = "docker/gwdaemon.Dockerfile"
   contexts = {
     baseimg = "target:daemon-compile"
   }
@@ -48,7 +48,7 @@ target "cnimanager-compile" {
 
 target "cnimanager" {
   inherits = ["cnimanager-tags"]
-  dockerfile = "cnimanager.Dockerfile"
+  dockerfile = "docker/cnimanager.Dockerfile"
   contexts = {
     baseimg = "target:cnimanager-compile"
   }
@@ -68,7 +68,7 @@ target "cni-compile" {
 
 target "cni" {
   inherits = ["cni-tags"]
-  dockerfile = "cni.Dockerfile"
+  dockerfile = "docker/cni.Dockerfile"
   contexts = {
     baseimg = "target:cni-compile"
   }
@@ -84,7 +84,7 @@ target "cni-ipam-compile" {
 
 target "cni-ipam" {
   inherits = ["cni-ipam-tags"]
-  dockerfile = "cni.Dockerfile"
+  dockerfile = "docker/cni.Dockerfile"
   contexts = {
     baseimg = "target:cni-ipam-compile"
   }
