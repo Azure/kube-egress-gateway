@@ -17,7 +17,7 @@ type CloudConfig struct {
 	// tenant ID
 	TenantID string `json:"tenantID,omitempty" mapstructure:"tenantID,omitempty"`
 	// use user assigned identity or not
-	UseUserAssignedIdentity bool `json:"useUserAssignedIdentity,omitempty" mapstructure:"useUserAssignedIdentity,omitempty"`
+	UseManagedIdentityExtension bool `json:"useManagedIdentityExtension,omitempty" mapstructure:"useManagedIdentityExtension,omitempty"`
 	// user assigned identity ID
 	UserAssignedIdentityID string `json:"userAssignedIdentityID,omitempty" mapstructure:"userAssignedIdentityID,omitempty"`
 	// aad client ID

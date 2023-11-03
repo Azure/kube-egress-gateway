@@ -270,7 +270,7 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 	// get LoadBalancer
 	lb, err := r.getGatewayLB(ctx)
 	if err != nil {
-		log.Error(err, "failed to get LoadBalancer")
+		log.Error(err, "failed to get LoadBalancer %s", r.LoadBalancerName())
 		return "", 0, err
 	}
 	if lb == nil {
