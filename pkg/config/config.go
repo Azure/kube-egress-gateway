@@ -15,9 +15,10 @@ type CloudConfig struct {
 	// subscription ID
 	SubscriptionID string `json:"subscriptionID,omitempty" mapstructure:"subscriptionID,omitempty"`
 	// tenant ID
-	TenantID string `json:"tenantID,omitempty" mapstructure:"tenantID,omitempty"`
+	TenantID                    string `json:"tenantID,omitempty" mapstructure:"tenantID,omitempty"`
+	UseManagedIdentityExtension bool   `json:"useManagedIdentityExtension,omitempty" mapstructure:"useManagedIdentityExtension,omitempty"`
 	// use user assigned identity or not
-	UseManagedIdentityExtension bool `json:"useManagedIdentityExtension,omitempty" mapstructure:"useManagedIdentityExtension,omitempty"`
+	UseUserAssignedIdentity bool `json:"useUserAssignedIdentity,omitempty" mapstructure:"useUserAssignedIdentity,omitempty"`
 	// user assigned identity ID
 	UserAssignedIdentityID string `json:"userAssignedIdentityID,omitempty" mapstructure:"userAssignedIdentityID,omitempty"`
 	// aad client ID
