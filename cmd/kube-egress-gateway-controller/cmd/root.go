@@ -52,13 +52,14 @@ func Execute() {
 }
 
 var (
-	cloudConfigFile      string
-	cloudConfig          config.CloudConfig
-	scheme               = runtime.NewScheme()
-	metricsPort          int
-	enableLeaderElection bool
-	probePort            int
-	zapOpts              = zap.Options{
+	cloudConfigFile         string
+	cloudConfig             config.CloudConfig
+	scheme                  = runtime.NewScheme()
+	metricsPort             int
+	enableLeaderElection    bool
+	leaderElectionNamespace string
+	probePort               int
+	zapOpts                 = zap.Options{
 		Development: true,
 	}
 )
@@ -82,6 +83,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	rootCmd.Flags().StringVar(&leaderElectionNamespace, "leader-election-namespace", "kube-system", "the namespace to create leader election objects")
 
 	zapOpts.BindFlags(goflag.CommandLine)
 	rootCmd.Flags().AddGoFlagSet(goflag.CommandLine)
@@ -121,9 +123,10 @@ func startControllers(cmd *cobra.Command, args []string) {
 		Metrics: metricsserver.Options{
 			BindAddress: ":" + strconv.Itoa(metricsPort),
 		},
-		HealthProbeBindAddress: ":" + strconv.Itoa(probePort),
-		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "0a299682.microsoft.com",
+		HealthProbeBindAddress:  ":" + strconv.Itoa(probePort),
+		LeaderElection:          enableLeaderElection,
+		LeaderElectionNamespace: leaderElectionNamespace,
+		LeaderElectionID:        "0a299682.microsoft.com",
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
