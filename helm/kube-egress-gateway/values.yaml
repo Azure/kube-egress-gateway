@@ -22,6 +22,8 @@ gatewayCNIManager:
   exceptionCidrs:
     - ""
   cniConfigFileName: "01-egressgateway.conflist"
+  cniUninstallConfigMapName: "cni-uninstall"
+  cniUninstall: true
 
 gatewayDaemonManager:
   enabled: true

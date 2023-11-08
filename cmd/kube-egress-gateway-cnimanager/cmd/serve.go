@@ -3,10 +3,12 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
 
+	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
@@ -19,9 +21,13 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
@@ -48,8 +54,9 @@ var serveCmd = &cobra.Command{
 }
 
 var (
-	confFileName   string
-	exceptionCidrs string
+	confFileName              string
+	exceptionCidrs            string
+	cniUninstallConfigMapName string
 )
 
 func init() {
@@ -66,6 +73,7 @@ func init() {
 	// serveCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	serveCmd.Flags().StringVar(&exceptionCidrs, "exception-cidrs", "", "Cidrs that should bypass egress gateway separated with ',', e.g. intra-cluster traffic")
 	serveCmd.Flags().StringVar(&confFileName, "cni-conf-file", "01-egressgateway.conflist", "Name of the new cni configuration file")
+	serveCmd.Flags().StringVar(&cniUninstallConfigMapName, "cni-uninstall-configmap-name", "cni-uninstall", "Name of the configmap that indicates whether to uninstall cni plugin or not, the configMap should be in the same namespace as the cniManager pod")
 }
 
 func ServiceLauncher(cmd *cobra.Command, args []string) {
@@ -77,7 +85,9 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 	logger.SetDefaultLogger(zapr.NewLogger(zapLog))
 	logger := logger.GetLogger()
 
-	cniConfMgr, err := cniconf.NewCNIConfManager(consts.CNIConfDir, confFileName, exceptionCidrs)
+	k8sClient := startKubeClient(ctx, logger)
+
+	cniConfMgr, err := cniconf.NewCNIConfManager(consts.CNIConfDir, confFileName, exceptionCidrs, cniUninstallConfigMapName, k8sClient)
 	if err != nil {
 		logger.Error(err, "failed to create cni config manager")
 		os.Exit(1)
@@ -89,27 +99,7 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	apischeme := runtime.NewScheme()
-	utilruntime.Must(clientgoscheme.AddToScheme(apischeme))
-	utilruntime.Must(current.AddToScheme(apischeme))
-	k8sCluster, err := cluster.New(config.GetConfigOrDie(), func(options *cluster.Options) {
-		options.Scheme = apischeme
-		options.Logger = logger
-	})
-	if err != nil {
-		logger.Error(err, "failed to create k8s cluster object")
-		os.Exit(1)
-	}
-	go func() {
-		if err := k8sCluster.Start(ctx); err != nil {
-			logger.Error(err, "failed to start k8s client cache")
-			os.Exit(1)
-		}
-	}()
-
-	k8sClient := k8sCluster.GetClient()
 	nicSvc := cnimanager.NewNicService(k8sClient)
-
 	server := grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
@@ -148,4 +138,45 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 		logger.Error(err, "failed to serve")
 	}
 	logger.Info("server shutdown")
+}
+
+func startKubeClient(ctx context.Context, logger logr.Logger) client.Client {
+	apischeme := runtime.NewScheme()
+	utilruntime.Must(clientgoscheme.AddToScheme(apischeme))
+	utilruntime.Must(current.AddToScheme(apischeme))
+	k8sCluster, err := cluster.New(config.GetConfigOrDie(), func(options *cluster.Options) {
+		options.Scheme = apischeme
+		options.Logger = logger
+		options.Cache = cache.Options{
+			ByObject: map[client.Object]cache.ByObject{
+				&corev1.ConfigMap{}: cache.ByObject{
+					// we only watch this specific one cm object
+					Field: fields.SelectorFromSet(fields.Set{
+						"metadata.name":      cniUninstallConfigMapName,
+						"metadata.namespace": os.Getenv(consts.PodNamespaceEnvKey),
+					}),
+				},
+			},
+		}
+	})
+	if err != nil {
+		logger.Error(err, "failed to create k8s cluster object")
+		os.Exit(1)
+	}
+	go func() {
+		if err := k8sCluster.Start(ctx); err != nil {
+			logger.Error(err, "failed to start k8s client cache")
+			os.Exit(1)
+		}
+	}()
+
+	// wait for initial cache sync
+	k8sCluster.GetCache().WaitForCacheSync(ctx)
+	k8sClient := k8sCluster.GetClient()
+	cm := &corev1.ConfigMap{}
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: cniUninstallConfigMapName, Namespace: os.Getenv(consts.PodNamespaceEnvKey)}, cm); err != nil {
+		// only get the configMap to trigger informer start, ignore the error
+		logger.Error(err, "failed to get cni uninstall configMap, error ignored", "configMap name", cniUninstallConfigMapName)
+	}
+	return k8sClient
 }

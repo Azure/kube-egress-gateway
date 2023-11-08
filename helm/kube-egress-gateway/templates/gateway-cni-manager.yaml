@@ -13,6 +13,14 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - pods
   verbs:
   - get
@@ -80,6 +88,7 @@ spec:
         - serve
         - --exception-cidrs={{- range $i, $cidr := .Values.gatewayCNIManager.exceptionCidrs }}{{- if $i }},{{- end }}{{ $cidr }}{{- end }}
         - --cni-conf-file={{- .Values.gatewayCNIManager.cniConfigFileName }}
+        - --cni-uninstall-configmap-name={{- .Values.gatewayCNIManager.cniUninstallConfigMapName }}
         command:
         - /kube-egress-gateway-cnimanager
         image: {{ template "image.gatewayCNIManager" . }}
@@ -108,6 +117,11 @@ spec:
             memory: 64Mi
         securityContext:
           privileged: true
+        env:
+        - name: MY_POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         volumeMounts:
         - mountPath: /etc/cni/net.d
           name: cni-conf
