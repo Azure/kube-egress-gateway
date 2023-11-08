@@ -34,7 +34,7 @@ fi
 
 # Create vnet and subnets
 echo "Creating virtual network: ${VNET_NAME}"
-VNET=$(az network vnet create -g ${RESOURCE_GROUP} -n ${VNET_NAME} --address-prefixes "10.243.0.0/16")
+VNET=$(az network vnet create -g ${RESOURCE_GROUP} -n ${VNET_NAME} -l ${LOCATION} --address-prefixes "10.243.0.0/16")
 VNET_ID=$(echo ${VNET} | jq -r '. | .id')
 SUBNET_GATEWAY=$(az network vnet subnet create -g ${RESOURCE_GROUP} --vnet-name ${VNET_NAME} -n "gateway" --address-prefixes "10.243.0.0/23")
 SUBNET_AKS=$(az network vnet subnet create -g ${RESOURCE_GROUP} --vnet-name ${VNET_NAME} -n "aks" --address-prefixes "10.243.4.0/22")

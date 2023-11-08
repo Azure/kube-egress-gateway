@@ -35,7 +35,7 @@ spec:
   provisionPublicIps: true
   publicIpPrefixId: /subscriptions/mySubscriptionID/resourcegroups/myResourceGroup/providers/Microsoft.Network/publicipprefixes/myPIPPrefix
   defaultRoute: staticEgressGateway
-  excludeCIDRs:
+  excludeCidrs:
     - 10.244.0.0/16
     - 10.245.0.0/16
 ```

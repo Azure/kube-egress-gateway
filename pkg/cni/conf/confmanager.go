@@ -5,6 +5,7 @@ package conf
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -13,20 +14,27 @@ import (
 	"strings"
 
 	"github.com/fsnotify/fsnotify"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/logger"
 )
 
+var ErrMainCNINotFound error = errors.New("no existing cni plugin configuration file found")
+
 type Manager struct {
-	cniConfDir      string
-	cniConfFile     string
-	cniConfFileTemp string
-	cniConfWatcher  *fsnotify.Watcher
-	exceptionCidrs  []string
+	cniConfDir                string
+	cniConfFile               string
+	cniConfFileTemp           string
+	cniUninstallConfigMapName string
+	cniConfWatcher            *fsnotify.Watcher
+	exceptionCidrs            []string
+	k8sClient                 client.Client
 }
 
-func NewCNIConfManager(cniConfDir, cniConfFile, exceptionCidrs string) (*Manager, error) {
+func NewCNIConfManager(cniConfDir, cniConfFile, exceptionCidrs, cniUninstallConfigMapName string, k8sClient client.Client) (*Manager, error) {
 	cidrs, err := parseCidrs(exceptionCidrs)
 	if err != nil {
 		return nil, err
@@ -38,11 +46,13 @@ func NewCNIConfManager(cniConfDir, cniConfFile, exceptionCidrs string) (*Manager
 	}
 
 	return &Manager{
-		cniConfDir:      cniConfDir,
-		cniConfFile:     cniConfFile,
-		cniConfFileTemp: cniConfFile + ".tmp",
-		cniConfWatcher:  watcher,
-		exceptionCidrs:  cidrs,
+		cniConfDir:                cniConfDir,
+		cniConfFile:               cniConfFile,
+		cniConfFileTemp:           cniConfFile + ".tmp",
+		cniUninstallConfigMapName: cniUninstallConfigMapName,
+		cniConfWatcher:            watcher,
+		exceptionCidrs:            cidrs,
+		k8sClient:                 k8sClient,
 	}, nil
 }
 
@@ -57,16 +67,19 @@ func (mgr *Manager) Start(ctx context.Context) error {
 
 	log.Info("Installing cni configuration")
 	if err := mgr.insertCNIPluginConf(); err != nil {
-		return err
+		if errors.Is(err, ErrMainCNINotFound) {
+			log.Info("Main CNI config file is missing, continue to watch changes")
+		} else {
+			return err
+		}
 	}
 
 	log.Info("Start to watch cni configuration changes", "conf directory", mgr.cniConfDir)
 	for {
 		select {
 		case event := <-mgr.cniConfWatcher.Events:
-			if strings.Contains(event.Name, mgr.cniConfFileTemp) ||
-				(strings.Contains(event.Name, mgr.cniConfFile) && !event.Has(fsnotify.Remove) && !event.Has(fsnotify.Rename)) {
-				// ignore our cni conf file change (unless it's deletion or rename) to avoid loop
+			if strings.Contains(event.Name, mgr.cniConfFile) {
+				// ignore our cni conf file change itself to avoid loop
 				log.Info("Detected changes in cni configuration file, ignoring...", "change event", event)
 				continue
 			}
@@ -79,6 +92,9 @@ func (mgr *Manager) Start(ctx context.Context) error {
 				log.Error(err, "failed to watch cni configuration directory changes")
 			}
 		case <-ctx.Done():
+			if err := mgr.removeCNIPluginConf(); err != nil {
+				log.Error(err, "failed to remove cni configuration file on exit")
+			}
 			return nil
 		}
 	}
@@ -116,6 +132,34 @@ func (mgr *Manager) insertCNIPluginConf() error {
 	err = os.Rename(tmpFile, filepath.Join(mgr.cniConfDir, mgr.cniConfFile))
 	if err != nil {
 		return fmt.Errorf("failed to rename file: %w", err)
+	}
+	return nil
+}
+
+func (mgr *Manager) removeCNIPluginConf() error {
+	log := logger.GetLogger()
+	cm := &corev1.ConfigMap{}
+	cmKey := client.ObjectKey{Name: mgr.cniUninstallConfigMapName, Namespace: os.Getenv(consts.PodNamespaceEnvKey)}
+	err := mgr.k8sClient.Get(context.Background(), cmKey, cm)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("failed to get cni uninstall configMap (%s/%s): %w", cmKey.Namespace, cmKey.Name, err)
+	} else if err == nil {
+		if cm.Data["uninstall"] == "false" {
+			log.Info("Uninstall flag is NOT set, skip removing cni configuration file")
+			return nil
+		}
+	}
+
+	log.Info("Removing cni configuration file...")
+	file := filepath.Join(mgr.cniConfDir, mgr.cniConfFile)
+	if _, err := os.Stat(file); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to stat file %s: %w", file, err)
+	}
+	if err := os.Remove(file); err != nil {
+		return fmt.Errorf("failed to delete file %s: %w", file, err)
 	}
 	return nil
 }
@@ -245,7 +289,7 @@ func findMasterPlugin(cniConfDir, cniConfFile string) (string, error) {
 	}
 
 	if len(confFiles) == 0 {
-		return "", fmt.Errorf("no existing cni plugin configuration file found")
+		return "", ErrMainCNINotFound
 	}
 	sort.Strings(confFiles)
 	return filepath.Join(cniConfDir, confFiles[0]), nil

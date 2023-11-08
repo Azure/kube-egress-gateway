@@ -38,10 +38,16 @@ spec:
             - serve
             - --exception-cidrs=$(EXCEPTION_CIDRS)
             - --cni-conf-file=01-egressgateway.conflist
+            - --cni-uninstall-configmap-name=cni-uninstall
           image: cnimanager:latest
           name: cnimanager
           securityContext:
             privileged: true
+          env:
+          - name: MY_POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
           volumeMounts:
             - mountPath: /etc/cni/net.d
               name: cni-conf
