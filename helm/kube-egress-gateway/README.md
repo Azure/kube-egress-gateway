@@ -113,6 +113,8 @@ The Helm chart installs 5 components with different images: gateway-controller-m
 | `gatewayCNIManager.imagePullPolicy` | `IfNotPresent` | Image pull policy for gatewayCNIManager's image. |
 | `gatewayCNIManager.exceptionCidrs` | `[""]` | A list of cidrs that should be exempted from all egress gateways, e.g. intra-cluster traffic. |
 | `gatewayCNIManager.cniConfigFileName` | `01-egressgateway.conflist` | Name of the newly generated cni configuration list file. |
+| `gatewayCNIManager.cniUninstallConfigMapName` | `cni-uninstall` | Name of the configMap indicating whether cni plugin needs to be uninstalled upon gatewayCNIManager pod shutdown. |
+| `gatewayCNIManager.cniUninstall` | `true` | Boolean indicating whether to uninstall kube-egress-gateway CNI plugin upon gatewayCNIManager pod shutdown. |
 
 ## gateway-CNI and gateway-CNI-Ipam configurations
 

@@ -12,12 +12,20 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/Azure/kube-egress-gateway/pkg/consts"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 const (
-	testDir      = "./testdata"
-	testConf     = "01-test.conf"
-	testConfList = "01-test.conflist"
+	testDir                       = "./testdata"
+	testConf                      = "01-test.conf"
+	testConfList                  = "01-test.conflist"
+	testCniUninstallConfigMapName = "cni-uninstall"
 )
 
 func TestNewCNIConfManager(t *testing.T) {
@@ -44,7 +52,7 @@ func TestNewCNIConfManager(t *testing.T) {
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			mgr, err := NewCNIConfManager(test.testDir, testConfList, test.exceptionCidrs)
+			mgr, err := NewCNIConfManager(test.testDir, testConfList, test.exceptionCidrs, testCniUninstallConfigMapName, fake.NewFakeClient())
 			defer func() {
 				if mgr != nil && mgr.cniConfWatcher != nil {
 					_ = mgr.cniConfWatcher.Close()
@@ -62,6 +70,9 @@ func TestNewCNIConfManager(t *testing.T) {
 				}
 				if mgr.cniConfFileTemp != testConfList+".tmp" {
 					t.Fatalf("mgr's cniConfFileTemp is different: got: %s, expected: %s", mgr.cniConfFileTemp, testConfList+".tmp")
+				}
+				if mgr.cniUninstallConfigMapName != testCniUninstallConfigMapName {
+					t.Fatalf("mgr's cniUninstallConfigMapName is different: got: %s, expected: %s", mgr.cniUninstallConfigMapName, testCniUninstallConfigMapName)
 				}
 				if mgr.cniConfWatcher == nil {
 					t.Fatalf("mgr's cniConfWatch is nil")
@@ -83,7 +94,7 @@ func TestNewCNIConfManager(t *testing.T) {
 }
 
 func TestStart(t *testing.T) {
-	mgr, err := NewCNIConfManager(testDir, testConfList, "")
+	mgr, err := NewCNIConfManager(testDir, testConfList, "", testCniUninstallConfigMapName, fake.NewFakeClient())
 	if err != nil {
 		t.Fatalf("failed to create cni conf manager: %v", err)
 	}
@@ -91,11 +102,6 @@ func TestStart(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 	wg.Add(1)
-	defer func() {
-		cancel()
-		wg.Wait()
-		_ = os.Remove(filepath.Join(testDir, testConfList))
-	}()
 	go func() {
 		defer wg.Done()
 		if err := mgr.Start(ctx); err != nil {
@@ -128,23 +134,64 @@ func TestStart(t *testing.T) {
 		t.Fatalf("cni conf file is not regenerated")
 	}
 
-	// delete existing cni conf file
-	_ = os.Remove(filepath.Join(testDir, testConfList))
-	time.Sleep(100 * time.Millisecond)
+	cancel()
+	wg.Wait()
 	_, err = os.Stat(filepath.Join(testDir, testConfList))
-	if err != nil {
-		t.Fatalf("failed to recreate cni conf file after it's deleted: %v", err)
+	if err == nil || !os.IsNotExist(err) {
+		t.Fatalf("expect cni conf file not to be found, actual: %v", err)
 	}
+}
 
-	// rename existing cni conf file
-	_ = os.Rename(filepath.Join(testDir, testConfList), filepath.Join(testDir, "test"))
-	defer func() {
-		_ = os.Remove(filepath.Join(testDir, "test"))
-	}()
-	time.Sleep(100 * time.Millisecond)
-	_, err = os.Stat(filepath.Join(testDir, testConfList))
-	if err != nil {
-		t.Fatalf("failed to create cni conf file after it's renamed: %v", err)
+func TestRemoveCNIPluginConf(t *testing.T) {
+	tests := map[string]struct {
+		client        client.Client
+		expectDeleted bool
+	}{
+		"confManager should delete cni conf file upon stop when cniUninstall cm is not found": {
+			client:        fake.NewFakeClient(),
+			expectDeleted: true,
+		},
+		"confManager should delete cni conf file upon stop when cniUninstall cm enables cni uninstall": {
+			client:        fake.NewFakeClient(&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: testCniUninstallConfigMapName, Namespace: "default"}, Data: map[string]string{"uninstall": "true"}}),
+			expectDeleted: true,
+		},
+		"confManager should not delete cni conf file upon stop when cniUninstall cm disables cni uninstall": {
+			client:        fake.NewFakeClient(&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: testCniUninstallConfigMapName, Namespace: "default"}, Data: map[string]string{"uninstall": "false"}}),
+			expectDeleted: false,
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			os.Setenv(consts.PodNamespaceEnvKey, "default")
+			defer os.Unsetenv(consts.PodNamespaceEnvKey)
+			mgr, err := NewCNIConfManager(testDir, testConfList, "", testCniUninstallConfigMapName, test.client)
+			if err != nil {
+				t.Fatalf("failed to create cni conf manager: %v", err)
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if err := mgr.Start(ctx); err != nil {
+					t.Errorf("test")
+				}
+			}()
+			cancel()
+			wg.Wait()
+			_, err = os.Stat(filepath.Join(testDir, testConfList))
+			if test.expectDeleted {
+				if err == nil || !os.IsNotExist(err) {
+					t.Fatalf("expect not found error, got: %v", err)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("expect file to be found, got err: %v", err)
+				}
+				_ = os.Remove(filepath.Join(testDir, testConfList))
+			}
+		})
 	}
 }
 
@@ -273,7 +320,7 @@ func TestInsertCNIPluginConf(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			confFileName := "50-result.conflist"
-			mgr, err := NewCNIConfManager(testDir, confFileName, "10.1.0.0/16,1.2.3.4/32")
+			mgr, err := NewCNIConfManager(testDir, confFileName, "10.1.0.0/16,1.2.3.4/32", testCniUninstallConfigMapName, fake.NewFakeClient())
 			if err != nil {
 				t.Fatalf("failed to create cni conf manager: %v", err)
 			}

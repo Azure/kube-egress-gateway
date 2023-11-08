@@ -1,0 +1,9 @@
+{{- if .Values.gatewayCNIManager.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.gatewayCNIManager.cniUninstallConfigMapName }}
+  namespace: {{ .Release.Namespace }}
+data:
+  uninstall: {{ printf "%t" .Values.gatewayCNIManager.cniUninstall | quote }}
+{{- end }}

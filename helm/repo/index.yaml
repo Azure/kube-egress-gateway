@@ -2,9 +2,9 @@ apiVersion: v1
 entries:
   kube-egress-gateway:
   - apiVersion: v2
-    created: "2023-11-01T15:56:39.009199583Z"
+    created: "2023-11-12T13:34:14.615433094Z"
     description: A Helm chart for installing Azure kube-egress-gateway components
-    digest: 4a1a11e33e40a4d2fc7a6d85deb46b6e194773ec8d49dbb4c16b16ded3ce943e
+    digest: 7408aa318743988fd8ff2712b9f7e1c744b1c4d5aaff0544f539f0d0a4ec9793
     maintainers:
     - email: jwtty0919@gmail.com
       name: Wantong Jiang
@@ -17,4 +17,4 @@ entries:
     urls:
     - kube-egress-gateway-0.1.0.tgz
     version: 0.1.0
-generated: "2023-11-01T15:56:39.008615384Z"
+generated: "2023-11-12T13:34:14.614812517Z"
