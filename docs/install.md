@@ -41,7 +41,7 @@ kube-egress-gateway components communicates with Azure Resource Manager (ARM) to
     ```
 4. Fill the identity clientID in your Azure cloud config file. See [sample_cloud_config_msi.yaml](samples/sample_azure_config_msi.yaml) for example.
     ```
-    useUserAssignedIdentity: true
+    useManagedIdentityExtension: true
     userAssignedIdentityID: "$identityClientId"
     ```
 
@@ -55,7 +55,7 @@ kube-egress-gateway components communicates with Azure Resource Manager (ARM) to
     ```
 2. Fill the sp clientID and secret in your Azure cloud config file. See [sample_cloud_config_sp.yaml](samples/sample_azure_config_sp.yaml) for example.
     ```
-    useUserAssignedIdentity: false
+    useManagedIdentityExtension: false
     aadClientId: "<sp clientID>"
     aadClientSecret: "<sp secret>"
     ```

@@ -146,7 +146,7 @@ func startControllers(cmd *cobra.Command, args []string) {
 		AADClientID:                 cloudConfig.AADClientID,
 		AADClientSecret:             cloudConfig.AADClientSecret,
 		UserAssignedIdentityID:      cloudConfig.UserAssignedIdentityID,
-		UseManagedIdentityExtension: cloudConfig.UseUserAssignedIdentity,
+		UseManagedIdentityExtension: cloudConfig.UseManagedIdentityExtension,
 	}, &arm.ClientOptions{
 		AuxiliaryTenants: []string{cloudConfig.TenantID},
 	})
@@ -155,7 +155,7 @@ func startControllers(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 	var cred azcore.TokenCredential
-	if cloudConfig.UseUserAssignedIdentity {
+	if cloudConfig.UseManagedIdentityExtension {
 		cred = authProvider.ManagedIdentityCredential
 	} else {
 		cred = authProvider.ClientSecretCredential

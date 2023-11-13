@@ -15,11 +15,11 @@ type CloudConfig struct {
 	// subscription ID
 	SubscriptionID string `json:"subscriptionID,omitempty" mapstructure:"subscriptionID,omitempty"`
 	// tenant ID
-	TenantID                    string `json:"tenantID,omitempty" mapstructure:"tenantID,omitempty"`
-	UseManagedIdentityExtension bool   `json:"useManagedIdentityExtension,omitempty" mapstructure:"useManagedIdentityExtension,omitempty"`
-	// use user assigned identity or not
-	UseUserAssignedIdentity bool `json:"useUserAssignedIdentity,omitempty" mapstructure:"useUserAssignedIdentity,omitempty"`
-	// user assigned identity ID
+	TenantID string `json:"tenantID,omitempty" mapstructure:"tenantID,omitempty"`
+	// use managed identity to access Azure ARM APIs
+	UseManagedIdentityExtension bool `json:"useManagedIdentityExtension,omitempty" mapstructure:"useManagedIdentityExtension,omitempty"`
+	// UserAssignedIdentityID contains the Client ID of the user assigned MSI which is assigned to the underlying VMs. If empty the user assigned identity is not used.
+	// For the user assigned identity specified here to be used, the UseManagedIdentityExtension has to be set to true.
 	UserAssignedIdentityID string `json:"userAssignedIdentityID,omitempty" mapstructure:"userAssignedIdentityID,omitempty"`
 	// aad client ID
 	AADClientID string `json:"aadClientID,omitempty" mapstructure:"aadClientID,omitempty"`
@@ -71,11 +71,10 @@ func (cfg *CloudConfig) Validate() error {
 		return fmt.Errorf("subscription ID is empty")
 	}
 
-	if cfg.UseUserAssignedIdentity {
-		if cfg.UserAssignedIdentityID == "" {
-			return fmt.Errorf("user assigned identity ID is empty")
+	if !cfg.UseManagedIdentityExtension {
+		if cfg.UserAssignedIdentityID != "" {
+			return fmt.Errorf("useManagedIdentityExtension needs to be true when userAssignedIdentityID is provided")
 		}
-	} else {
 		if cfg.AADClientID == "" || cfg.AADClientSecret == "" {
 			return fmt.Errorf("AAD client ID or AAD client secret is empty")
 		}
