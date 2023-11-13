@@ -155,7 +155,7 @@ spec:
       nodeSelector:
         kubernetes.io/os: linux
       serviceAccountName: kube-egress-gateway-cni-manager
-      terminationGracePeriodSeconds: 10
+      terminationGracePeriodSeconds: 60 # update to 60 seconds for cni uninstall retry on error
       volumes:
       - hostPath:
           path: /proc

@@ -23,7 +23,7 @@ gatewayCNIManager:
     - ""
   cniConfigFileName: "01-egressgateway.conflist"
   cniUninstallConfigMapName: "cni-uninstall"
-  cniUninstall: true
+  cniUninstall: false
 
 gatewayDaemonManager:
   enabled: true

@@ -87,7 +87,7 @@ spec:
         kubernetes.io/os: linux
       hostNetwork: true
       serviceAccountName: cni-manager
-      terminationGracePeriodSeconds: 10
+      terminationGracePeriodSeconds: 60 # update to 60 seconds for cni uninstall retry on error
       volumes:
         - name: hostpath-proc
           hostPath:

@@ -12,10 +12,13 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
@@ -158,10 +161,18 @@ func (mgr *Manager) removeCNIPluginConf() error {
 		}
 		return fmt.Errorf("failed to stat file %s: %w", file, err)
 	}
-	if err := os.Remove(file); err != nil {
-		return fmt.Errorf("failed to delete file %s: %w", file, err)
-	}
-	return nil
+
+	return retry.OnError(
+		// retry for 10 times, 5s each
+		wait.Backoff{Duration: 5 * time.Second, Steps: 10},
+		func(err error) bool { return true },
+		func() error {
+			if err := os.Remove(file); err != nil {
+				return fmt.Errorf("failed to delete file %s: %w", file, err)
+			}
+			return nil
+		},
+	)
 }
 
 func newWatcher(cniConfDir string) (*fsnotify.Watcher, error) {
