@@ -3,7 +3,7 @@ config:
     cloud: "AzurePublicCloud"
     tenantId: "<tenant ID>"
     subscriptionId: "<subscription ID>"
-    useUserAssignedIdentity: false
+    useManagedIdentityExtension: false
     aadClientId: "<sp clientID>"
     aadClientSecret: "<sp secret>"
     userAgent: "kube-egress-gateway-controller"

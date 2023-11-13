@@ -33,23 +33,23 @@ Below we provide a list of configurations you can set when invoking `helm instal
 
 Azure cloud configuration provides information including resource metadata and credentials for gatewayControllerManager and gatewayDaemonManager to manipulate Azure resources. It's embedded into a Kubernetes secret and mounted to the pods. The complete configuration is **required** for the components to run. 
 
-| configuration value | description | Remark |
-| --- | --- | --- |
-| `config.azureCloudConfig.cloud` | The cloud where Azure resources belong. Choose from `AzurePublicCloud`, `AzureChinaCloud`, and `AzureGovernmentCloud`. | Required, helm chart defaults to `AzurePublicCloud` |
-| `config.azureCloudConfig.tenantId` | The AAD Tenant ID for the subscription where the Azure resources are deployed. | |
-| `config.azureCloudConfig.subscriptionId` | The ID of the subscription where Azure resources are deployed. | |
-| `config.azureCloudConfig.useUserAssignedIdentity` | Boolean indicating whether or not to use a managed identity. | `true` or `false` |
-| `config.azureCloudConfig.userAssignedIdentityID` | ClientID of the user-assigned managed identity with RBAC access to Azure resources. | Required to use user assigned managed identity. |
-| `config.azureCloudConfig.aadClientId` | The ClientID for an AAD application with RBAC access to Azure resources. | Required if `useUserAssignedIdentity` is set to `false`. |
-| `config.azureCloudConfig.aadClientSecret` | The ClientSecret for an AAD application with RBAC access to Azure resources. | Required if `useUserAssignedIdentity` is set to `false`. |
-| `config.azureCloudConfig.resourceGroup` | The name of the resource group where cluster resources are deployed. | |
-| `config.azureCloudConfig.userAgent` | The userAgent provided to Azure when accessing Azure resources. | |
-| `config.azureCloudConfig.location` | The azure region where resource group and its resources is deployed. | |
-| `config.azureCloudConfig.gatewayLoadBalancerName` | The name of the load balancer in front of gateway VMSS for high availability. | Required, helm chart defaults to `kubeegressgateway-ilb`. |
-| `config.azureCloudConfig.loadBalancerResourceGroup` | The resouce group where the load balancer to be deployed. | Optional. If not provided, it's the same as `config.azureCloudConfig.resourceGroup`. |
-| `config.azureCloudConfig.vnetName` | The name of the virtual network where load balancer frontend ip comes from. | |
-| `config.azureCloudConfig.vnetResourceGroup` | The resource group where the virtual network is deployed. | Optional. If not set, it's the same as `config.azureCloudConfig.resourceGroup`. |
-| `config.azureCloudConfig.subnetName` | The name of the subnet inside the virtual network where the load balancer frontend ip comes from. | |
+| configuration value                                   | description | Remark                                                                               |
+|-------------------------------------------------------| --- |--------------------------------------------------------------------------------------|
+| `config.azureCloudConfig.cloud`                       | The cloud where Azure resources belong. Choose from `AzurePublicCloud`, `AzureChinaCloud`, and `AzureGovernmentCloud`. | Required, helm chart defaults to `AzurePublicCloud`                                  |
+| `config.azureCloudConfig.tenantId`                    | The AAD Tenant ID for the subscription where the Azure resources are deployed. |                                                                                      |
+| `config.azureCloudConfig.subscriptionId`              | The ID of the subscription where Azure resources are deployed. |                                                                                      |
+| `config.azureCloudConfig.useManagedIdentityExtension` | Boolean indicating whether or not to use a managed identity. | `true` or `false`                                                                    |
+| `config.azureCloudConfig.userAssignedIdentityID`      | ClientID of the user-assigned managed identity with RBAC access to Azure resources. | Required to use managed identity.                                                    |
+| `config.azureCloudConfig.aadClientId`                 | The ClientID for an AAD application with RBAC access to Azure resources. | Required if `useManagedIdentityExtension` is set to `false`.                         |
+| `config.azureCloudConfig.aadClientSecret`             | The ClientSecret for an AAD application with RBAC access to Azure resources. | Required if `useManagedIdentityExtension` is set to `false`.                         |
+| `config.azureCloudConfig.resourceGroup`               | The name of the resource group where cluster resources are deployed. |                                                                                      |
+| `config.azureCloudConfig.userAgent`                   | The userAgent provided to Azure when accessing Azure resources. |                                                                                      |
+| `config.azureCloudConfig.location`                    | The azure region where resource group and its resources is deployed. |                                                                                      |
+| `config.azureCloudConfig.gatewayLoadBalancerName`     | The name of the load balancer in front of gateway VMSS for high availability. | Required, helm chart defaults to `kubeegressgateway-ilb`.                            |
+| `config.azureCloudConfig.loadBalancerResourceGroup`   | The resouce group where the load balancer to be deployed. | Optional. If not provided, it's the same as `config.azureCloudConfig.resourceGroup`. |
+| `config.azureCloudConfig.vnetName`                    | The name of the virtual network where load balancer frontend ip comes from. |                                                                                      |
+| `config.azureCloudConfig.vnetResourceGroup`           | The resource group where the virtual network is deployed. | Optional. If not set, it's the same as `config.azureCloudConfig.resourceGroup`.      |
+| `config.azureCloudConfig.subnetName`                  | The name of the subnet inside the virtual network where the load balancer frontend ip comes from. |                                                                                      |
 
 You can create a file `azure.yaml` with the following content, and pass it to `helm install` command: `helm install <release-name> <chart-name> -f azure.yaml`
 
@@ -59,7 +59,7 @@ config:
     cloud: "AzurePublicCloud"
     tenantId: "00000000-0000-0000-0000-000000000000"
     subscriptionId: "00000000-0000-0000-0000-000000000000"
-    useUserAssignedIdentity: false
+    useManagedIdentityExtension: false
     userAssignedIdentityID: "00000000-0000-0000-0000-000000000000"
     aadClientId: "00000000-0000-0000-0000-000000000000"
     aadClientSecret: "<your secret>"
