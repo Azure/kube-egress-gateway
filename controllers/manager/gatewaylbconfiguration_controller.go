@@ -33,7 +33,8 @@ import (
 type GatewayLBConfigurationReconciler struct {
 	client.Client
 	*azmanager.AzureManager
-	Recorder record.EventRecorder
+	Recorder    record.EventRecorder
+	LBProbePort int
 }
 
 type lbPropertyNames struct {
@@ -350,7 +351,7 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 
 	probeID := r.GetLBProbeID(names.probeName)
 	expectedLBRule := getExpectedLBRule(&names.lbRuleName, frontendID, backendID, probeID)
-	expectedProbe := getExpectedLBProbe(&names.probeName, lbConfig)
+	expectedProbe := getExpectedLBProbe(&names.probeName, r.LBProbePort, lbConfig)
 
 	lbRules := lb.Properties.LoadBalancingRules
 	if needLB {
@@ -537,6 +538,7 @@ func getExpectedLBRule(lbRuleName, frontendID, backendID, probeID *string) *netw
 
 func getExpectedLBProbe(
 	probeName *string,
+	lbProbePort int,
 	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
 ) *network.Probe {
 	gatewayUID := ""
@@ -550,7 +552,7 @@ func getExpectedLBProbe(
 	probeProp := &network.ProbePropertiesFormat{
 		RequestPath: to.Ptr(consts.GatewayHealthProbeEndpoint + gatewayUID),
 		Protocol:    to.Ptr(network.ProbeProtocolHTTP),
-		Port:        to.Ptr(consts.WireguardDaemonServicePort),
+		Port:        to.Ptr(int32(lbProbePort)),
 	}
 	return &network.Probe{
 		Name:       probeName,

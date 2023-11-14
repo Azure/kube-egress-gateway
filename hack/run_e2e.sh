@@ -15,6 +15,14 @@ if [[ "${COLLECT_LOG}" == "true" ]]; then
     fi
 fi
 
+collect_pod_specs() {
+    echo "Describing kube-egress-gateway pods..."
+    kubectl get pod -A -l app=kube-egress-gateway -o json | jq -r '.items[] | .metadata.namespace + " " + .metadata.name' | while read -r NS POD; do
+        mkdir -p "${LOG_DIR}/pods-spec/${NS}"
+        kubectl describe pod ${POD} -n ${NS} > "${LOG_DIR}/pods-spec/${NS}/${POD}" || echo "Cannot describe pod ${NS}/${POD}"
+    done
+}
+
 collect_pod_logs() {
     echo "Collecting kube-egress-gateway pods logs..."
     kubectl get pod -A -l app=kube-egress-gateway -o json | jq -r '.items[] | .metadata.namespace + " " + .metadata.name' | while read -r NS POD; do
@@ -49,6 +57,7 @@ cleanup() {
         return
     fi
     echo "Collecting logs..."
+    collect_pod_specs
     collect_pod_logs
     collect_node_logs 
 }

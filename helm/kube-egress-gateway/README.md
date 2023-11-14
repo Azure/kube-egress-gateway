@@ -77,6 +77,8 @@ config:
 
 The Helm chart installs 5 components with different images: gateway-controller-manager, gateway-daemon-manager, gateway-CNI-manager, gateway-CNI, and gateway-CNI-Ipam. For easy deployment, we provide `common.imageRepository` and `common.imageTag`. If all images can be downloaded from the same reposity (use `common.imageRepository`) and come from the same build/release (use `common.imageTag`), you can set just these two values instead of each individual value as shown in the following sections. If for any particular components, you want to apply a different repository/tag, you can specify in their own configurations, overriding these two values.
 
+Additionally, `common.gatewayLbProbePort` defines the gateway LoadBalancer probe port which is consumed by both gateway-controller-manager (LB probe creator) and gateway-daemon-manager (probe server). The default value is `8082`.
+
 ## gateway-controller-manager configurations
 
 | configuration value | default value | description |

@@ -47,11 +47,12 @@ var _ reconcile.Reconciler = &StaticGatewayConfigurationReconciler{}
 type StaticGatewayConfigurationReconciler struct {
 	client.Client
 	*azmanager.AzureManager
-	TickerEvents chan event.GenericEvent
-	Netlink      netlinkwrapper.Interface
-	NetNS        netnswrapper.Interface
-	IPTables     iptableswrapper.Interface
-	WgCtrl       wgctrlwrapper.Interface
+	TickerEvents  chan event.GenericEvent
+	LBProbeServer *healthprobe.LBProbeServer
+	Netlink       netlinkwrapper.Interface
+	NetNS         netnswrapper.Interface
+	IPTables      iptableswrapper.Interface
+	WgCtrl        wgctrlwrapper.Interface
 }
 
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations,verbs=get;list;watch
@@ -194,7 +195,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 		return err
 	}
 
-	if err := healthprobe.AddGateway(string(gwConfig.GetUID())); err != nil {
+	if err := r.LBProbeServer.AddGateway(string(gwConfig.GetUID())); err != nil {
 		return err
 	}
 
@@ -279,7 +280,7 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(ctx context.Context
 	}
 
 	gwUID := getGatewayUIDFromNamespaceName(netns)
-	if err := healthprobe.RemoveGateway(gwUID); err != nil {
+	if err := r.LBProbeServer.RemoveGateway(gwUID); err != nil {
 		return err
 	}
 	return nil

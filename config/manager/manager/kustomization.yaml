@@ -3,7 +3,7 @@ resources:
 generatorOptions:
   disableNameSuffixHash: true
 
-patchesStrategicMerge:
+patches:
   # Mount the controller config file for loading manager configurations
   # through a ComponentConfig type
-  - manager_config_patch.yaml
+  - path: manager_config_patch.yaml

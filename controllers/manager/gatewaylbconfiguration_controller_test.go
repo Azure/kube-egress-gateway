@@ -43,15 +43,16 @@ import (
 )
 
 const (
-	testRG          = "testRG"
-	testLBName      = "testLB"
-	testLBRG        = "testLBRG"
-	testLBConfigUID = "testLBConfig"
-	testVnetName    = "testVnet"
-	testVnetRG      = "testVnetRG"
-	testSubnetName  = "testSubnet"
-	testVMSSUID     = "testvmss"
-	testGWConfigUID = "testGWConfig"
+	testRG              = "testRG"
+	testLBName          = "testLB"
+	testLBRG            = "testLBRG"
+	testLBConfigUID     = "testLBConfig"
+	testVnetName        = "testVnet"
+	testVnetRG          = "testVnetRG"
+	testSubnetName      = "testSubnet"
+	testVMSSUID         = "testvmss"
+	testGWConfigUID     = "testGWConfig"
+	lbProbePort     int = 8082
 )
 
 var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
@@ -108,7 +109,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			It("should only report error in get", func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
-				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
+				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundLBConfig)
 
@@ -122,7 +123,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			BeforeEach(func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(lbConfig).Build()
-				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
+				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundLBConfig)
 			})
@@ -141,7 +142,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 		Context("TestGetGatewayVMSS", func() {
 			BeforeEach(func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
-				r = &GatewayLBConfigurationReconciler{AzureManager: az, Recorder: recorder}
+				r = &GatewayLBConfigurationReconciler{AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 			})
 
 			It("should return error when listing vmss fails", func() {
@@ -199,7 +200,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(lbConfig).Build()
-				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
+				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 			})
 
 			It("should report error if gateway LB is not found", func() {
@@ -396,17 +397,17 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 						{
 							RequestPath: to.Ptr("/" + testNamespace + "/" + testName + "1"),
 							Protocol:    to.Ptr(network.ProbeProtocolHTTP),
-							Port:        to.Ptr(consts.WireguardDaemonServicePort),
+							Port:        to.Ptr(int32(lbProbePort)),
 						},
 						{
 							RequestPath: to.Ptr("/" + testNamespace + "/" + testName),
 							Protocol:    to.Ptr(network.ProbeProtocolTCP),
-							Port:        to.Ptr(consts.WireguardDaemonServicePort),
+							Port:        to.Ptr(int32(lbProbePort)),
 						},
 						{
 							RequestPath: to.Ptr("/" + testNamespace + "/" + testName),
 							Protocol:    to.Ptr(network.ProbeProtocolHTTP),
-							Port:        to.Ptr(consts.WireguardDaemonServicePort + 1),
+							Port:        to.Ptr(int32(lbProbePort + 1)),
 						},
 					} {
 						existingLB.Properties.Probes[0].Properties = prop
@@ -473,7 +474,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 
 			It("should create a new vmConfig", func() {
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(lbConfig).Build()
-				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
+				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(BeNil())
 				Expect(res).To(Equal(ctrl.Result{}))
@@ -518,7 +519,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				}
 
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(lbConfig, vmConfig).Build()
-				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
+				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(BeNil())
 				Expect(res).To(Equal(ctrl.Result{}))
@@ -550,7 +551,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				}
 
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(lbConfig, vmConfig).Build()
-				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
+				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(BeNil())
 				Expect(res).To(Equal(ctrl.Result{}))
@@ -578,7 +579,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					},
 				}
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(lbConfig, vmConfig).Build()
-				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
+				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(BeNil())
 				getErr = getResource(cl, foundVMConfig)
@@ -592,7 +593,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				lbConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(lbConfig).Build()
-				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
+				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 				vmss := &compute.VirtualMachineScaleSet{
 					Properties: &compute.VirtualMachineScaleSetProperties{UniqueID: to.Ptr(testVMSSUID)},
 					Tags:       map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")},
@@ -893,7 +894,7 @@ func getExpectedLB() *network.LoadBalancer {
 					Properties: &network.ProbePropertiesFormat{
 						RequestPath: to.Ptr("/gw/" + testGWConfigUID),
 						Protocol:    to.Ptr(network.ProbeProtocolHTTP),
-						Port:        to.Ptr(consts.WireguardDaemonServicePort),
+						Port:        to.Ptr(int32(lbProbePort)),
 					},
 				},
 			},

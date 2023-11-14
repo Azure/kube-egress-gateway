@@ -106,6 +106,7 @@ spec:
         - --cloud-config=/azure/config/azure-cloud-config.json
         - --metrics-bind-port={{ .Values.gatewayDaemonManager.metricsBindPort }}
         - --health-probe-bind-port={{ .Values.gatewayDaemonManager.healthProbeBindPort }}
+        - --gateway-lb-probe-port={{ .Values.common.gatewayLbProbePort }}
         command:
         - /kube-egress-gateway-daemon
         env:
