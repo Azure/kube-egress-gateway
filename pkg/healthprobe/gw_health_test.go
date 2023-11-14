@@ -11,56 +11,57 @@ import (
 )
 
 func TestGatewayHealthServer(t *testing.T) {
-	assert.Empty(t, activeGateways, "active gateway map should be empty at the beginning")
+	svr := NewLBProbeServer(1000)
+	assert.Empty(t, svr.activeGateways, "active gateway map should be empty at the beginning")
 
 	// test unexpected request path
-	testHandler("", http.StatusBadRequest, t)
-	testHandler("/gw", http.StatusBadRequest, t)
-	testHandler("/gw/123/123", http.StatusBadRequest, t)
+	testHandler(svr, "", http.StatusBadRequest, t)
+	testHandler(svr, "/gw", http.StatusBadRequest, t)
+	testHandler(svr, "/gw/123/123", http.StatusBadRequest, t)
 
 	// Add gateway
-	err := AddGateway("123")
+	err := svr.AddGateway("123")
 	assert.Nil(t, err, "AddGateway should not report error")
-	assert.Equal(t, 1, len(activeGateways), "active gateway map should have 1 element")
-	testHandler("/gw/123", http.StatusOK, t)
-	testHandler("/gw/456", http.StatusServiceUnavailable, t)
+	assert.Equal(t, 1, len(svr.activeGateways), "active gateway map should have 1 element")
+	testHandler(svr, "/gw/123", http.StatusOK, t)
+	testHandler(svr, "/gw/456", http.StatusServiceUnavailable, t)
 
 	// Remove gateway
-	err = RemoveGateway("456")
+	err = svr.RemoveGateway("456")
 	assert.Nil(t, err, "RemoveGateway should not report error")
-	assert.Equal(t, 1, len(activeGateways), "active gateway map should have 1 element")
-	err = RemoveGateway("123")
+	assert.Equal(t, 1, len(svr.activeGateways), "active gateway map should have 1 element")
+	err = svr.RemoveGateway("123")
 	assert.Nil(t, err, "RemoveGateway should not report error")
-	assert.Empty(t, activeGateways, "active gateway map should be empty")
-	testHandler("/gw/123", http.StatusServiceUnavailable, t)
-	testHandler("/gw/456", http.StatusServiceUnavailable, t)
+	assert.Empty(t, svr.activeGateways, "active gateway map should be empty")
+	testHandler(svr, "/gw/123", http.StatusServiceUnavailable, t)
+	testHandler(svr, "/gw/456", http.StatusServiceUnavailable, t)
 
 	// Add multiple gateways
-	err = AddGateway("abc")
+	err = svr.AddGateway("abc")
 	assert.Nil(t, err, "AddGateway should not report error")
-	err = AddGateway("def")
+	err = svr.AddGateway("def")
 	assert.Nil(t, err, "AddGateway should not report error")
-	err = AddGateway("ghi")
+	err = svr.AddGateway("ghi")
 	assert.Nil(t, err, "AddGateway should not report error")
-	assert.Equal(t, 3, len(activeGateways), "active gateway map should have 3 elements")
-	testHandler("/gw/def", http.StatusOK, t)
-	testHandler("/gw/xyz", http.StatusServiceUnavailable, t)
+	assert.Equal(t, 3, len(svr.activeGateways), "active gateway map should have 3 elements")
+	testHandler(svr, "/gw/def", http.StatusOK, t)
+	testHandler(svr, "/gw/xyz", http.StatusServiceUnavailable, t)
 
 	// Delete multiple gateways
-	err = RemoveGateway("def")
+	err = svr.RemoveGateway("def")
 	assert.Nil(t, err, "RemoveGateway should not report error")
-	err = RemoveGateway("abc")
+	err = svr.RemoveGateway("abc")
 	assert.Nil(t, err, "RemoveGateway should not report error")
-	assert.Equal(t, 1, len(activeGateways), "active gateway map should have 1 element")
-	testHandler("/gw/abc", http.StatusServiceUnavailable, t)
-	testHandler("/gw/ghi", http.StatusOK, t)
+	assert.Equal(t, 1, len(svr.activeGateways), "active gateway map should have 1 element")
+	testHandler(svr, "/gw/abc", http.StatusServiceUnavailable, t)
+	testHandler(svr, "/gw/ghi", http.StatusOK, t)
 }
 
-func testHandler(requestPath string, status int, t *testing.T) {
+func testHandler(svr *LBProbeServer, requestPath string, status int, t *testing.T) {
 	req, err := http.NewRequest("GET", requestPath, nil)
 	assert.Nil(t, err, "testHandler: failed to create new http request")
 	resp := httptest.NewRecorder()
 
-	serveHTTP(resp, req)
+	svr.serveHTTP(resp, req)
 	assert.Equal(t, status, resp.Code, "testHandler: got unexpected http status code")
 }

@@ -56,13 +56,14 @@ func Execute() {
 }
 
 var (
-	cloudConfigFile string
-	cloudConfig     config.CloudConfig
-	scheme          = runtime.NewScheme()
-	setupLog        = ctrl.Log.WithName("setup")
-	metricsPort     int
-	probePort       int
-	zapOpts         = zap.Options{
+	cloudConfigFile    string
+	cloudConfig        config.CloudConfig
+	scheme             = runtime.NewScheme()
+	setupLog           = ctrl.Log.WithName("setup")
+	metricsPort        int
+	probePort          int
+	gatewayLBProbePort int
+	zapOpts            = zap.Options{
 		Development: true,
 	}
 )
@@ -84,6 +85,7 @@ func init() {
 
 	rootCmd.Flags().IntVar(&metricsPort, "metrics-bind-port", 8080, "The port the metric endpoint binds to.")
 	rootCmd.Flags().IntVar(&probePort, "health-probe-bind-port", 8081, "The port the probe endpoint binds to.")
+	rootCmd.Flags().IntVar(&gatewayLBProbePort, "gateway-lb-probe-port", 8082, "The port the gateway lb probe endpoint binds to.")
 
 	zapOpts.BindFlags(goflag.CommandLine)
 	rootCmd.Flags().AddGoFlagSet(goflag.CommandLine)
@@ -177,11 +179,18 @@ func startControllers(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	lbProbeServer := healthprobe.NewLBProbeServer(gatewayLBProbePort)
+	if err := mgr.Add(manager.RunnableFunc(lbProbeServer.Start)); err != nil {
+		setupLog.Error(err, "unbaled to set up gateway health probe server")
+		os.Exit(1)
+	}
+
 	netnsCleanupEvents := make(chan event.GenericEvent)
 	if err = (&controllers.StaticGatewayConfigurationReconciler{
-		Client:       mgr.GetClient(),
-		AzureManager: az,
-		TickerEvents: netnsCleanupEvents,
+		Client:        mgr.GetClient(),
+		AzureManager:  az,
+		TickerEvents:  netnsCleanupEvents,
+		LBProbeServer: lbProbeServer,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "StaticGatewayConfiguration")
 		os.Exit(1)
@@ -196,11 +205,6 @@ func startControllers(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder
-
-	if err := mgr.Add(manager.RunnableFunc(healthprobe.Start)); err != nil {
-		setupLog.Error(err, "unbaled to set up gateway health probe server")
-		os.Exit(1)
-	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")

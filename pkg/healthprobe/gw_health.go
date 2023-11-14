@@ -17,29 +17,32 @@ import (
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 )
 
-var (
-	httpServer     *http.Server
+type LBProbeServer struct {
 	lock           sync.RWMutex
 	activeGateways map[string]bool
-)
+	listenPort     int
+}
 
-func init() {
+func NewLBProbeServer(listenPort int) *LBProbeServer {
+	return &LBProbeServer{
+		activeGateways: make(map[string]bool),
+		listenPort:     listenPort,
+	}
+}
+
+func (svr *LBProbeServer) Start(ctx context.Context) error {
+	log := log.FromContext(ctx)
+
 	mux := http.NewServeMux()
-	mux.HandleFunc(consts.GatewayHealthProbeEndpoint, serveHTTP)
+	mux.HandleFunc(consts.GatewayHealthProbeEndpoint, svr.serveHTTP)
 
-	httpServer = &http.Server{
-		Addr:              net.JoinHostPort("", strconv.Itoa(int(consts.WireguardDaemonServicePort))),
+	httpServer := &http.Server{
+		Addr:              net.JoinHostPort("", strconv.Itoa(svr.listenPort)),
 		Handler:           mux,
 		MaxHeaderBytes:    1 << 20,
 		IdleTimeout:       90 * time.Second, // matches http.DefaultTransport keep-alive timeout
 		ReadHeaderTimeout: 32 * time.Second,
 	}
-
-	activeGateways = make(map[string]bool)
-}
-
-func Start(ctx context.Context) error {
-	log := log.FromContext(ctx)
 
 	go func() {
 		log.Info("Starting gateway lb health probe server")
@@ -61,23 +64,23 @@ func Start(ctx context.Context) error {
 	return nil
 }
 
-func AddGateway(gatewayUID string) error {
-	lock.Lock()
-	defer lock.Unlock()
+func (svr *LBProbeServer) AddGateway(gatewayUID string) error {
+	svr.lock.Lock()
+	defer svr.lock.Unlock()
 
-	activeGateways[gatewayUID] = true
+	svr.activeGateways[gatewayUID] = true
 	return nil
 }
 
-func RemoveGateway(gatewayUID string) error {
-	lock.Lock()
-	defer lock.Unlock()
+func (svr *LBProbeServer) RemoveGateway(gatewayUID string) error {
+	svr.lock.Lock()
+	defer svr.lock.Unlock()
 
-	delete(activeGateways, gatewayUID)
+	delete(svr.activeGateways, gatewayUID)
 	return nil
 }
 
-func serveHTTP(resp http.ResponseWriter, req *http.Request) {
+func (svr *LBProbeServer) serveHTTP(resp http.ResponseWriter, req *http.Request) {
 	reqPath := req.URL.Path
 	subPaths := strings.Split(reqPath, "/")
 	if len(subPaths) != 3 {
@@ -86,9 +89,9 @@ func serveHTTP(resp http.ResponseWriter, req *http.Request) {
 	}
 	gatewayUID := subPaths[2]
 
-	lock.RLock()
-	_, ok := activeGateways[gatewayUID]
-	lock.RUnlock()
+	svr.lock.RLock()
+	_, ok := svr.activeGateways[gatewayUID]
+	svr.lock.RUnlock()
 
 	if !ok {
 		resp.WriteHeader(http.StatusServiceUnavailable)

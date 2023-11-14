@@ -42,6 +42,7 @@ import (
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
+	"github.com/Azure/kube-egress-gateway/pkg/healthprobe"
 	"github.com/Azure/kube-egress-gateway/pkg/imds"
 	"github.com/Azure/kube-egress-gateway/pkg/iptableswrapper/mockiptableswrapper"
 	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper/mocknetlinkwrapper"
@@ -82,7 +83,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 		mctrl := gomock.NewController(GinkgoT())
 		az := getMockAzureManager(mctrl)
 		cl := fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(objects...).Build()
-		r = &StaticGatewayConfigurationReconciler{Client: cl, AzureManager: az}
+		r = &StaticGatewayConfigurationReconciler{Client: cl, AzureManager: az, LBProbeServer: healthprobe.NewLBProbeServer(1000)}
 		r.Netlink = mocknetlinkwrapper.NewMockInterface(mctrl)
 		r.NetNS = mocknetnswrapper.NewMockInterface(mctrl)
 		r.IPTables = mockiptableswrapper.NewMockInterface(mctrl)

@@ -8,8 +8,6 @@ spec:
     spec:
       containers:
       - name: manager
-        args:
-          - "--cloud-config=/etc/config/azure.json"
         volumeMounts:
         - name: manager-config-volume
           mountPath: /etc/config

@@ -29,6 +29,7 @@ import (
 	controllers "github.com/Azure/kube-egress-gateway/controllers/manager"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
+	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -56,6 +57,7 @@ var (
 	cloudConfig             config.CloudConfig
 	scheme                  = runtime.NewScheme()
 	metricsPort             int
+	gatewayLBProbePort      int
 	enableLeaderElection    bool
 	leaderElectionNamespace string
 	probePort               int
@@ -80,10 +82,11 @@ func init() {
 
 	rootCmd.Flags().IntVar(&metricsPort, "metrics-bind-port", 8080, "The port the metric endpoint binds to.")
 	rootCmd.Flags().IntVar(&probePort, "health-probe-bind-port", 8081, "The port the probe endpoint binds to.")
+	rootCmd.Flags().IntVar(&gatewayLBProbePort, "gateway-lb-probe-port", 8082, "The port the gateway lb health probe endpoint binds to.")
 	rootCmd.Flags().BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
-	rootCmd.Flags().StringVar(&leaderElectionNamespace, "leader-election-namespace", "kube-system", "the namespace to create leader election objects")
+	rootCmd.Flags().StringVar(&leaderElectionNamespace, "leader-election-namespace", os.Getenv(consts.PodNamespaceEnvKey), "the namespace to create leader election objects")
 
 	zapOpts.BindFlags(goflag.CommandLine)
 	rootCmd.Flags().AddGoFlagSet(goflag.CommandLine)
@@ -206,6 +209,7 @@ func startControllers(cmd *cobra.Command, args []string) {
 		Client:       mgr.GetClient(),
 		AzureManager: az,
 		Recorder:     mgr.GetEventRecorderFor("gatewayLBConfiguration-controller"),
+		LBProbePort:  gatewayLBProbePort,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GatewayLBConfiguration")
 		os.Exit(1)

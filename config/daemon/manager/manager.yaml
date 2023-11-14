@@ -37,6 +37,9 @@ spec:
       containers:
       - command:
         - /kube-egress-gateway-daemon
+        args:
+        - --gateway-lb-probe-port=8082
+        - --cloud-config=/etc/config/azure.json
         image: daemon:latest
         name: daemon
         securityContext:

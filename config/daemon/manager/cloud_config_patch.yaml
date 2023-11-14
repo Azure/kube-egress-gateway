@@ -8,8 +8,6 @@ spec:
     spec:
       containers:
       - name: daemon
-        args:
-        - "--cloud-config=/etc/config/azure.json"
         volumeMounts:
         - name: daemon-config-volume
           mountPath: /etc/config

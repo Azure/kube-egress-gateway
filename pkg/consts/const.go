@@ -27,9 +27,6 @@ const (
 	// Gateway lb health probe path
 	GatewayHealthProbeEndpoint = "/gw/"
 
-	// Gateway lb health probe port
-	WireguardDaemonServicePort int32 = 8082
-
 	// nodepool name tag key in aks clusters
 	AKSNodepoolTagKey = "aks-managed-poolName"
 

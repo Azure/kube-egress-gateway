@@ -1,6 +1,7 @@
 common:
   imageRepository: "local"
   imageTag: "test"
+  gatewayLbProbePort: 8082
 
 gatewayControllerManager:
   enabled: true
