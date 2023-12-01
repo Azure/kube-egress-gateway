@@ -258,7 +258,7 @@ func TestGetVMSS(t *testing.T) {
 		az, _ := CreateAzureManager(config, factory)
 		if test.expectedCall {
 			mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
-			mockVMSSClient.EXPECT().Get(gomock.Any(), test.expectedRG, test.vmssName).Return(test.vmss, test.testErr)
+			mockVMSSClient.EXPECT().Get(gomock.Any(), test.expectedRG, test.vmssName, gomock.Any()).Return(test.vmss, test.testErr)
 		}
 		vmss, err := az.GetVMSS(context.Background(), test.rg, test.vmssName)
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
@@ -731,9 +731,9 @@ func TestGetVMSSInterface(t *testing.T) {
 		if test.expectedCall {
 			mockInterfaceClient := az.InterfaceClient.(*mockinterfaceclient.MockInterface)
 			if test.nic != nil {
-				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), test.expectedRG, test.vmssName, test.instanceID, test.nicName, gomock.Any()).Return(network.InterfacesClientGetVirtualMachineScaleSetNetworkInterfaceResponse{Interface: *test.nic}, test.testErr)
+				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), test.expectedRG, test.vmssName, test.instanceID, test.nicName).Return(test.nic, test.testErr)
 			} else {
-				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), test.expectedRG, test.vmssName, test.instanceID, test.nicName, gomock.Any()).Return(network.InterfacesClientGetVirtualMachineScaleSetNetworkInterfaceResponse{}, test.testErr)
+				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), test.expectedRG, test.vmssName, test.instanceID, test.nicName).Return(nil, test.testErr)
 
 			}
 		}

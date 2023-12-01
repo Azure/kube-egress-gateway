@@ -178,7 +178,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			It("should return error when getting vmss fails", func() {
 				lbConfig.Spec.GatewayNodepoolName = ""
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
-				mockVMSSClient.EXPECT().Get(gomock.Any(), "vmssRG", "vmss").Return(nil, fmt.Errorf("vmss not found"))
+				mockVMSSClient.EXPECT().Get(gomock.Any(), "vmssRG", "vmss", gomock.Any()).Return(nil, fmt.Errorf("vmss not found"))
 				vmss, err := r.getGatewayVMSS(context.Background(), lbConfig)
 				Expect(vmss).To(BeNil())
 				Expect(err).To(Equal(fmt.Errorf("vmss not found")))
@@ -188,7 +188,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				lbConfig.Spec.GatewayNodepoolName = ""
 				vmss := &compute.VirtualMachineScaleSet{ID: to.Ptr("test")}
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
-				mockVMSSClient.EXPECT().Get(gomock.Any(), "vmssRG", "vmss").Return(vmss, nil)
+				mockVMSSClient.EXPECT().Get(gomock.Any(), "vmssRG", "vmss", gomock.Any()).Return(vmss, nil)
 				foundVMSS, err := r.getGatewayVMSS(context.Background(), lbConfig)
 				Expect(err).To(BeNil())
 				Expect(to.Val(foundVMSS)).To(Equal(to.Val(vmss)))

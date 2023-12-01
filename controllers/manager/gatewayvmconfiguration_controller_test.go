@@ -178,7 +178,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 					if c.expectGet {
 						vmConfig.Spec.GatewayNodepoolName = ""
-						mockVMSSClient.EXPECT().Get(gomock.Any(), vmssRG, vmssName).Return(c.vmss, c.returnedErr)
+						mockVMSSClient.EXPECT().Get(gomock.Any(), vmssRG, vmssName, gomock.Any()).Return(c.vmss, c.returnedErr)
 					} else {
 						vmConfig.Spec.GatewayNodepoolName = "testgw"
 						mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{
@@ -718,10 +718,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						return expectedVM, nil
 					})
 				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
-				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), testRG, vmssName, "0", "nic", gomock.Any()).Return(
-					network.InterfacesClientGetVirtualMachineScaleSetNetworkInterfaceResponse{
-						Interface: getConfiguredVMSSVMInterface(),
-					}, nil)
+				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), testRG, vmssName, "0", "nic").Return(
+					getConfiguredVMSSVMInterface(), nil)
 				privateIPs, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "", true)
 				Expect(len(privateIPs)).To(Equal(1))
 				Expect(privateIPs[0]).To(Equal("10.0.0.6"))
@@ -750,10 +748,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						return expectedVM, nil
 					})
 				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
-				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), testRG, vmssName, "0", "nic", gomock.Any()).Return(
-					network.InterfacesClientGetVirtualMachineScaleSetNetworkInterfaceResponse{
-						Interface: getConfiguredVMSSVMInterface(),
-					}, nil)
+				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), testRG, vmssName, "0", "nic").Return(
+					getConfiguredVMSSVMInterface(), nil)
 				privateIPs, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "", true)
 				Expect(len(privateIPs)).To(Equal(1))
 				Expect(privateIPs[0]).To(Equal("10.0.0.6"))
@@ -1144,8 +1140,8 @@ func getConfiguredVMSSVM() *compute.VirtualMachineScaleSetVM {
 	return vm
 }
 
-func getConfiguredVMSSVMInterface() network.Interface {
-	return network.Interface{
+func getConfiguredVMSSVMInterface() *network.Interface {
+	return &network.Interface{
 		Properties: &network.InterfacePropertiesFormat{
 			IPConfigurations: []*network.InterfaceIPConfiguration{
 				{
