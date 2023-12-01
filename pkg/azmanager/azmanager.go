@@ -135,7 +135,7 @@ func (az *AzureManager) GetVMSS(ctx context.Context, resourceGroup, vmssName str
 	if vmssName == "" {
 		return nil, fmt.Errorf("vmss name is empty")
 	}
-	vmss, err := az.VmssClient.Get(ctx, resourceGroup, vmssName)
+	vmss, err := az.VmssClient.Get(ctx, resourceGroup, vmssName, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -255,11 +255,11 @@ func (az *AzureManager) GetVMSSInterface(ctx context.Context, resourceGroup, vms
 	if interfaceName == "" {
 		return nil, fmt.Errorf("interface name is empty")
 	}
-	nicResp, err := az.InterfaceClient.GetVirtualMachineScaleSetNetworkInterface(ctx, resourceGroup, vmssName, instanceID, interfaceName, nil)
+	nicResp, err := az.InterfaceClient.GetVirtualMachineScaleSetNetworkInterface(ctx, resourceGroup, vmssName, instanceID, interfaceName)
 	if err != nil {
 		return nil, err
 	}
-	return &nicResp.Interface, nil
+	return nicResp, nil
 }
 
 func (az *AzureManager) GetSubnet(ctx context.Context) (*network.Subnet, error) {
