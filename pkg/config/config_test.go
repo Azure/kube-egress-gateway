@@ -4,44 +4,54 @@ package config
 
 import (
 	"testing"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 )
 
 func TestTrimSpace(t *testing.T) {
 	t.Run("test spaces are trimmed", func(t *testing.T) {
 		config := CloudConfig{
-			Cloud:                       "  test  \n",
-			Location:                    "  test  \n",
-			SubscriptionID:              "  test  \n",
-			TenantID:                    "  test  \t \n",
-			UserAgent:                   "  test  \n",
-			ResourceGroup:               "\r\n  test  \n",
-			LoadBalancerName:            "  test  \r\n",
-			LoadBalancerResourceGroup:   "  test  \n",
-			UseManagedIdentityExtension: true,
-			UserAssignedIdentityID:      "  test  \n",
-			AADClientID:                 "\n  test  \n",
-			AADClientSecret:             "  test  \n",
-			VnetName:                    "  test   ",
-			VnetResourceGroup:           " \t  test   ",
-			SubnetName:                  "  test  ",
+			ARMClientConfig: azclient.ARMClientConfig{
+				Cloud:     "  test  \n",
+				UserAgent: "  test  \n",
+				TenantID:  "  test  \t \n",
+			},
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				UserAssignedIdentityID:      "  test  \n",
+				UseManagedIdentityExtension: true,
+				AADClientID:                 "\n  test  \n",
+				AADClientSecret:             "  test  \n",
+			},
+			Location:                  "  test  \n",
+			SubscriptionID:            "  test  \n",
+			ResourceGroup:             "\r\n  test  \n",
+			LoadBalancerName:          "  test  \r\n",
+			LoadBalancerResourceGroup: "  test  \n",
+			VnetName:                  "  test   ",
+			VnetResourceGroup:         " \t  test   ",
+			SubnetName:                "  test  ",
 		}
 
 		expected := CloudConfig{
-			Cloud:                       "test",
-			Location:                    "test",
-			SubscriptionID:              "test",
-			TenantID:                    "test",
-			UserAgent:                   "test",
-			ResourceGroup:               "test",
-			LoadBalancerName:            "test",
-			LoadBalancerResourceGroup:   "test",
-			UseManagedIdentityExtension: true,
-			UserAssignedIdentityID:      "test",
-			AADClientID:                 "test",
-			AADClientSecret:             "test",
-			VnetName:                    "test",
-			VnetResourceGroup:           "test",
-			SubnetName:                  "test",
+			ARMClientConfig: azclient.ARMClientConfig{
+				Cloud:     "test",
+				TenantID:  "test",
+				UserAgent: "test",
+			},
+			Location:                  "test",
+			SubscriptionID:            "test",
+			ResourceGroup:             "test",
+			LoadBalancerName:          "test",
+			LoadBalancerResourceGroup: "test",
+			AzureAuthConfig: azclient.AzureAuthConfig{
+				UseManagedIdentityExtension: true,
+				UserAssignedIdentityID:      "test",
+				AADClientID:                 "test",
+				AADClientSecret:             "test",
+			},
+			VnetName:          "test",
+			VnetResourceGroup: "test",
+			SubnetName:        "test",
 		}
 		config.TrimSpace()
 		if config != expected {
@@ -190,16 +200,20 @@ func TestValidate(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			config := CloudConfig{
-				Cloud:                       test.Cloud,
-				Location:                    test.Location,
-				SubscriptionID:              test.SubscriptionID,
-				ResourceGroup:               test.ResourceGroup,
-				VnetName:                    test.VnetName,
-				SubnetName:                  test.SubnetName,
-				UseManagedIdentityExtension: test.UseManagedIdentityExtension,
-				UserAssignedIdentityID:      test.UserAssignedIdentityID,
-				AADClientID:                 test.AADClientID,
-				AADClientSecret:             test.AADClientSecret,
+				ARMClientConfig: azclient.ARMClientConfig{
+					Cloud: test.Cloud,
+				},
+				AzureAuthConfig: azclient.AzureAuthConfig{
+					UseManagedIdentityExtension: test.UseManagedIdentityExtension,
+					UserAssignedIdentityID:      test.UserAssignedIdentityID,
+					AADClientID:                 test.AADClientID,
+					AADClientSecret:             test.AADClientSecret,
+				},
+				Location:       test.Location,
+				SubscriptionID: test.SubscriptionID,
+				ResourceGroup:  test.ResourceGroup,
+				VnetName:       test.VnetName,
+				SubnetName:     test.SubnetName,
 			}
 
 			err := config.Validate()

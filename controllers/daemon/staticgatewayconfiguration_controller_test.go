@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	mockinterfaceclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
 	mockloadbalancerclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	mockazclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
@@ -765,10 +766,12 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 
 func getMockAzureManager(ctrl *gomock.Controller) *azmanager.AzureManager {
 	conf := &config.CloudConfig{
-		Cloud:            "AzureTest",
+		ARMClientConfig: azclient.ARMClientConfig{
+			Cloud:     "AzureTest",
+			UserAgent: "testUserAgent",
+		},
 		Location:         "location",
 		SubscriptionID:   "testSub",
-		UserAgent:        "testUserAgent",
 		ResourceGroup:    "rg",
 		LoadBalancerName: "lb",
 	}
