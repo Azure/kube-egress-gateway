@@ -5,7 +5,6 @@ package cmd
 import (
 	"context"
 	goflag "flag"
-	"fmt"
 	"os"
 	"strconv"
 
@@ -16,14 +15,13 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	controllers "github.com/Azure/kube-egress-gateway/controllers/manager"
@@ -54,7 +52,7 @@ func Execute() {
 
 var (
 	cloudConfigFile         string
-	cloudConfig             config.CloudConfig
+	cloudConfig             *config.CloudConfig
 	scheme                  = runtime.NewScheme()
 	metricsPort             int
 	gatewayLBProbePort      int
@@ -100,21 +98,7 @@ func init() {
 
 // initCloudConfig reads in cloud config file and ENV variables if set.
 func initCloudConfig() {
-	if cloudConfigFile == "" {
-		fmt.Fprintln(os.Stderr, "Error: cloud config file is not provided")
-		os.Exit(1)
-	}
-	viper.SetConfigFile(cloudConfigFile)
-
 	viper.AutomaticEnv() // read in environment variables that match
-
-	// If a config file is found, read it in.
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
-	} else {
-		fmt.Fprintln(os.Stderr, "Error: failed to find cloud config file:", cloudConfigFile)
-		os.Exit(1)
-	}
 }
 
 func startControllers(cmd *cobra.Command, args []string) {
@@ -151,31 +135,20 @@ func startControllers(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	if err := viper.Unmarshal(&cloudConfig); err != nil {
-		setupLog.Error(err, "unable to unmarshal cloud configuration file")
+	cloudConfig, err = configloader.Load[config.CloudConfig](context.Background(), nil, &configloader.FileLoaderConfig{FilePath: cloudConfigFile})
+	if err != nil {
+		setupLog.Error(err, "unable to parse config file")
 		os.Exit(1)
 	}
-
 	cloudConfig.TrimSpace()
 	if err := cloudConfig.Validate(); err != nil {
 		setupLog.Error(err, "cloud configuration is invalid")
 		os.Exit(1)
 	}
 	var authProvider *azclient.AuthProvider
-	authProvider, err = azclient.NewAuthProvider(azclient.AzureAuthConfig{
-		TenantID:                    cloudConfig.TenantID,
-		AADClientID:                 cloudConfig.AADClientID,
-		AADClientSecret:             cloudConfig.AADClientSecret,
-		UserAssignedIdentityID:      cloudConfig.UserAssignedIdentityID,
-		UseManagedIdentityExtension: cloudConfig.UseManagedIdentityExtension,
-	}, &arm.ClientOptions{
-		AuxiliaryTenants: []string{cloudConfig.TenantID},
-		ClientOptions: azcore.ClientOptions{
-			Telemetry: policy.TelemetryOptions{
-				ApplicationID: cloudConfig.UserAgent,
-			},
-		},
-	})
+	authProvider, err = azclient.NewAuthProvider(
+		&cloudConfig.ARMClientConfig,
+		&cloudConfig.AzureAuthConfig)
 	if err != nil {
 		setupLog.Error(err, "unable to create auth provider")
 		os.Exit(1)
@@ -192,7 +165,7 @@ func startControllers(cmd *cobra.Command, args []string) {
 		setupLog.Error(err, "unable to create client factory")
 		os.Exit(1)
 	}
-	az, err := azmanager.CreateAzureManager(&cloudConfig, factory)
+	az, err := azmanager.CreateAzureManager(cloudConfig, factory)
 	if err != nil {
 		setupLog.Error(err, "unable to create azure manager")
 		os.Exit(1)

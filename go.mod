@@ -31,7 +31,8 @@ require (
 	k8s.io/api v0.28.4
 	k8s.io/apimachinery v0.28.4
 	k8s.io/client-go v0.28.4
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.0-20231201054951-b4a466e7eb34
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.0-20231205023417-1ba5a224ab0e
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.0-20231205023417-1ba5a224ab0e
 	sigs.k8s.io/controller-runtime v0.16.3
 )
 
@@ -54,7 +55,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
-	github.com/go-openapi/swag v0.22.3 // indirect
+	github.com/go-openapi/swag v0.22.4 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.0.0 // indirect
@@ -126,5 +127,5 @@ require (
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
-	sigs.k8s.io/yaml v1.3.0 // indirect
+	sigs.k8s.io/yaml v1.4.0 // indirect
 )

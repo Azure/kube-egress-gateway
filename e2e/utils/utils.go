@@ -26,8 +26,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-
 	"github.com/Azure/kube-egress-gateway/api/v1alpha1"
 )
 
@@ -60,27 +58,19 @@ func CreateAzureClients() (azclient.ClientFactory, error) {
 	if subscriptionID = os.Getenv("AZURE_SUBSCRIPTION_ID"); subscriptionID == "" {
 		return nil, fmt.Errorf("AZURE_SUBSCRIPTION_ID is not set")
 	}
-	if tenantID = os.Getenv("AZURE_TENANT_ID"); tenantID == "" {
-		return nil, fmt.Errorf("AZURE_TENANT_ID is not set")
+	armConfig := &azclient.ARMClientConfig{
+		TenantID: tenantID,
+		Cloud:    "",
 	}
-	if clientID = os.Getenv("AZURE_CLIENT_ID"); clientID == "" {
-		return nil, fmt.Errorf("AZURE_CLIENT_ID is not set")
-	}
-	if clientSecret = os.Getenv("AZURE_CLIENT_SECRET"); clientSecret == "" {
-		return nil, fmt.Errorf("AZURE_CLIENT_SECRET is not set")
-	}
-	authProvider, err := azclient.NewAuthProvider(azclient.AzureAuthConfig{
-		TenantID:        tenantID,
+	authProvider, err := azclient.NewAuthProvider(armConfig, &azclient.AzureAuthConfig{
 		AADClientID:     clientID,
 		AADClientSecret: clientSecret,
-	}, &arm.ClientOptions{
-		AuxiliaryTenants: []string{tenantID},
 	})
 	if err != nil {
 		return nil, err
 	}
 	// only test in Public Cloud
-	return azclient.NewClientFactory(&azclient.ClientFactoryConfig{SubscriptionID: subscriptionID}, &azclient.ARMClientConfig{Cloud: ""}, authProvider.ClientSecretCredential)
+	return azclient.NewClientFactory(&azclient.ClientFactoryConfig{SubscriptionID: subscriptionID}, armConfig, authProvider.ClientSecretCredential)
 }
 
 func CreateNamespace(namespaceName string, c client.Client) error {

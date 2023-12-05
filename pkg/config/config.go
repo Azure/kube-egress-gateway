@@ -5,28 +5,17 @@ package config
 import (
 	"fmt"
 	"strings"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 )
 
 type CloudConfig struct {
-	// azure cloud
-	Cloud string `json:"cloud,omitempty" mapstructure:"cloud,omitempty"`
+	azclient.ARMClientConfig `json:",inline" mapstructure:",squash"`
+	azclient.AzureAuthConfig `json:",inline" mapstructure:",squash"`
 	// azure resource location
 	Location string `json:"location,omitempty" mapstructure:"location,omitempty"`
 	// subscription ID
 	SubscriptionID string `json:"subscriptionID,omitempty" mapstructure:"subscriptionID,omitempty"`
-	// tenant ID
-	TenantID string `json:"tenantID,omitempty" mapstructure:"tenantID,omitempty"`
-	// use managed identity to access Azure ARM APIs
-	UseManagedIdentityExtension bool `json:"useManagedIdentityExtension,omitempty" mapstructure:"useManagedIdentityExtension,omitempty"`
-	// UserAssignedIdentityID contains the Client ID of the user assigned MSI which is assigned to the underlying VMs. If empty the user assigned identity is not used.
-	// For the user assigned identity specified here to be used, the UseManagedIdentityExtension has to be set to true.
-	UserAssignedIdentityID string `json:"userAssignedIdentityID,omitempty" mapstructure:"userAssignedIdentityID,omitempty"`
-	// aad client ID
-	AADClientID string `json:"aadClientID,omitempty" mapstructure:"aadClientID,omitempty"`
-	// aad client secret
-	AADClientSecret string `json:"aadClientSecret,omitempty" mapstructure:"aadClientSecret,omitempty"`
-	// user agent for Azure customer usage attribution
-	UserAgent string `json:"userAgent,omitempty" mapstructure:"userAgent,omitempty"`
 	// default resource group where the gateway nodes are deployed
 	ResourceGroup string `json:"resourceGroup,omitempty" mapstructure:"resourceGroup,omitempty"`
 	// name of the gateway ILB

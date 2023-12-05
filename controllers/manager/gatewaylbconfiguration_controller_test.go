@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	mockinterfaceclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
 	mockloadbalancerclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	mockpublicipprefixclient "sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient/mock_publicipprefixclient"
@@ -786,10 +787,12 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 
 func getMockAzureManager(ctrl *gomock.Controller) *azmanager.AzureManager {
 	conf := &config.CloudConfig{
-		Cloud:                     "AzureTest",
+		ARMClientConfig: azclient.ARMClientConfig{
+			Cloud:     "AzureTest",
+			UserAgent: "testUserAgent",
+		},
 		Location:                  "location",
 		SubscriptionID:            "testSub",
-		UserAgent:                 "testUserAgent",
 		ResourceGroup:             testRG,
 		LoadBalancerName:          testLBName,
 		LoadBalancerResourceGroup: testLBRG,

@@ -785,10 +785,12 @@ func getMockFactory(ctrl *gomock.Controller) azclient.ClientFactory {
 
 func getTestCloudConfig(userAgent, lbRG, vnetRG string) *config.CloudConfig {
 	return &config.CloudConfig{
-		Cloud:                     "AzureTest",
+		ARMClientConfig: azclient.ARMClientConfig{
+			Cloud:     "AzureTest",
+			UserAgent: userAgent,
+		},
 		Location:                  "location",
 		SubscriptionID:            "testSub",
-		UserAgent:                 userAgent,
 		ResourceGroup:             "testRG",
 		LoadBalancerName:          "testLB",
 		LoadBalancerResourceGroup: lbRG,
