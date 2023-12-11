@@ -1,0 +1,177 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+name: Trivy scanner
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches:
+      - 'main'
+  schedule:
+    - cron: '35 12 * * 4'
+permissions:
+  contents: read
+jobs:
+  build:
+    permissions:
+      contents: read # for actions/checkout to fetch code
+      security-events: write # for github/codeql-action/upload-sarif to upload SARIF results
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@eb238b55efaa70779f274895e782ed17c84f2895 # v2.6.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - name: Set up Go 1.x
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+        with:
+          go-version: '>=1.20'
+          check-latest: true
+        id: go
+      - name: Build images
+        run: |
+          export IMAGE_TAG=${{ github.sha }}
+          export OUTPUT_TYPE=docker
+          make docker-build
+
+      - name: Run Trivy scanner for controller
+        uses: aquasecurity/trivy-action@91713af97dc80187565512baba96e4364e983601 # master
+        with:
+          image-ref: 'local/kube-egress-gateway-controller:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-controller-results.sarif'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@cdcdbb579706841c47f7063dda365e292e5cad7a # v2.13.4
+        with:
+          sarif_file: 'trivy-controller-results.sarif'
+          category: kube-egress-gateway-controller-image
+
+      - name: Run Trivy scanner for daemon
+        uses: aquasecurity/trivy-action@91713af97dc80187565512baba96e4364e983601 # master
+        with:
+          image-ref: 'local/kube-egress-gateway-daemon:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-daemon-results.sarif'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@cdcdbb579706841c47f7063dda365e292e5cad7a # v2.13.4
+        with:
+          sarif_file: 'trivy-daemon-results.sarif'
+          category: kube-egress-gateway-daemon-image
+
+      - name: Run Trivy scanner for cnimanager
+        uses: aquasecurity/trivy-action@91713af97dc80187565512baba96e4364e983601 # master
+        with:
+          image-ref: 'local/kube-egress-gateway-cnimanager:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-cnimanager-results.sarif'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@cdcdbb579706841c47f7063dda365e292e5cad7a # v2.13.4
+        with:
+          sarif_file: 'trivy-cnimanager-results.sarif'
+          category: kube-egress-gateway-controller-cnimanager
+
+      - name: Run Trivy scanner for cni
+        uses: aquasecurity/trivy-action@91713af97dc80187565512baba96e4364e983601 # master
+        with:
+          image-ref: 'local/kube-egress-gateway-cni:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-cni-results.sarif'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@cdcdbb579706841c47f7063dda365e292e5cad7a # v2.13.4
+        with:
+          sarif_file: 'trivy-cni-results.sarif'
+          category: kube-egress-gateway-controller-cni
+
+      - name: Run Trivy scanner for cni-ipam
+        uses: aquasecurity/trivy-action@91713af97dc80187565512baba96e4364e983601 # master
+        with:
+          image-ref: 'local/kube-egress-gateway-cni-ipam:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-cni-ipam-results.sarif'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@cdcdbb579706841c47f7063dda365e292e5cad7a # v2.13.4
+        with:
+          sarif_file: 'trivy-cni-ipam-results.sarif'
+          category: kube-egress-gateway-controller-cni-ipam
+
+      - name: Run Trivy vulnerability scanner in repo mode
+        uses: aquasecurity/trivy-action@91713af97dc80187565512baba96e4364e983601 # master
+        with:
+          scan-type: 'fs'
+          ignore-unfixed: true
+          format: 'github'
+          output: 'dependency-results.sbom.json'
+          image-ref: '.'
+          github-pat: ${{ secrets.GITHUB_TOKEN }}
+# name: trivy
+
+# on:
+#   push:
+#     branches: [ "main" ]
+#   pull_request:
+#     # The branches below must be a subset of the branches above
+#     branches: [ "main" ]
+#   schedule:
+#     - cron: '15 6 * * 0'
+
+# permissions:
+#   contents: read
+
+# jobs:
+#   build:
+#     permissions:
+#       contents: read # for actions/checkout to fetch code
+#       security-events: write # for github/codeql-action/upload-sarif to upload SARIF results
+#       actions: read # only required for a private repository by github/codeql-action/upload-sarif to get the Action run status
+#     name: Build
+#     runs-on: "ubuntu-20.04"
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v3
+
+#       - name: Build an image from Dockerfile
+#         run: |
+#           docker build -t docker.io/my-organization/my-app:${{ github.sha }} .
+
+#       - name: Run Trivy vulnerability scanner
+#         uses: aquasecurity/trivy-action@7b7aa264d83dc58691451798b4d117d53d21edfe
+#         with:
+#           image-ref: 'docker.io/my-organization/my-app:${{ github.sha }}'
+#           format: 'template'
+#           template: '@/contrib/sarif.tpl'
+#           output: 'trivy-results.sarif'
+#           severity: 'CRITICAL,HIGH'
+
+#       - name: Upload Trivy scan results to GitHub Security tab
+#         uses: github/codeql-action/upload-sarif@v2
+#         with:
+          sarif_file: 'trivy-results.sarif'
