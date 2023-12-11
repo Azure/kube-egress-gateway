@@ -1,0 +1,112 @@
+name: Trivy scanner
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches:
+      - 'main'
+  schedule:
+    - cron: '35 12 * * 4'
+permissions:
+  contents: read
+jobs:
+  build:
+    permissions:
+      contents: read # for actions/checkout to fetch code
+      security-events: write # for github/codeql-action/upload-sarif to upload SARIF results
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@eb238b55efaa70779f274895e782ed17c84f2895 # v2.6.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - name: Set up Go 1.x
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+        with:
+          go-version: '>=1.20'
+          check-latest: true
+        id: go
+      - name: Build images
+        run: |
+          export IMAGE_TAG=${{ github.sha }}
+          export OUTPUT_TYPE=docker
+          make docker-build
+
+      - name: Run Trivy scanner for controller
+        uses: aquasecurity/trivy-action@91713af97dc80187565512baba96e4364e983601 # master
+        if: success() || failure()
+        with:
+          image-ref: 'local/kube-egress-gateway-controller:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+          timeout: '5m0s'
+
+      - name: Run Trivy scanner for daemon
+        uses: aquasecurity/trivy-action@91713af97dc80187565512baba96e4364e983601 # master
+        if: success() || failure()
+        with:
+          image-ref: 'local/kube-egress-gateway-daemon:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+          timeout: '5m0s'
+
+      - name: Run Trivy scanner for cnimanager
+        uses: aquasecurity/trivy-action@91713af97dc80187565512baba96e4364e983601 # master
+        if: success() || failure()
+        with:
+          image-ref: 'local/kube-egress-gateway-cnimanager:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+          timeout: '5m0s'
+
+      - name: Run Trivy scanner for cni
+        uses: aquasecurity/trivy-action@91713af97dc80187565512baba96e4364e983601 # master
+        if: success() || failure()
+        with:
+          image-ref: 'local/kube-egress-gateway-cni:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+          timeout: '5m0s'
+
+      - name: Run Trivy scanner for cni-ipam
+        uses: aquasecurity/trivy-action@91713af97dc80187565512baba96e4364e983601 # master
+        if: success() || failure()
+        with:
+          image-ref: 'local/kube-egress-gateway-cni-ipam:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+          timeout: '5m0s'
+
+      - name: Run Trivy vulnerability scanner in repo mode
+        uses: aquasecurity/trivy-action@91713af97dc80187565512baba96e4364e983601 # master
+        if: success() || failure()
+        with:
+          scan-type: 'fs'
+          ignore-unfixed: true
+          format: 'github'
+          output: 'dependency-results.sbom.json'
+          image-ref: '.'
+          github-pat: ${{ secrets.GITHUB_TOKEN }}
+          timeout: '5m0s'
