@@ -36,6 +36,7 @@ spec:
             - /kube-egress-gateway-cnimanager
           args:
             - serve
+            - --grpc-server-port=50051
             - --exception-cidrs=$(EXCEPTION_CIDRS)
             - --cni-conf-file=01-egressgateway.conflist
             - --cni-uninstall-configmap-name=cni-uninstall
@@ -51,27 +52,17 @@ spec:
           volumeMounts:
             - mountPath: /etc/cni/net.d
               name: cni-conf
-            - mountPath: /proc
-              name: hostpath-proc
-              mountPropagation: Bidirectional
-            - mountPath: /run
-              name: hostpath-run
-              mountPropagation: Bidirectional
-            - mountPath: /var
-              name: hostpath-var
-              mountPropagation: Bidirectional
+          ports:
+            - containerPort: 50051
+              name: grpc
           livenessProbe:
-            exec:
-              command:
-                - /usr/local/bin/grpc_health_probe
-                - -addr=unix:///var/run/egressgateway.sock
+            grpc:
+              port: 50051
             initialDelaySeconds: 20
             periodSeconds: 5
           readinessProbe:
-            exec:
-              command:
-                - /usr/local/bin/grpc_health_probe
-                - -addr=unix:///var/run/egressgateway.sock
+            grpc:
+              port: 50051
             initialDelaySeconds: 20
             periodSeconds: 5
           # TODO(user): Configure the resources accordingly based on the project requirements.
@@ -89,15 +80,6 @@ spec:
       serviceAccountName: cni-manager
       terminationGracePeriodSeconds: 60 # update to 60 seconds for cni uninstall retry on error
       volumes:
-        - name: hostpath-proc
-          hostPath:
-            path: /proc
-        - name: hostpath-run
-          hostPath:
-            path: /run
-        - name: hostpath-var
-          hostPath:
-            path: /var
         - name: cni-bin
           hostPath:
             path: /opt/cni/bin/

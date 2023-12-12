@@ -55,7 +55,6 @@ target "cnimanager" {
   platforms = [PLATFORMS]
   args = {
     MAIN_ENTRY = "kube-egress-gateway-cnimanager",
-    GRPC_HEALTH_PROBE_VERSION = "v0.4.14"
   }
 }
 

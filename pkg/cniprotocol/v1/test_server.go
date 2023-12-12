@@ -61,7 +61,7 @@ func (s *TestServer) startServer() {
 	}
 }
 
-func StartTestServer(socket string, exceptionCidrs []string, podAnnotations map[string]string) (s *TestServer, err error) {
+func StartTestServer(addr string, exceptionCidrs []string, podAnnotations map[string]string) (s *TestServer, err error) {
 	s = &TestServer{
 		Received:       make(chan interface{}, 2),
 		grpcServer:     grpc.NewServer(),
@@ -69,9 +69,9 @@ func StartTestServer(socket string, exceptionCidrs []string, podAnnotations map[
 		exceptionCidrs: exceptionCidrs,
 	}
 
-	s.lis, err = net.Listen("unix", socket)
+	s.lis, err = net.Listen("tcp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to listen on unix socket %s: %v", socket, err)
+		return nil, fmt.Errorf("failed to listen on tcp addr %s: %v", addr, err)
 	}
 
 	RegisterNicServiceServer(s.grpcServer, s)

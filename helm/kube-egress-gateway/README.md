@@ -113,6 +113,7 @@ Additionally, `common.gatewayLbProbePort` defines the gateway LoadBalancer probe
 | `gatewayCNIManager.imageName` | `kube-egress-gateway-cni` | Name of gatewayCNIManager image. |
 | `gatewayCNIManager.imageTag` | | Tag of gatewayCNIManager image. |
 | `gatewayCNIManager.imagePullPolicy` | `IfNotPresent` | Image pull policy for gatewayCNIManager's image. |
+| `gatewayCNIManager.grpcServerPort` | `50051` | Port which cniManager grpc server listens on. Also used for cniManager pod liveness and readiness probes. |
 | `gatewayCNIManager.exceptionCidrs` | `[""]` | A list of cidrs that should be exempted from all egress gateways, e.g. intra-cluster traffic. |
 | `gatewayCNIManager.cniConfigFileName` | `01-egressgateway.conflist` | Name of the newly generated cni configuration list file. |
 | `gatewayCNIManager.cniUninstallConfigMapName` | `cni-uninstall` | Name of the configMap indicating whether cni plugin needs to be uninstalled upon gatewayCNIManager pod shutdown. |

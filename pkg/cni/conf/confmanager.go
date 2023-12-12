@@ -35,9 +35,10 @@ type Manager struct {
 	cniConfWatcher            *fsnotify.Watcher
 	exceptionCidrs            []string
 	k8sClient                 client.Client
+	grpcPort                  int
 }
 
-func NewCNIConfManager(cniConfDir, cniConfFile, exceptionCidrs, cniUninstallConfigMapName string, k8sClient client.Client) (*Manager, error) {
+func NewCNIConfManager(cniConfDir, cniConfFile, exceptionCidrs, cniUninstallConfigMapName string, k8sClient client.Client, grpcPort int) (*Manager, error) {
 	cidrs, err := parseCidrs(exceptionCidrs)
 	if err != nil {
 		return nil, err
@@ -56,6 +57,7 @@ func NewCNIConfManager(cniConfDir, cniConfFile, exceptionCidrs, cniUninstallConf
 		cniConfWatcher:            watcher,
 		exceptionCidrs:            cidrs,
 		k8sClient:                 k8sClient,
+		grpcPort:                  grpcPort,
 	}, nil
 }
 
@@ -222,7 +224,7 @@ func (mgr *Manager) managePluginFromConf(file string) (map[string]interface{}, e
 		"type":          consts.KubeEgressCNIName,
 		"ipam":          map[string]interface{}{"type": consts.KubeEgressIPAMCNIName},
 		"excludedCIDRs": mgr.exceptionCidrs,
-		"socketPath":    consts.CNISocketPath,
+		"socketPath":    fmt.Sprintf("localhost:%d", mgr.grpcPort),
 	})
 	rawList["plugins"] = plugins
 	return rawList, nil
@@ -272,7 +274,7 @@ func (mgr *Manager) managePluginFromConfList(file string) (map[string]interface{
 		"type":          consts.KubeEgressCNIName,
 		"ipam":          map[string]interface{}{"type": consts.KubeEgressIPAMCNIName},
 		"excludedCIDRs": mgr.exceptionCidrs,
-		"socketPath":    consts.CNISocketPath,
+		"socketPath":    fmt.Sprintf("localhost:%d", mgr.grpcPort),
 	}}, plugins[1:]...)...)
 
 	rawList["plugins"] = plugins

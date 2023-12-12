@@ -66,7 +66,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		grpc.WithStreamInterceptor(grpc_prometheus.StreamClientInterceptor),
 		grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
 			d := net.Dialer{}
-			return d.DialContext(ctx, "unix", addr)
+			return d.DialContext(ctx, "tcp", addr)
 		}),
 	)
 	if err != nil {
@@ -211,7 +211,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		grpc.WithStreamInterceptor(grpc_prometheus.StreamClientInterceptor),
 		grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
 			d := net.Dialer{}
-			return d.DialContext(ctx, "unix", addr)
+			return d.DialContext(ctx, "tcp", addr)
 		}))
 	if err != nil {
 		return err
