@@ -20,6 +20,7 @@ gatewayCNIManager:
   imageName: "kube-egress-gateway-cnimanager"
   # imageTag: ""
   imagePullPolicy: "IfNotPresent"
+  grpcServerPort: 50051
   exceptionCidrs:
     - ""
   cniConfigFileName: "01-egressgateway.conflist"

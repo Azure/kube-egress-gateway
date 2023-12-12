@@ -86,6 +86,7 @@ spec:
       containers:
       - args:
         - serve
+        - --grpc-server-port={{- .Values.gatewayCNIManager.grpcServerPort }}
         - --exception-cidrs={{- range $i, $cidr := .Values.gatewayCNIManager.exceptionCidrs }}{{- if $i }},{{- end }}{{ $cidr }}{{- end }}
         - --cni-conf-file={{- .Values.gatewayCNIManager.cniConfigFileName }}
         - --cni-uninstall-configmap-name={{- .Values.gatewayCNIManager.cniUninstallConfigMapName }}
@@ -93,19 +94,18 @@ spec:
         - /kube-egress-gateway-cnimanager
         image: {{ template "image.gatewayCNIManager" . }}
         imagePullPolicy: {{ .Values.gatewayCNIManager.imagePullPolicy }}
+        ports:
+          - containerPort: {{ .Values.gatewayCNIManager.grpcServerPort }}
+            name: grpc
         livenessProbe:
-          exec:
-            command:
-            - /usr/local/bin/grpc_health_probe
-            - -addr=unix:///var/run/egressgateway.sock
+          grpc:
+            port: {{ .Values.gatewayCNIManager.grpcServerPort }}
           initialDelaySeconds: 20
           periodSeconds: 5
         name: cnimanager
         readinessProbe:
-          exec:
-            command:
-            - /usr/local/bin/grpc_health_probe
-            - -addr=unix:///var/run/egressgateway.sock
+          grpc:
+            port: {{ .Values.gatewayCNIManager.grpcServerPort }}
           initialDelaySeconds: 20
           periodSeconds: 5
         resources:
@@ -125,15 +125,6 @@ spec:
         volumeMounts:
         - mountPath: /etc/cni/net.d
           name: cni-conf
-        - mountPath: /proc
-          mountPropagation: Bidirectional
-          name: hostpath-proc
-        - mountPath: /run
-          mountPropagation: Bidirectional
-          name: hostpath-run
-        - mountPath: /var
-          mountPropagation: Bidirectional
-          name: hostpath-var
       initContainers:
       - image: {{ template "image.gatewayCNI" . }}
         imagePullPolicy: {{ .Values.gatewayCNI.imagePullPolicy }}
@@ -157,15 +148,6 @@ spec:
       serviceAccountName: kube-egress-gateway-cni-manager
       terminationGracePeriodSeconds: 60 # update to 60 seconds for cni uninstall retry on error
       volumes:
-      - hostPath:
-          path: /proc
-        name: hostpath-proc
-      - hostPath:
-          path: /run
-        name: hostpath-run
-      - hostPath:
-          path: /var
-        name: hostpath-var
       - hostPath:
           path: /opt/cni/bin/
         name: cni-bin

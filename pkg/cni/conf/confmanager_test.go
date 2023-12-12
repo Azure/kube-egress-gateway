@@ -26,6 +26,7 @@ const (
 	testConf                      = "01-test.conf"
 	testConfList                  = "01-test.conflist"
 	testCniUninstallConfigMapName = "cni-uninstall"
+	testGrpcPort                  = 5051
 )
 
 func TestNewCNIConfManager(t *testing.T) {
@@ -52,7 +53,7 @@ func TestNewCNIConfManager(t *testing.T) {
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			mgr, err := NewCNIConfManager(test.testDir, testConfList, test.exceptionCidrs, testCniUninstallConfigMapName, fake.NewFakeClient())
+			mgr, err := NewCNIConfManager(test.testDir, testConfList, test.exceptionCidrs, testCniUninstallConfigMapName, fake.NewFakeClient(), testGrpcPort)
 			defer func() {
 				if mgr != nil && mgr.cniConfWatcher != nil {
 					_ = mgr.cniConfWatcher.Close()
@@ -74,6 +75,9 @@ func TestNewCNIConfManager(t *testing.T) {
 				if mgr.cniUninstallConfigMapName != testCniUninstallConfigMapName {
 					t.Fatalf("mgr's cniUninstallConfigMapName is different: got: %s, expected: %s", mgr.cniUninstallConfigMapName, testCniUninstallConfigMapName)
 				}
+				if mgr.grpcPort != testGrpcPort {
+					t.Fatalf("mgr's grpcPort is different: got: %d, expected: %d", mgr.grpcPort, testGrpcPort)
+				}
 				if mgr.cniConfWatcher == nil {
 					t.Fatalf("mgr's cniConfWatch is nil")
 				}
@@ -94,7 +98,7 @@ func TestNewCNIConfManager(t *testing.T) {
 }
 
 func TestStart(t *testing.T) {
-	mgr, err := NewCNIConfManager(testDir, testConfList, "", testCniUninstallConfigMapName, fake.NewFakeClient())
+	mgr, err := NewCNIConfManager(testDir, testConfList, "", testCniUninstallConfigMapName, fake.NewFakeClient(), testGrpcPort)
 	if err != nil {
 		t.Fatalf("failed to create cni conf manager: %v", err)
 	}
@@ -164,7 +168,7 @@ func TestRemoveCNIPluginConf(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			os.Setenv(consts.PodNamespaceEnvKey, "default")
 			defer os.Unsetenv(consts.PodNamespaceEnvKey)
-			mgr, err := NewCNIConfManager(testDir, testConfList, "", testCniUninstallConfigMapName, test.client)
+			mgr, err := NewCNIConfManager(testDir, testConfList, "", testCniUninstallConfigMapName, test.client, testGrpcPort)
 			if err != nil {
 				t.Fatalf("failed to create cni conf manager: %v", err)
 			}
@@ -242,7 +246,7 @@ func TestInsertCNIPluginConf(t *testing.T) {
       "ipam": {
         "type": "kube-egress-cni-ipam"
       },
-      "socketPath": "/var/run/egressgateway.sock",
+      "socketPath": "localhost:5051",
       "type": "kube-egress-cni"
     },
     {
@@ -295,7 +299,7 @@ func TestInsertCNIPluginConf(t *testing.T) {
       "ipam": {
         "type": "kube-egress-cni-ipam"
       },
-      "socketPath": "/var/run/egressgateway.sock",
+      "socketPath": "localhost:5051",
       "type": "kube-egress-cni"
     }
   ]
@@ -320,7 +324,7 @@ func TestInsertCNIPluginConf(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			confFileName := "50-result.conflist"
-			mgr, err := NewCNIConfManager(testDir, confFileName, "10.1.0.0/16,1.2.3.4/32", testCniUninstallConfigMapName, fake.NewFakeClient())
+			mgr, err := NewCNIConfManager(testDir, confFileName, "10.1.0.0/16,1.2.3.4/32", testCniUninstallConfigMapName, fake.NewFakeClient(), testGrpcPort)
 			if err != nil {
 				t.Fatalf("failed to create cni conf manager: %v", err)
 			}

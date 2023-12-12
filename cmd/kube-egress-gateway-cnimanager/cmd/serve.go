@@ -40,11 +40,6 @@ import (
 	"github.com/Azure/kube-egress-gateway/pkg/logger"
 )
 
-const (
-	protocol = "unix"
-	sockAddr = consts.CNISocketPath
-)
-
 // serveCmd represents the serve command
 var serveCmd = &cobra.Command{
 	Use:   "serve",
@@ -57,6 +52,7 @@ var (
 	confFileName              string
 	exceptionCidrs            string
 	cniUninstallConfigMapName string
+	grpcPort                  int
 )
 
 func init() {
@@ -71,6 +67,7 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// serveCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	serveCmd.Flags().IntVar(&grpcPort, "grpc-server-port", 50051, "The port the grpc server listens on.")
 	serveCmd.Flags().StringVar(&exceptionCidrs, "exception-cidrs", "", "Cidrs that should bypass egress gateway separated with ',', e.g. intra-cluster traffic")
 	serveCmd.Flags().StringVar(&confFileName, "cni-conf-file", "01-egressgateway.conflist", "Name of the new cni configuration file")
 	serveCmd.Flags().StringVar(&cniUninstallConfigMapName, "cni-uninstall-configmap-name", "cni-uninstall", "Name of the configmap that indicates whether to uninstall cni plugin or not, the configMap should be in the same namespace as the cniManager pod")
@@ -87,7 +84,7 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 
 	k8sClient := startKubeClient(ctx, logger)
 
-	cniConfMgr, err := cniconf.NewCNIConfManager(consts.CNIConfDir, confFileName, exceptionCidrs, cniUninstallConfigMapName, k8sClient)
+	cniConfMgr, err := cniconf.NewCNIConfManager(consts.CNIConfDir, confFileName, exceptionCidrs, cniUninstallConfigMapName, k8sClient, grpcPort)
 	if err != nil {
 		logger.Error(err, "failed to create cni config manager")
 		os.Exit(1)
@@ -122,7 +119,7 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 
 	cniprotocol.RegisterNicServiceServer(server, nicSvc)
 	var listener net.Listener
-	listener, err = net.Listen(protocol, sockAddr)
+	listener, err = net.Listen("tcp", fmt.Sprintf(":%d", grpcPort))
 	if err != nil {
 		logger.Error(err, "failed to listen")
 		os.Exit(1)

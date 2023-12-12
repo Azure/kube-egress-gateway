@@ -21,7 +21,7 @@ PKG=${PKG:-$(go list ./... | xargs echo)}
 for t in ${PKG}; do
     if [[ "${pkg_need_root[*]}"  == *"${t}"* ]];
     then 
-        bash -c "export XDG_RUNTIME_DIR=/tmp/cni-rootless; unshare -rmn go test -cover ${t} -args -test.gocoverdir=${PWD}/testcoverage"
+        bash -c "export XDG_RUNTIME_DIR=/tmp/cni-rootless; unshare -rmn bash -c 'ip link set lo up; go test -cover ${t} -args -test.gocoverdir=${PWD}/testcoverage'"
     elif [[ "${t}" != *"e2e"* ]];
     then
         go test -cover ${t} -args -test.gocoverdir="${PWD}/testcoverage"
