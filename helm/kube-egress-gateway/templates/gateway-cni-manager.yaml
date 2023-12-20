@@ -116,7 +116,10 @@ spec:
             cpu: 10m
             memory: 64Mi
         securityContext:
-          privileged: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
         env:
         - name: MY_POD_NAMESPACE
           valueFrom:
@@ -130,7 +133,10 @@ spec:
         imagePullPolicy: {{ .Values.gatewayCNI.imagePullPolicy }}
         name: cni-install
         securityContext:
-          privileged: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
         volumeMounts:
         - mountPath: /opt/cni/bin
           name: cni-bin
@@ -138,7 +144,10 @@ spec:
         imagePullPolicy: {{ .Values.gatewayCNIIpam.imagePullPolicy }}
         name: cni-ipam-install
         securityContext:
-          privileged: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
         volumeMounts:
         - mountPath: /opt/cni/bin
           name: cni-bin

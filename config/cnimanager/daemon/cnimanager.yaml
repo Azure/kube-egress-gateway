@@ -23,14 +23,20 @@ spec:
             - mountPath: /opt/cni/bin
               name: cni-bin
           securityContext:
-            privileged: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
         - name: cni-ipam-install
           image: cni-ipam:latest
           volumeMounts:
             - mountPath: /opt/cni/bin
               name: cni-bin
           securityContext:
-            privileged: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
       containers:
         - command:
             - /kube-egress-gateway-cnimanager
@@ -43,7 +49,10 @@ spec:
           image: cnimanager:latest
           name: cnimanager
           securityContext:
-            privileged: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
           env:
           - name: MY_POD_NAMESPACE
             valueFrom:
