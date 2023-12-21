@@ -220,7 +220,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcileWireguardKey(
 		if secret.Data == nil {
 			secret.Data = make(map[string][]byte)
 		}
-		if _, ok := secret.Data[consts.WireguardSecretKeyName]; !ok {
+		if _, ok := secret.Data[consts.WireguardPrivateKeyName]; !ok {
 			// create new private key
 			wgPrivateKey, err := wgtypes.GeneratePrivateKey()
 			if err != nil {
@@ -228,7 +228,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcileWireguardKey(
 				return err
 			}
 
-			secret.Data[consts.WireguardSecretKeyName] = []byte(wgPrivateKey.String())
+			secret.Data[consts.WireguardPrivateKeyName] = []byte(wgPrivateKey.String())
 			secret.Data[consts.WireguardPublicKeyName] = []byte(wgPrivateKey.PublicKey().String())
 		}
 
@@ -240,14 +240,14 @@ func (r *StaticGatewayConfigurationReconciler) reconcileWireguardKey(
 	}
 	if secret.DeletionTimestamp.IsZero() {
 		// Update secret reference
-		gwConfig.Status.WireguardPrivateKeySecretRef = &corev1.ObjectReference{
+		gwConfig.Status.PrivateKeySecretRef = &corev1.ObjectReference{
 			APIVersion: "v1",
 			Kind:       "Secret",
 			Name:       secret.Name,
 		}
 
 		// Update public key
-		gwConfig.Status.WireguardPublicKey = string(secret.Data[consts.WireguardPublicKeyName])
+		gwConfig.Status.PublicKey = string(secret.Data[consts.WireguardPublicKeyName])
 	}
 
 	return nil
@@ -277,8 +277,8 @@ func (r *StaticGatewayConfigurationReconciler) reconcileGatewayLBConfig(
 		return err
 	}
 	if lbConfig.DeletionTimestamp.IsZero() && lbConfig.Status != nil {
-		gwConfig.Status.WireguardServerIp = lbConfig.Status.FrontendIp
-		gwConfig.Status.WireguardServerPort = lbConfig.Status.ServerPort
+		gwConfig.Status.Ip = lbConfig.Status.FrontendIp
+		gwConfig.Status.Port = lbConfig.Status.ServerPort
 		gwConfig.Status.EgressIpPrefix = lbConfig.Status.EgressIpPrefix
 	}
 

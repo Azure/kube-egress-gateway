@@ -5,5 +5,5 @@ resources:
 - gatewaylbconfiguration_editor.role.yaml
 - gatewayvmconfiguration_viewer.role.yaml
 - gatewayvmconfiguration_editor.role.yaml
-- podwireguardendpoint_viewer.role.yaml
-- podwireguardendpoint_editor.role.yaml
+- podendpoint_viewer.role.yaml
+- podendpoint_editor.role.yaml

@@ -161,7 +161,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 	}
 
 	// add lb ip (if not exists) to eth0
-	if err := r.reconcileIlbIPOnHost(ctx, gwConfig.Status.GatewayWireguardProfile.WireguardServerIp, false /* deleting */); err != nil {
+	if err := r.reconcileIlbIPOnHost(ctx, gwConfig.Status.GatewayServerProfile.Ip, false /* deleting */); err != nil {
 		return err
 	}
 
@@ -292,14 +292,14 @@ func (r *StaticGatewayConfigurationReconciler) getWireguardPrivateKey(
 ) (*wgtypes.Key, error) {
 	secretKey := &types.NamespacedName{
 		Namespace: gwConfig.Namespace,
-		Name:      gwConfig.Status.WireguardPrivateKeySecretRef.Name,
+		Name:      gwConfig.Status.PrivateKeySecretRef.Name,
 	}
 	secret := &corev1.Secret{}
 	if err := r.Get(ctx, *secretKey, secret); err != nil {
 		return nil, fmt.Errorf("failed to retrieve wireguard private key secret: %w", err)
 	}
 
-	wgPrivateKeyByte, ok := secret.Data[consts.WireguardSecretKeyName]
+	wgPrivateKeyByte, ok := secret.Data[consts.WireguardPrivateKeyName]
 	if !ok {
 		return nil, fmt.Errorf("failed to retrieve private key from secret %s/%s", secretKey.Namespace, secretKey.Name)
 	}
@@ -376,10 +376,10 @@ func (r *StaticGatewayConfigurationReconciler) getVMIP(
 }
 
 func isReady(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) bool {
-	wgProfile := gwConfig.Status.GatewayWireguardProfile
-	return gwConfig.Status.EgressIpPrefix != "" && wgProfile.WireguardServerIp != "" &&
-		wgProfile.WireguardServerPort != 0 && wgProfile.WireguardPublicKey != "" &&
-		wgProfile.WireguardPrivateKeySecretRef != nil
+	wgProfile := gwConfig.Status.GatewayServerProfile
+	return gwConfig.Status.EgressIpPrefix != "" && wgProfile.Ip != "" &&
+		wgProfile.Port != 0 && wgProfile.PublicKey != "" &&
+		wgProfile.PrivateKeySecretRef != nil
 }
 
 func applyToNode(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) bool {
@@ -603,7 +603,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcileWireguardLink(
 		defer func() { _ = wgClient.Close() }()
 
 		wgConfig := wgtypes.Config{
-			ListenPort: to.Ptr(int(gwConfig.Status.WireguardServerPort)),
+			ListenPort: to.Ptr(int(gwConfig.Status.Port)),
 			PrivateKey: privateKey,
 		}
 
@@ -966,7 +966,7 @@ func (r *StaticGatewayConfigurationReconciler) updateGatewayNodeStatus(
 }
 
 func getGatewayNamespaceName(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) string {
-	return fmt.Sprintf("gw-%s-%s", string(gwConfig.GetUID()), strings.Replace(gwConfig.Status.GatewayWireguardProfile.WireguardServerIp, ".", "_", -1))
+	return fmt.Sprintf("gw-%s-%s", string(gwConfig.GetUID()), strings.Replace(gwConfig.Status.GatewayServerProfile.Ip, ".", "_", -1))
 }
 
 func getVethHostLinkName(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) string {

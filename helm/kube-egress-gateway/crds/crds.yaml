@@ -3,16 +3,6 @@ kind: CustomResourceDefinition
 metadata:
   name: staticgatewayconfigurations.egressgateway.kubernetes.azure.com
 spec:
-  conversion:
-    strategy: Webhook
-    webhook:
-      clientConfig:
-        service:
-          name: kube-egress-gateway-webhook-service
-          namespace: kube-egress-gateway-system
-          path: /convert
-      conversionReviewVersions:
-      - v1
   group: egressgateway.kubernetes.azure.com
   names:
     kind: StaticGatewayConfiguration
@@ -24,18 +14,24 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: StaticGatewayConfiguration is the Schema for the staticgatewayconfigurations API
+        description: StaticGatewayConfiguration is the Schema for the staticgatewayconfigurations
+          API
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
             type: string
           metadata:
             type: object
           spec:
-            description: StaticGatewayConfigurationSpec defines the desired state of StaticGatewayConfiguration
+            description: StaticGatewayConfigurationSpec defines the desired state
+              of StaticGatewayConfiguration
             properties:
               defaultRoute:
                 default: staticEgressGateway
@@ -81,22 +77,41 @@ spec:
             - provisionPublicIps
             type: object
           status:
-            description: StaticGatewayConfigurationStatus defines the observed state of StaticGatewayConfiguration
+            description: StaticGatewayConfigurationStatus defines the observed state
+              of StaticGatewayConfiguration
             properties:
               egressIpPrefix:
                 description: Egress IP Prefix CIDR used for this gateway configuration.
                 type: string
-              gatewayWireguardProfile:
-                description: Gateway side wireguard profile.
+              gatewayServerProfile:
+                description: Gateway server profile.
                 properties:
-                  wireguardPrivateKeySecretRef:
-                    description: Reference of the secret that holds gateway side wireguard private key.
+                  ip:
+                    description: Gateway IP for connection.
+                    type: string
+                  port:
+                    description: Listening port of the gateway server.
+                    format: int32
+                    type: integer
+                  privateKeySecretRef:
+                    description: Reference of the secret that holds gateway side private
+                      key.
                     properties:
                       apiVersion:
                         description: API version of the referent.
                         type: string
                       fieldPath:
-                        description: 'If referring to a piece of an object instead of an entire object, this string should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2]. For example, if the object reference is to a container within a pod, this would take on a value like: "spec.containers{name}" (where "name" refers to the name of the container that triggered the event) or if no container name is specified "spec.containers[2]" (container with index 2 in this pod). This syntax is chosen only to have some well-defined way of referencing a part of an object. TODO: this design is not final and this field is subject to change in the future.'
+                        description: 'If referring to a piece of an object instead
+                          of an entire object, this string should contain a valid
+                          JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                          For example, if the object reference is to a container within
+                          a pod, this would take on a value like: "spec.containers{name}"
+                          (where "name" refers to the name of the container that triggered
+                          the event) or if no container name is specified "spec.containers[2]"
+                          (container with index 2 in this pod). This syntax is chosen
+                          only to have some well-defined way of referencing a part
+                          of an object. TODO: this design is not final and this field
+                          is subject to change in the future.'
                         type: string
                       kind:
                         description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
@@ -108,23 +123,17 @@ spec:
                         description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
                         type: string
                       resourceVersion:
-                        description: 'Specific resourceVersion to which this reference is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                        description: 'Specific resourceVersion to which this reference
+                          is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
                         type: string
                       uid:
                         description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
-                  wireguardPublicKey:
-                    description: Gateway side wireguard public key.
+                  publicKey:
+                    description: Gateway server public key.
                     type: string
-                  wireguardServerIp:
-                    description: Gateway IP for wireguard connection.
-                    type: string
-                  wireguardServerPort:
-                    description: Listening port of the gateway side wireguard daemon.
-                    format: int32
-                    type: integer
                 type: object
             type: object
         type: object
@@ -136,6 +145,8 @@ spec:
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.13.0
   name: gatewaylbconfigurations.egressgateway.kubernetes.azure.com
 spec:
   group: egressgateway.kubernetes.azure.com
@@ -149,13 +160,18 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: GatewayLBConfiguration is the Schema for the gatewaylbconfigurations API
+        description: GatewayLBConfiguration is the Schema for the gatewaylbconfigurations
+          API
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
             type: string
           metadata:
             type: object
@@ -192,16 +208,17 @@ spec:
             - provisionPublicIps
             type: object
           status:
-            description: GatewayLBConfigurationStatus defines the observed state of GatewayLBConfiguration
+            description: GatewayLBConfigurationStatus defines the observed state of
+              GatewayLBConfiguration
             properties:
               egressIpPrefix:
                 description: Egress IP Prefix CIDR used for this gateway configuration.
                 type: string
               frontendIp:
-                description: Gateway IP for wireguard connection.
+                description: Gateway frontend IP.
                 type: string
               serverPort:
-                description: Listening port of the gateway side wireguard daemon.
+                description: Listening port of the gateway server.
                 format: int32
                 type: integer
             type: object
@@ -285,6 +302,8 @@ spec:
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.13.0
   name: gatewaystatuses.egressgateway.kubernetes.azure.com
 spec:
   group: egressgateway.kubernetes.azure.com
@@ -301,10 +320,14 @@ spec:
         description: GatewayStatus is the Schema for the gatewaystatuses API
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
             type: string
           metadata:
             type: object
@@ -319,7 +342,8 @@ spec:
                       description: Network namespace name
                       type: string
                     staticGatewayConfiguration:
-                      description: StaticGatewayConfiguration in <namespace>/<name> pattern
+                      description: StaticGatewayConfiguration in <namespace>/<name>
+                        pattern
                       type: string
                   type: object
                 type: array
@@ -330,8 +354,8 @@ spec:
                     netnsName:
                       description: Network namespace name
                       type: string
-                    podWireguardEndpoint:
-                      description: PodWireguardEndpoint in <namespace>/<name> pattern
+                    podEndpoint:
+                      description: PodEndpoint in <namespace>/<name> pattern
                       type: string
                     publicKey:
                       description: Public Key
@@ -351,44 +375,50 @@ spec:
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: podwireguardendpoints.egressgateway.kubernetes.azure.com
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.13.0
+  name: podendpoints.egressgateway.kubernetes.azure.com
 spec:
   group: egressgateway.kubernetes.azure.com
   names:
-    kind: PodWireguardEndpoint
-    listKind: PodWireguardEndpointList
-    plural: podwireguardendpoints
-    singular: podwireguardendpoint
+    kind: PodEndpoint
+    listKind: PodEndpointList
+    plural: podendpoints
+    singular: podendpoint
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: PodWireguardEndpoint is the Schema for the podwireguardendpoints API
+        description: PodEndpoint is the Schema for the podendpoints API
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
             type: string
           metadata:
             type: object
           spec:
-            description: PodWireguardEndpointSpec defines the desired state of PodWireguardEndpoint
+            description: PodEndpointSpec defines the desired state of PodEndpoint
             properties:
               podIpAddress:
                 description: IPv4 address assigned to the pod.
                 type: string
-              podWireguardPublicKey:
-                description: wireguard public key on pod side.
+              podPublicKey:
+                description: public key on pod side.
                 type: string
               staticGatewayConfiguration:
                 description: Name of StaticGatewayConfiguration the pod uses.
                 type: string
             type: object
           status:
-            description: PodWireguardEndpointStatus defines the observed state of PodWireguardEndpoint
+            description: PodEndpointStatus defines the observed state of PodEndpoint
             type: object
         type: object
     served: true

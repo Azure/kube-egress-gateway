@@ -18,8 +18,8 @@ type GatewayNamespace struct {
 }
 
 type PeerConfiguration struct {
-	// PodWireguardEndpoint in <namespace>/<name> pattern
-	PodWireguardEndpoint string `json:"podWireguardEndpoint,omitempty"`
+	// PodEndpoint in <namespace>/<name> pattern
+	PodEndpoint string `json:"podEndpoint,omitempty"`
 	// Network namespace name
 	NetnsName string `json:"netnsName,omitempty"`
 	// Public Key

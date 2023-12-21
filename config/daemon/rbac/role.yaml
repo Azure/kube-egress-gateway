@@ -34,7 +34,7 @@ rules:
 - apiGroups:
   - egressgateway.kubernetes.azure.com
   resources:
-  - podwireguardendpoints
+  - podendpoints
   verbs:
   - get
   - list
@@ -42,7 +42,7 @@ rules:
 - apiGroups:
   - egressgateway.kubernetes.azure.com
   resources:
-  - podwireguardendpoints/status
+  - podendpoints/status
   verbs:
   - get
   - patch

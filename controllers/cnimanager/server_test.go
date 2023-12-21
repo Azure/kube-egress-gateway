@@ -40,10 +40,10 @@ var _ = Describe("Server", func() {
 				Namespace: "default",
 			},
 			Status: current.StaticGatewayConfigurationStatus{
-				GatewayWireguardProfile: current.GatewayWireguardProfile{
-					WireguardServerIp:   "192.168.1.1/32",
-					WireguardPublicKey:  "somerandompublickey",
-					WireguardServerPort: 54321,
+				GatewayServerProfile: current.GatewayServerProfile{
+					Ip:        "192.168.1.1/32",
+					PublicKey: "somerandompublickey",
+					Port:      54321,
 				},
 			},
 		}
@@ -86,8 +86,8 @@ var _ = Describe("Server", func() {
 					Namespace: "default",
 				},
 				Status: current.StaticGatewayConfigurationStatus{
-					GatewayWireguardProfile: current.GatewayWireguardProfile{
-						WireguardPublicKey: "somerandompublickey",
+					GatewayServerProfile: current.GatewayServerProfile{
+						PublicKey: "somerandompublickey",
 					},
 				},
 			}
@@ -112,18 +112,18 @@ var _ = Describe("Server", func() {
 			It("should fetch gateway and create pod endpoint", func() {
 				resp, err := service.NicAdd(context.Background(), nicAddInputRequest)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(resp.PublicKey).To(Equal(gatewayProfile.Status.GatewayWireguardProfile.WireguardPublicKey))
-				Expect(resp.EndpointIp).To(Equal(gatewayProfile.Status.GatewayWireguardProfile.WireguardServerIp))
-				Expect(resp.ListenPort).To(Equal(gatewayProfile.Status.GatewayWireguardProfile.WireguardServerPort))
+				Expect(resp.PublicKey).To(Equal(gatewayProfile.Status.GatewayServerProfile.PublicKey))
+				Expect(resp.EndpointIp).To(Equal(gatewayProfile.Status.GatewayServerProfile.Ip))
+				Expect(resp.ListenPort).To(Equal(gatewayProfile.Status.GatewayServerProfile.Port))
 				Expect(resp.DefaultRoute).To(Equal(cniprotocol.DefaultRoute_DEFAULT_ROUTE_STATIC_EGRESS_GATEWAY))
-				podEndpoint := &current.PodWireguardEndpoint{}
+				podEndpoint := &current.PodEndpoint{}
 				err = fakeClient.Get(context.Background(), client.ObjectKey{
 					Name:      nicAddInputRequest.PodConfig.PodName,
 					Namespace: nicAddInputRequest.PodConfig.PodNamespace,
 				}, podEndpoint)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(podEndpoint.Spec.StaticGatewayConfiguration).To(Equal(gatewayProfile.Name))
-				Expect(podEndpoint.Spec.PodWireguardPublicKey).To(Equal(nicAddInputRequest.PublicKey))
+				Expect(podEndpoint.Spec.PodPublicKey).To(Equal(nicAddInputRequest.PublicKey))
 				Expect(podEndpoint.Spec.PodIpAddress).To(Equal(nicAddInputRequest.AllowedIp))
 			})
 		})
@@ -141,7 +141,7 @@ var _ = Describe("Server", func() {
 				fakeClient.Delete(context.Background(), gatewayProfile) //nolint:errcheck
 				_, err := service.NicAdd(context.Background(), nicAddInputRequest)
 				Expect(err).To(HaveOccurred())
-				podEndpoint := &current.PodWireguardEndpoint{}
+				podEndpoint := &current.PodEndpoint{}
 				err = fakeClient.Get(context.Background(), client.ObjectKey{
 					Name:      nicAddInputRequest.PodConfig.PodName,
 					Namespace: nicAddInputRequest.PodConfig.PodNamespace,

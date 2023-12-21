@@ -4,7 +4,7 @@ package cnimanager
 
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations,verbs=get;list;watch
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations/status,verbs=get;
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=podwireguardendpoints,verbs=list;watch;create;update;patch;delete;
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=podendpoints,verbs=list;watch;create;update;patch;delete;
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch
 
@@ -39,24 +39,24 @@ func (s *NicService) NicAdd(ctx context.Context, in *cniprotocol.NicAddRequest) 
 	if err := s.k8sClient.Get(ctx, client.ObjectKey{Name: in.GetGatewayName(), Namespace: in.GetPodConfig().GetPodNamespace()}, gwConfig); err != nil {
 		return nil, status.Errorf(codes.Unknown, "failed to retrieve StaticGatewayConfiguration %s/%s: %s", in.GetPodConfig().GetPodNamespace(), in.GetGatewayName(), err)
 	}
-	if len(gwConfig.Status.WireguardServerIp) == 0 {
+	if len(gwConfig.Status.Ip) == 0 {
 		return nil, status.Errorf(codes.FailedPrecondition, "the gateway is not ready yet.")
 	}
 	pod := &corev1.Pod{}
 	if err := s.k8sClient.Get(ctx, client.ObjectKey{Name: in.GetPodConfig().GetPodName(), Namespace: in.GetPodConfig().GetPodNamespace()}, pod); err != nil {
 		return nil, status.Errorf(codes.Unknown, "failed to retrieve pod %s/%s: %s", in.GetPodConfig().GetPodNamespace(), in.GetPodConfig().GetPodName(), err)
 	}
-	podEndpoint := &current.PodWireguardEndpoint{ObjectMeta: metav1.ObjectMeta{Name: in.GetPodConfig().GetPodName(), Namespace: in.GetPodConfig().GetPodNamespace()}}
+	podEndpoint := &current.PodEndpoint{ObjectMeta: metav1.ObjectMeta{Name: in.GetPodConfig().GetPodName(), Namespace: in.GetPodConfig().GetPodNamespace()}}
 	if _, err := controllerutil.CreateOrUpdate(ctx, s.k8sClient, podEndpoint, func() error {
 		if err := controllerutil.SetControllerReference(pod, podEndpoint, s.k8sClient.Scheme()); err != nil {
 			return err
 		}
 		podEndpoint.Spec.PodIpAddress = in.GetAllowedIp()
 		podEndpoint.Spec.StaticGatewayConfiguration = in.GetGatewayName()
-		podEndpoint.Spec.PodWireguardPublicKey = in.PublicKey
+		podEndpoint.Spec.PodPublicKey = in.PublicKey
 		return nil
 	}); err != nil {
-		return nil, status.Errorf(codes.Unknown, "failed to update PodWireguardEndpoint %s/%s: %s", in.GetPodConfig().GetPodNamespace(), in.GetPodConfig().GetPodName(), err)
+		return nil, status.Errorf(codes.Unknown, "failed to update PodEndpoint %s/%s: %s", in.GetPodConfig().GetPodNamespace(), in.GetPodConfig().GetPodName(), err)
 	}
 
 	defaultRoute := cniprotocol.DefaultRoute_DEFAULT_ROUTE_STATIC_EGRESS_GATEWAY
@@ -64,19 +64,19 @@ func (s *NicService) NicAdd(ctx context.Context, in *cniprotocol.NicAddRequest) 
 		defaultRoute = cniprotocol.DefaultRoute_DEFAULT_ROUTE_AZURE_NETWORKING
 	}
 	return &cniprotocol.NicAddResponse{
-		EndpointIp:     gwConfig.Status.WireguardServerIp,
-		ListenPort:     gwConfig.Status.WireguardServerPort,
-		PublicKey:      gwConfig.Status.WireguardPublicKey,
+		EndpointIp:     gwConfig.Status.Ip,
+		ListenPort:     gwConfig.Status.Port,
+		PublicKey:      gwConfig.Status.PublicKey,
 		ExceptionCidrs: gwConfig.Spec.ExcludeCidrs,
 		DefaultRoute:   defaultRoute,
 	}, nil
 }
 
 func (s *NicService) NicDel(ctx context.Context, in *cniprotocol.NicDelRequest) (*cniprotocol.NicDelResponse, error) {
-	podEndpoint := &current.PodWireguardEndpoint{ObjectMeta: metav1.ObjectMeta{Name: in.GetPodConfig().GetPodName(), Namespace: in.GetPodConfig().GetPodNamespace()}}
+	podEndpoint := &current.PodEndpoint{ObjectMeta: metav1.ObjectMeta{Name: in.GetPodConfig().GetPodName(), Namespace: in.GetPodConfig().GetPodNamespace()}}
 	if err := s.k8sClient.Delete(ctx, podEndpoint); err != nil {
 		if !apierrors.IsNotFound(err) {
-			return nil, status.Errorf(codes.Unknown, "failed to delete PodWireguardEndpoint %s/%s: %s", in.GetPodConfig().GetPodNamespace(), in.GetPodConfig().GetPodName(), err)
+			return nil, status.Errorf(codes.Unknown, "failed to delete PodEndpoint %s/%s: %s", in.GetPodConfig().GetPodNamespace(), in.GetPodConfig().GetPodName(), err)
 		}
 	}
 	return &cniprotocol.NicDelResponse{}, nil

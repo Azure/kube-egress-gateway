@@ -66,19 +66,19 @@ type StaticGatewayConfigurationSpec struct {
 	ExcludeCidrs []string `json:"excludeCidrs,omitempty"`
 }
 
-// GatewayWireguardProfile provides details about gateway side wireguard configuration.
-type GatewayWireguardProfile struct {
-	// Gateway IP for wireguard connection.
-	WireguardServerIp string `json:"wireguardServerIp,omitempty"`
+// GatewayProfile provides details about gateway side configuration.
+type GatewayServerProfile struct {
+	// Gateway IP for connection.
+	Ip string `json:"ip,omitempty"`
 
-	// Listening port of the gateway side wireguard daemon.
-	WireguardServerPort int32 `json:"wireguardServerPort,omitempty"`
+	// Listening port of the gateway server.
+	Port int32 `json:"port,omitempty"`
 
-	// Gateway side wireguard public key.
-	WireguardPublicKey string `json:"wireguardPublicKey,omitempty"`
+	// Gateway server public key.
+	PublicKey string `json:"publicKey,omitempty"`
 
-	// Reference of the secret that holds gateway side wireguard private key.
-	WireguardPrivateKeySecretRef *corev1.ObjectReference `json:"wireguardPrivateKeySecretRef,omitempty"`
+	// Reference of the secret that holds gateway side private key.
+	PrivateKeySecretRef *corev1.ObjectReference `json:"privateKeySecretRef,omitempty"`
 }
 
 // StaticGatewayConfigurationStatus defines the observed state of StaticGatewayConfiguration
@@ -89,8 +89,8 @@ type StaticGatewayConfigurationStatus struct {
 	// Egress IP Prefix CIDR used for this gateway configuration.
 	EgressIpPrefix string `json:"egressIpPrefix,omitempty"`
 
-	// Gateway side wireguard profile.
-	GatewayWireguardProfile `json:"gatewayWireguardProfile,omitempty"`
+	// Gateway server profile.
+	GatewayServerProfile `json:"gatewayServerProfile,omitempty"`
 }
 
 //+kubebuilder:object:root=true

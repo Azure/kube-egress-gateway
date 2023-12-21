@@ -4,21 +4,20 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.13.0
-  name: podwireguardendpoints.egressgateway.kubernetes.azure.com
+  name: podendpoints.egressgateway.kubernetes.azure.com
 spec:
   group: egressgateway.kubernetes.azure.com
   names:
-    kind: PodWireguardEndpoint
-    listKind: PodWireguardEndpointList
-    plural: podwireguardendpoints
-    singular: podwireguardendpoint
+    kind: PodEndpoint
+    listKind: PodEndpointList
+    plural: podendpoints
+    singular: podendpoint
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: PodWireguardEndpoint is the Schema for the podwireguardendpoints
-          API
+        description: PodEndpoint is the Schema for the podendpoints API
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -33,21 +32,20 @@ spec:
           metadata:
             type: object
           spec:
-            description: PodWireguardEndpointSpec defines the desired state of PodWireguardEndpoint
+            description: PodEndpointSpec defines the desired state of PodEndpoint
             properties:
               podIpAddress:
                 description: IPv4 address assigned to the pod.
                 type: string
-              podWireguardPublicKey:
-                description: wireguard public key on pod side.
+              podPublicKey:
+                description: public key on pod side.
                 type: string
               staticGatewayConfiguration:
                 description: Name of StaticGatewayConfiguration the pod uses.
                 type: string
             type: object
           status:
-            description: PodWireguardEndpointStatus defines the observed state of
-              PodWireguardEndpoint
+            description: PodEndpointStatus defines the observed state of PodEndpoint
             type: object
         type: object
     served: true

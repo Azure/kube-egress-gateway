@@ -38,11 +38,9 @@ import (
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "kube-egress-gateway-daemon",
-	Short: "Monitor GatewayWireguardEndpoint CR and PodWireguardEndpoint CR, configures the network namespaces, interfaces, and routes on gateway nodes",
-	Long:  `Monitor GatewayWireguardEndpoint CR and PodWireguardEndpoint CR, configures the network namespaces, interfaces, and routes on gateway nodes`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	Run: startControllers,
+	Short: "Monitor StaticEgressGateway CR and PodEndpoint CR, configures the network namespaces, interfaces, and routes on gateway nodes",
+	Long:  `Monitor StaticEgressGateway CR and PodEndpoint CR, configures the network namespaces, interfaces, and routes on gateway nodes`,
+	Run:   startControllers,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -176,11 +174,11 @@ func startControllers(cmd *cobra.Command, args []string) {
 	}
 
 	peerCleanupEvents := make(chan event.GenericEvent)
-	if err = (&controllers.PodWireguardEndpointReconciler{
+	if err = (&controllers.PodEndpointReconciler{
 		Client:       mgr.GetClient(),
 		TickerEvents: peerCleanupEvents,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "PodWireguardEndpoint")
+		setupLog.Error(err, "unable to create controller", "controller", "PodEndpoint")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder
