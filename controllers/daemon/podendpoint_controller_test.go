@@ -40,13 +40,13 @@ const (
 	podIPAddrNet = "10.0.0.25/32"
 )
 
-var _ = Describe("Daemon PodWireguardEndpoint controller unit tests", func() {
+var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 	var (
-		r            *PodWireguardEndpointReconciler
+		r            *PodEndpointReconciler
 		req          reconcile.Request
 		res          reconcile.Result
 		reconcileErr error
-		podEndpoint  *egressgatewayv1alpha1.PodWireguardEndpoint
+		podEndpoint  *egressgatewayv1alpha1.PodEndpoint
 		gwConfig     *egressgatewayv1alpha1.StaticGatewayConfiguration
 		mclient      *mockwgctrlwrapper.MockClient
 		node         = &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: testNodeName}}
@@ -55,23 +55,23 @@ var _ = Describe("Daemon PodWireguardEndpoint controller unit tests", func() {
 	getTestReconciler := func(objects ...runtime.Object) {
 		mctrl := gomock.NewController(GinkgoT())
 		cl := fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(objects...).Build()
-		r = &PodWireguardEndpointReconciler{Client: cl}
+		r = &PodEndpointReconciler{Client: cl}
 		r.Netlink = mocknetlinkwrapper.NewMockInterface(mctrl)
 		r.NetNS = mocknetnswrapper.NewMockInterface(mctrl)
 		r.WgCtrl = mockwgctrlwrapper.NewMockInterface(mctrl)
 		mclient = mockwgctrlwrapper.NewMockClient(mctrl)
 	}
 
-	getTestPodEndpoint := func() *egressgatewayv1alpha1.PodWireguardEndpoint {
-		return &egressgatewayv1alpha1.PodWireguardEndpoint{
+	getTestPodEndpoint := func() *egressgatewayv1alpha1.PodEndpoint {
+		return &egressgatewayv1alpha1.PodEndpoint{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      testName,
 				Namespace: testNamespace,
 			},
-			Spec: egressgatewayv1alpha1.PodWireguardEndpointSpec{
+			Spec: egressgatewayv1alpha1.PodEndpointSpec{
 				StaticGatewayConfiguration: testName,
 				PodIpAddress:               podIPAddrNet,
-				PodWireguardPublicKey:      pubK,
+				PodPublicKey:               pubK,
 			},
 		}
 	}
@@ -264,9 +264,9 @@ var _ = Describe("Daemon PodWireguardEndpoint controller unit tests", func() {
 				Expect(err).To(BeNil())
 				Expect(gwStatus.Spec.ReadyPeerConfigurations).To(Equal([]egressgatewayv1alpha1.PeerConfiguration{
 					{
-						PublicKey:            pubK,
-						NetnsName:            nsName,
-						PodWireguardEndpoint: fmt.Sprintf("%s/%s", testNamespace, testName),
+						PublicKey:   pubK,
+						NetnsName:   nsName,
+						PodEndpoint: fmt.Sprintf("%s/%s", testNamespace, testName),
 					},
 				}))
 			})
@@ -498,15 +498,15 @@ var _ = Describe("Daemon PodWireguardEndpoint controller unit tests", func() {
 					},
 					Status: getTestGwConfigStatus(),
 				},
-				&egressgatewayv1alpha1.PodWireguardEndpoint{
+				&egressgatewayv1alpha1.PodEndpoint{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      testName + "a",
 						Namespace: testNamespace,
 					},
-					Spec: egressgatewayv1alpha1.PodWireguardEndpointSpec{
+					Spec: egressgatewayv1alpha1.PodEndpointSpec{
 						StaticGatewayConfiguration: testName,
 						PodIpAddress:               "10.0.0.1",
-						PodWireguardPublicKey:      pubK,
+						PodPublicKey:               pubK,
 					},
 				},
 			}

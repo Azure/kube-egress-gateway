@@ -22,7 +22,7 @@ resources:
     namespaced: true
   domain: kubernetes.azure.com
   group: egressgateway
-  kind: PodWireguardEndpoint
+  kind: PodEndpoint
   path: github.com/Azure/kube-egress-gateway/api/v1alpha1
   version: v1alpha1
 - api:

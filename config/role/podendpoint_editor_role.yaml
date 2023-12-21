@@ -1,20 +1,24 @@
-# permissions for end users to view podwireguardendpoints.
+# permissions for end users to edit podendpoints.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: podwireguardendpoint-viewer-role
+  name: podendpoint-editor-role
 rules:
 - apiGroups:
   - egressgateway.kubernetes.azure.com
   resources:
-  - podwireguardendpoints
+  - podendpoints
   verbs:
+  - create
+  - delete
   - get
   - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - egressgateway.kubernetes.azure.com
   resources:
-  - podwireguardendpoints/status
+  - podendpoints/status
   verbs:
   - get

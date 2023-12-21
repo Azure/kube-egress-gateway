@@ -16,17 +16,17 @@ metadata:
 spec:
   ...
 status:
-  gatewayWireguardProfile:
-    wireguardPrivateKeySecretRef:
+  gatewayServerProfile:
+    PrivateKeySecretRef:
       apiVersion: v1
       kind: Secret
       name: <your sgw name>
-    wireguardPublicKey: ***
-    wireguardServerIP: 10.243.0.6 # ilb private IP in your vnet
-    wireguardServerPort: 6000
+    PublicKey: ***
+    Ip: 10.243.0.6 # ilb private IP in your vnet
+    Port: 6000
   egressIpPrefix: 1.2.3.4/31 # egress public IP prefix
 ```
-The controller creates a secret storing the gateway side wireguard private key with the same namespace and name as your `StaticGatewayConfiguration`. This information is displayed in `.status.gatewayWireguardProfile.wireguardPrivateKeySecretRef` field. `wireguardPublicKey` is base64 encoded wireguard public key used by the gateway. `wireguardServerIP` is the gateway ILB frontend IP. This IP comes from the subnet provided in Azure cloud config. `wireguardServerPort` is LoadBalancing rule frontend and backend port. All `StaticGatewayConfiguration`s deployed to the same gateway VMSS share the same ILB frontend and backend but have separate LoadBalancing rules with different ports. And most importantly, `egressIpPrefix` is the egress source IPNet of the pods using this gateway. If you see any of these not showing in status, you can describe the CR objects and see if there are error events:
+The controller creates a secret storing the gateway side wireguard private key with the same namespace and name as your `StaticGatewayConfiguration`. This information is displayed in `.status.gatewayServerProfile.PrivateKeySecretRef` field. `PublicKey` is base64 encoded wireguard public key used by the gateway. `Ip` is the gateway ILB frontend IP. This IP comes from the subnet provided in Azure cloud config. `Port` is LoadBalancing rule frontend and backend port. All `StaticGatewayConfiguration`s deployed to the same gateway VMSS share the same ILB frontend and backend but have separate LoadBalancing rules with different ports. And most importantly, `egressIpPrefix` is the egress source IPNet of the pods using this gateway. If you see any of these not showing in status, you can describe the CR objects and see if there are error events:
 ```bash
 $ kubectl describe staticcgatewayconfiguration -n <your namespace> <your sgw name>
 $ kubectl describe gatewaylbconfiguration -n <your namespace> <your sgw name> # gatewaylbconfiguration and gatewayvmconfiguration are two internal CRDs to reconcile gateway ilb and vmss status.
@@ -58,7 +58,7 @@ metadata:
   ownerReferences: <node object>
 spec:
   readyGatewayNamespaces:
-  - netnsName: gw-<StaticGatewayConfiguration obj GUID>-<WireguardServerIP>
+  - netnsName: gw-<StaticGatewayConfiguration obj GUID>-<ServerIP>
     staticGatewayConfiguration: <sgw namespace>/<sgw name>
   - ...
 ```
@@ -70,7 +70,7 @@ $ kubectl logs -f -n kube-egress-gateway-system kube-egress-gateway-daemon-manag
 ### Login to the node
 After checking the CR objects, you can login to the gateway node and check network settings directly:
 
-* Check network namespace, namespace name in format `gw-<SGC .metadata.uid>-<SGC .status.gatewayWireguardProfile.wireguardServerIP>`:
+* Check network namespace, namespace name in format `gw-<SGC .metadata.uid>-<SGC .status.gatewayServerProfile.Ip>`:
   ```bash
   $ ip netns
   gw-17f83d68-4cab-422d-a3af-ed320a761cee-10_243_0_6 (id: 0)
@@ -106,7 +106,7 @@ After checking the CR objects, you can login to the gateway node and check netwo
   -A POSTROUTING -o host0 -j MASQUERADE
   COMMIT
   ```
-* Check wireguard setup, public key and listening port should match SGW `.status.gatewayWireguardProfile.wireguardPublicKey` and `.status.gatewayWireguardProfile.wireguardServerPort` respectively:
+* Check wireguard setup, public key and listening port should match SGW `.status.gatewayServerProfile.PublicKey` and `.status.gatewayServerProfile.Port` respectively:
   ```bash
   $ ip netns exec gw-17f83d68-4cab-422d-a3af-ed320a761cee-10_243_0_6 wg
   interface: wg0
@@ -129,16 +129,16 @@ Firstly, check whether pod is in "Running" state. If pod gets stuck in "Containe
 $ kubectl logs -f -n kube-egress-gateway-system kube-egress-gateway-cni-manager-*****
 ```
 
-### Check PodWireguardEndpoint CR
-For each pod using an egress gateway, kube-egress-gateway CNI plugin creates a corresponding `PodWireguardEndpoint` CR in the pod's namespace, with the same name as the pod. This CR contains pod side wireguard configurations so that gateway side can add it as a peer. You can view the details about this object by running `kubectl get podwireguardendpoint -n <pod namespace> <pod name> -o yaml`:
+### Check PodEndpoint CR
+For each pod using an egress gateway, kube-egress-gateway CNI plugin creates a corresponding `PodEndpoint` CR in the pod's namespace, with the same name as the pod. This CR contains pod side wireguard configurations so that gateway side can add it as a peer. You can view the details about this object by running `kubectl get podendpoint -n <pod namespace> <pod name> -o yaml`:
 ```yaml
 apiVersion: egressgateway.kubernetes.azure.com/v1alpha1
-kind: PodWireguardEndpoint
+kind: PodEndpoint
 metadata:
   ...
 spec:
   podIpAddress: XXX.XXX.XXX.XXX/32
-  podWireguardPublicKey: **********
+  podPublicKey: **********
   staticGatewayConfiguration: <SGC name>
 ```
 Pod IPNet (provisioned by the main CNI plugin in the cluster), pod side wireguard public key and the `StaticGatewayConfiguration` name are provided. Make sure this object exists. Otherwise, look for CNI plugin error from kubelet log.
@@ -189,7 +189,7 @@ COMMIT
 
 $ ip netns exec cni-***** wg
 interface: wg0
-  public key: ********** # should be same as the one in PodWireguardEndpoint CR
+  public key: ********** # should be same as the one in PodEndpoint CR
   private key: (hidden)
   listening port: 56959 # random
 
@@ -230,7 +230,7 @@ spec:
     ...
   readyPeerConfigurations:
   - netnsName: gw-17f83d68-4cab-422d-a3af-ed320a761cee-10_243_0_6
-    podWireguardEndpoint: <pod namespace>/<pod name>
+    podEndpoint: <pod namespace>/<pod name>
     publicKey: ****** <pod's wireguard public key>
 ```
 ### Check LoadBalancer health probe

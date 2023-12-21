@@ -37,10 +37,10 @@ type GatewayLBConfigurationStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Gateway IP for wireguard connection.
+	// Gateway frontend IP.
 	FrontendIp string `json:"frontendIp,omitempty"`
 
-	// Listening port of the gateway side wireguard daemon.
+	// Listening port of the gateway server.
 	ServerPort int32 `json:"serverPort,omitempty"`
 
 	// Egress IP Prefix CIDR used for this gateway configuration.
