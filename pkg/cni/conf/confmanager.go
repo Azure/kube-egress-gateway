@@ -172,6 +172,7 @@ func (mgr *Manager) removeCNIPluginConf() error {
 			if err := os.Remove(file); err != nil {
 				return fmt.Errorf("failed to delete file %s: %w", file, err)
 			}
+			log.Info(fmt.Sprintf("successfully removed cni configuration file %s", file))
 			return nil
 		},
 	)
