@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"sync"
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
@@ -89,7 +90,10 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 		logger.Error(err, "failed to create cni config manager")
 		os.Exit(1)
 	}
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		if err := cniConfMgr.Start(ctx); err != nil {
 			logger.Error(err, "failed to start cni config manager monitoring")
 			os.Exit(1)
@@ -125,7 +129,9 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		<-ctx.Done()
 		logger.Error(ctx.Err(), "os signal received, shutting down")
 		server.GracefulStop()
@@ -134,6 +140,7 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 	if err != nil {
 		logger.Error(err, "failed to serve")
 	}
+	wg.Wait()
 	logger.Info("server shutdown")
 }
 
