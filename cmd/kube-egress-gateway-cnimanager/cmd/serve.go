@@ -22,7 +22,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
-	
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -141,7 +141,10 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 		logger.Error(err, "failed to serve")
 	}
 	// wait for all context to be done
-	g.Wait()
+	err = g.Wait()
+	if err != nil {
+		logger.Error(err, "unexpected error returned from errgroup")
+	}
 	logger.Info("server shutdown")
 }
 
