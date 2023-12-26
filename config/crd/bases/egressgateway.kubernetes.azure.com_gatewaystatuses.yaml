@@ -54,8 +54,8 @@ spec:
                     netnsName:
                       description: Network namespace name
                       type: string
-                    podWireguardEndpoint:
-                      description: PodWireguardEndpoint in <namespace>/<name> pattern
+                    podEndpoint:
+                      description: PodEndpoint in <namespace>/<name> pattern
                       type: string
                     publicKey:
                       description: Public Key

@@ -1,8 +1,8 @@
 apiVersion: egressgateway.kubernetes.azure.com/v1alpha1
-kind: PodWireguardEndpoint
+kind: PodEndpoint
 metadata:
-  name: podwireguardendpoint-sample
+  name: podendpoint-sample
 spec:
   staticGatewayConfiguration: staticgatewayconfiguration-sample
-  podIPv4Address: 10.243.0.25
-  podWireguardKeySecret: mypod-secret
+  podIpAddress: 10.243.0.25
+  podPublicKey: <public key>

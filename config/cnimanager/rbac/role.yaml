@@ -23,7 +23,7 @@ rules:
 - apiGroups:
   - egressgateway.kubernetes.azure.com
   resources:
-  - podwireguardendpoints
+  - podendpoints
   verbs:
   - create
   - delete

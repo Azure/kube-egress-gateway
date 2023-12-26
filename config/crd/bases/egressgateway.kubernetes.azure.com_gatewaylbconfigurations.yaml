@@ -72,10 +72,10 @@ spec:
                 description: Egress IP Prefix CIDR used for this gateway configuration.
                 type: string
               frontendIp:
-                description: Gateway IP for wireguard connection.
+                description: Gateway frontend IP.
                 type: string
               serverPort:
-                description: Listening port of the gateway side wireguard daemon.
+                description: Listening port of the gateway server.
                 format: int32
                 type: integer
             type: object

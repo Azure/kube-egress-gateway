@@ -39,7 +39,7 @@ Out-of-cluster packets from pod containers are sent via the pod's `wg0` interfac
 * `GatewayLBConfiguration`: Used to reconcile gateway ILB status. Users no need to take care in most time.
 * `GatewayVMConfiguration`: Used to reconcile gateway VMSS status. Users no need to take care in most time.
 * `GatewayNodeStatus`: Used to display gateway node status. Users no need to take care in most time.
-* `PodWireguardEndpoint`: Shows pod side wireguard configuration. Users no need to take care in most time.
+* `PodEndpoint`: Shows pod side configuration. Users no need to take care in most time.
 
 ## Components
 

@@ -13,10 +13,10 @@ const (
 	DefaultGatewayLBName = "kubeegressgateway-ilb"
 
 	// Key name in the wireugard private key secret
-	WireguardSecretKeyName = "WireguardPrivateKey"
+	WireguardPrivateKeyName = "PrivateKey"
 
 	// Key name in the wireugard private key secret
-	WireguardPublicKeyName = "WireguardPublicKey"
+	WireguardPublicKeyName = "PublicKey"
 
 	// Wireguard listening port range start, inclusive
 	WireguardPortStart int32 = 6000

@@ -32,10 +32,10 @@ import (
 	"github.com/Azure/kube-egress-gateway/pkg/wgctrlwrapper"
 )
 
-var _ reconcile.Reconciler = &PodWireguardEndpointReconciler{}
+var _ reconcile.Reconciler = &PodEndpointReconciler{}
 
-// PodWireguardEndpointReconciler reconciles gateway node network according to a PodWireguardEndpoint object
-type PodWireguardEndpointReconciler struct {
+// PodEndpointReconciler reconciles gateway node network according to a PodEndpoint object
+type PodEndpointReconciler struct {
 	client.Client
 	TickerEvents chan event.GenericEvent
 	Netlink      netlinkwrapper.Interface
@@ -43,8 +43,8 @@ type PodWireguardEndpointReconciler struct {
 	WgCtrl       wgctrlwrapper.Interface
 }
 
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=podwireguardendpoints,verbs=get;list;watch;
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=podwireguardendpoints/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=podendpoints,verbs=get;list;watch;
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=podendpoints/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations,verbs=get;list;watch
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaystatuses,verbs=get;list;watch;create;update;patch
@@ -58,7 +58,7 @@ type PodWireguardEndpointReconciler struct {
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.0/pkg/reconcile
-func (r *PodWireguardEndpointReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *PodEndpointReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
 	// Got an event from cleanup ticker
@@ -68,13 +68,13 @@ func (r *PodWireguardEndpointReconciler) Reconcile(ctx context.Context, req ctrl
 		}
 	}
 
-	podEndpoint := &egressgatewayv1alpha1.PodWireguardEndpoint{}
+	podEndpoint := &egressgatewayv1alpha1.PodEndpoint{}
 	if err := r.Get(ctx, req.NamespacedName, podEndpoint); err != nil {
 		if apierrors.IsNotFound(err) {
 			// Object not found, return.
 			return ctrl.Result{}, nil
 		}
-		log.Error(err, "unable to fetch PodWireguardEndpoint instance")
+		log.Error(err, "unable to fetch PodEndpoint instance")
 		return ctrl.Result{}, err
 	}
 
@@ -98,24 +98,24 @@ func (r *PodWireguardEndpointReconciler) Reconcile(ctx context.Context, req ctrl
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *PodWireguardEndpointReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *PodEndpointReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.Netlink = netlinkwrapper.NewNetLink()
 	r.NetNS = netnswrapper.NewNetNS()
 	r.WgCtrl = wgctrlwrapper.NewWgCtrl()
-	controller, err := ctrl.NewControllerManagedBy(mgr).For(&egressgatewayv1alpha1.PodWireguardEndpoint{}).Build(r)
+	controller, err := ctrl.NewControllerManagedBy(mgr).For(&egressgatewayv1alpha1.PodEndpoint{}).Build(r)
 	if err != nil {
 		return err
 	}
 	return controller.Watch(&source.Channel{Source: r.TickerEvents}, &handler.EnqueueRequestForObject{})
 }
 
-func (r *PodWireguardEndpointReconciler) reconcile(
+func (r *PodEndpointReconciler) reconcile(
 	ctx context.Context,
 	gwNamespaceName string,
-	podEndpoint *egressgatewayv1alpha1.PodWireguardEndpoint,
+	podEndpoint *egressgatewayv1alpha1.PodEndpoint,
 ) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
-	log.Info("Reconciling PodWireguardEndpoint")
+	log.Info("Reconciling PodEndpoint")
 
 	gwns, err := r.NetNS.GetNS(gwNamespaceName)
 	if err != nil {
@@ -130,7 +130,7 @@ func (r *PodWireguardEndpointReconciler) reconcile(
 		}
 		defer func() { _ = wgClient.Close() }()
 
-		podWireguardPublicKey, err := wgtypes.ParseKey(podEndpoint.Spec.PodWireguardPublicKey)
+		podPublicKey, err := wgtypes.ParseKey(podEndpoint.Spec.PodPublicKey)
 		if err != nil {
 			return fmt.Errorf("failed to parse pod wireguard public key: %w", err)
 		}
@@ -143,7 +143,7 @@ func (r *PodWireguardEndpointReconciler) reconcile(
 		wgConfig := wgtypes.Config{
 			Peers: []wgtypes.PeerConfig{
 				{
-					PublicKey:         podWireguardPublicKey,
+					PublicKey:         podPublicKey,
 					ReplaceAllowedIPs: true,
 					AllowedIPs: []net.IPNet{
 						*podIPNet,
@@ -166,9 +166,9 @@ func (r *PodWireguardEndpointReconciler) reconcile(
 
 	peerConfigs := []egressgatewayv1alpha1.PeerConfiguration{
 		{
-			PodWireguardEndpoint: fmt.Sprintf("%s/%s", podEndpoint.Namespace, podEndpoint.Name),
-			NetnsName:            gwNamespaceName,
-			PublicKey:            podEndpoint.Spec.PodWireguardPublicKey,
+			PodEndpoint: fmt.Sprintf("%s/%s", podEndpoint.Namespace, podEndpoint.Name),
+			NetnsName:   gwNamespaceName,
+			PublicKey:   podEndpoint.Spec.PodPublicKey,
 		},
 	}
 	if err := r.updateGatewayNodeStatus(ctx, peerConfigs, true /* add */); err != nil {
@@ -179,13 +179,13 @@ func (r *PodWireguardEndpointReconciler) reconcile(
 	return ctrl.Result{}, nil
 }
 
-func (r *PodWireguardEndpointReconciler) cleanUp(ctx context.Context) error {
+func (r *PodEndpointReconciler) cleanUp(ctx context.Context) error {
 	log := log.FromContext(ctx)
 	log.Info("Cleaning up orphaned wireguard peers")
 
-	podEndpointList := &egressgatewayv1alpha1.PodWireguardEndpointList{}
+	podEndpointList := &egressgatewayv1alpha1.PodEndpointList{}
 	if err := r.List(ctx, podEndpointList); err != nil {
-		return fmt.Errorf("failed to list podWireguardEndpoints: %w", err)
+		return fmt.Errorf("failed to list PodEndpoints: %w", err)
 	}
 	gwConfigList := &egressgatewayv1alpha1.StaticGatewayConfigurationList{}
 	if err := r.List(ctx, gwConfigList); err != nil {
@@ -206,7 +206,7 @@ func (r *PodWireguardEndpointReconciler) cleanUp(ctx context.Context) error {
 			if _, exists := peerMap[nsName]; !exists {
 				peerMap[nsName] = make(map[string]bool)
 			}
-			peerMap[nsName][podEndpoint.Spec.PodWireguardPublicKey] = true
+			peerMap[nsName][podEndpoint.Spec.PodPublicKey] = true
 		}
 	}
 
@@ -227,7 +227,7 @@ func (r *PodWireguardEndpointReconciler) cleanUp(ctx context.Context) error {
 	return nil
 }
 
-func (r *PodWireguardEndpointReconciler) cleanUpNetNS(
+func (r *PodEndpointReconciler) cleanUpNetNS(
 	ctx context.Context,
 	nsName string,
 	peerMap map[string]map[string]bool,
@@ -288,8 +288,8 @@ func (r *PodWireguardEndpointReconciler) cleanUpNetNS(
 	return peersToDelete, nil
 }
 
-func (r *PodWireguardEndpointReconciler) addWireguardPeerRoutes(
-	podEndpoint *egressgatewayv1alpha1.PodWireguardEndpoint,
+func (r *PodEndpointReconciler) addWireguardPeerRoutes(
+	podEndpoint *egressgatewayv1alpha1.PodEndpoint,
 ) error {
 	wgLink, err := r.Netlink.LinkByName(consts.WireguardLinkName)
 	if err != nil {
@@ -313,7 +313,7 @@ func (r *PodWireguardEndpointReconciler) addWireguardPeerRoutes(
 	return nil
 }
 
-func (r *PodWireguardEndpointReconciler) deleteWireguardPeerRoutes(
+func (r *PodEndpointReconciler) deleteWireguardPeerRoutes(
 	podIPToDel map[string]bool,
 ) error {
 	wgLink, err := r.Netlink.LinkByName(consts.WireguardLinkName)
@@ -338,7 +338,7 @@ func (r *PodWireguardEndpointReconciler) deleteWireguardPeerRoutes(
 	return nil
 }
 
-func (r *PodWireguardEndpointReconciler) updateGatewayNodeStatus(
+func (r *PodEndpointReconciler) updateGatewayNodeStatus(
 	ctx context.Context,
 	peerConfigs []egressgatewayv1alpha1.PeerConfiguration,
 	add bool,

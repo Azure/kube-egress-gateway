@@ -10,8 +10,8 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// PodWireguardEndpointSpec defines the desired state of PodWireguardEndpoint
-type PodWireguardEndpointSpec struct {
+// PodEndpointSpec defines the desired state of PodEndpoint
+type PodEndpointSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
@@ -21,12 +21,12 @@ type PodWireguardEndpointSpec struct {
 	// IPv4 address assigned to the pod.
 	PodIpAddress string `json:"podIpAddress,omitempty"`
 
-	// wireguard public key on pod side.
-	PodWireguardPublicKey string `json:"podWireguardPublicKey,omitempty"`
+	// public key on pod side.
+	PodPublicKey string `json:"podPublicKey,omitempty"`
 }
 
-// PodWireguardEndpointStatus defines the observed state of PodWireguardEndpoint
-type PodWireguardEndpointStatus struct {
+// PodEndpointStatus defines the observed state of PodEndpoint
+type PodEndpointStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 }
@@ -34,24 +34,24 @@ type PodWireguardEndpointStatus struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
-// PodWireguardEndpoint is the Schema for the podwireguardendpoints API
-type PodWireguardEndpoint struct {
+// PodEndpoint is the Schema for the podendpoints API
+type PodEndpoint struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   PodWireguardEndpointSpec   `json:"spec,omitempty"`
-	Status PodWireguardEndpointStatus `json:"status,omitempty"`
+	Spec   PodEndpointSpec   `json:"spec,omitempty"`
+	Status PodEndpointStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// PodWireguardEndpointList contains a list of PodWireguardEndpoint
-type PodWireguardEndpointList struct {
+// PodEndpointList contains a list of PodEndpoint
+type PodEndpointList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []PodWireguardEndpoint `json:"items"`
+	Items           []PodEndpoint `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&PodWireguardEndpoint{}, &PodWireguardEndpointList{})
+	SchemeBuilder.Register(&PodEndpoint{}, &PodEndpointList{})
 }

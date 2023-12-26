@@ -101,15 +101,15 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), updatedGWConfig); err != nil {
 					return err
 				}
-				if updatedGWConfig.Status.WireguardPrivateKeySecretRef == nil ||
-					updatedGWConfig.Status.WireguardPrivateKeySecretRef.Name != testName {
-					return errors.New("wireguardPrivateKeySecretRef is not ready yet")
+				if updatedGWConfig.Status.PrivateKeySecretRef == nil ||
+					updatedGWConfig.Status.PrivateKeySecretRef.Name != testName {
+					return errors.New("PrivateKeySecretRef is not ready yet")
 				}
 				return nil
 			}, timeout, interval).ShouldNot(HaveOccurred())
 
 			Expect(len(secret.Data)).To(Equal(2))
-			privateKeyBytes, ok := secret.Data[consts.WireguardSecretKeyName]
+			privateKeyBytes, ok := secret.Data[consts.WireguardPrivateKeyName]
 			Expect(ok).To(BeTrue())
 			Expect(privateKeyBytes).NotTo(BeEmpty())
 
@@ -120,7 +120,7 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 			wgPrivateKey, err := wgtypes.ParseKey(string(privateKeyBytes))
 			Expect(err).To(BeNil())
 			wgPublicKey := wgPrivateKey.PublicKey().String()
-			Expect(updatedGWConfig.Status.WireguardPublicKey).To(Equal(wgPublicKey))
+			Expect(updatedGWConfig.Status.PublicKey).To(Equal(wgPublicKey))
 		})
 
 		It("should create a new lbconfig", func() {
@@ -141,8 +141,8 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 			Eventually(func() error {
 				return k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), updatedGWConfig)
 			}, timeout, interval).ShouldNot(HaveOccurred())
-			Expect(updatedGWConfig.Status.WireguardServerIp).To(BeEmpty())
-			Expect(updatedGWConfig.Status.WireguardServerPort).To(BeZero())
+			Expect(updatedGWConfig.Status.Ip).To(BeEmpty())
+			Expect(updatedGWConfig.Status.Port).To(BeZero())
 		})
 	})
 
@@ -165,8 +165,8 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 					return nil, err
 				}
 				return map[string]interface{}{
-					"ip":     updatedGWConfig.Status.WireguardServerIp,
-					"port":   updatedGWConfig.Status.WireguardServerPort,
+					"ip":     updatedGWConfig.Status.Ip,
+					"port":   updatedGWConfig.Status.Port,
 					"prefix": updatedGWConfig.Status.EgressIpPrefix,
 				}, nil
 			}, timeout, interval).Should(BeEquivalentTo(map[string]interface{}{
