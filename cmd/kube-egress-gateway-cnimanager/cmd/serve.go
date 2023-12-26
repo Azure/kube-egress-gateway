@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"sync"
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
@@ -19,9 +18,11 @@ import (
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
+	
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -76,6 +77,7 @@ func init() {
 
 func ServiceLauncher(cmd *cobra.Command, args []string) {
 	ctx := signals.SetupSignalHandler()
+	g, ctx := errgroup.WithContext(ctx)
 	zapLog, err := zap.NewProduction()
 	if err != nil {
 		panic(fmt.Sprintf("who watches the watchmen (%v)?", err))
@@ -90,15 +92,14 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 		logger.Error(err, "failed to create cni config manager")
 		os.Exit(1)
 	}
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+
+	g.Go(func() error {
 		if err := cniConfMgr.Start(ctx); err != nil {
 			logger.Error(err, "failed to start cni config manager monitoring")
 			os.Exit(1)
 		}
-	}()
+		return nil
+	})
 
 	nicSvc := cnimanager.NewNicService(k8sClient)
 	server := grpc.NewServer(
@@ -129,18 +130,18 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	g.Go(func() error {
 		<-ctx.Done()
 		logger.Error(ctx.Err(), "os signal received, shutting down")
 		server.GracefulStop()
-	}()
+		return nil
+	})
 	err = server.Serve(listener)
 	if err != nil {
 		logger.Error(err, "failed to serve")
 	}
-	wg.Wait()
+	// wait for all context to be done
+	g.Wait()
 	logger.Info("server shutdown")
 }
 
