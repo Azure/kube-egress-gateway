@@ -50,8 +50,9 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 		Expect(err).ToNot(HaveOccurred())
 
 		err = (&StaticGatewayConfigurationReconciler{
-			Client:   k8sManager.GetClient(),
-			Recorder: recorder,
+			Client:          k8sManager.GetClient(),
+			SecretNamespace: testNamespace,
+			Recorder:        recorder,
 		}).SetupWithManager(k8sManager)
 		Expect(err).ToNot(HaveOccurred())
 		go func() {
@@ -93,29 +94,42 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 	Context("new StaticGatewayConfiguration", func() {
 		It("should create a new secret", func() {
 			secret := &corev1.Secret{}
-			Eventually(func() error {
-				return k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), secret)
-			}, timeout, interval).ShouldNot(HaveOccurred())
 			updatedGWConfig := &egressgatewayv1alpha1.StaticGatewayConfiguration{}
 			Eventually(func() error {
 				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), updatedGWConfig); err != nil {
 					return err
 				}
 				if updatedGWConfig.Status.PrivateKeySecretRef == nil ||
-					updatedGWConfig.Status.PrivateKeySecretRef.Name != testName {
+					updatedGWConfig.Status.PrivateKeySecretRef.Name == "" ||
+					updatedGWConfig.Status.PrivateKeySecretRef.Namespace == "" {
 					return errors.New("PrivateKeySecretRef is not ready yet")
+				}
+
+				secretKey := types.NamespacedName{
+					Name:      updatedGWConfig.Status.PrivateKeySecretRef.Name,
+					Namespace: updatedGWConfig.Status.PrivateKeySecretRef.Namespace,
+				}
+				if err := k8sClient.Get(ctx, secretKey, secret); err != nil {
+					return err
 				}
 				return nil
 			}, timeout, interval).ShouldNot(HaveOccurred())
+
+			Expect(secret.Namespace).To(Equal(testNamespace))
+			Expect(secret.Name).To(Equal("sgw-" + string(updatedGWConfig.GetUID())))
+
+			labels := secret.GetLabels()
+			gwNSLabel, foundNSLabel := labels[consts.OwningSGCNamespaceLabel]
+			gwNameLabel, foundNameLabel := labels[consts.OwningSGCNameLabel]
+			Expect(foundNSLabel).To(BeTrue())
+			Expect(foundNameLabel).To(BeTrue())
+			Expect(gwNSLabel).To(Equal(testNamespace))
+			Expect(gwNameLabel).To(Equal(testName))
 
 			Expect(len(secret.Data)).To(Equal(2))
 			privateKeyBytes, ok := secret.Data[consts.WireguardPrivateKeyName]
 			Expect(ok).To(BeTrue())
 			Expect(privateKeyBytes).NotTo(BeEmpty())
-
-			owner := metav1.GetControllerOf(secret)
-			Expect(owner).NotTo(BeNil())
-			Expect(owner.Name).To(Equal(testName))
 
 			wgPrivateKey, err := wgtypes.ParseKey(string(privateKeyBytes))
 			Expect(err).To(BeNil())
@@ -143,6 +157,58 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 			}, timeout, interval).ShouldNot(HaveOccurred())
 			Expect(updatedGWConfig.Status.Ip).To(BeEmpty())
 			Expect(updatedGWConfig.Status.Port).To(BeZero())
+		})
+	})
+
+	Context("delete secret", func() {
+		var (
+			secretKey types.NamespacedName
+			oldPubKey string
+		)
+
+		BeforeAll(func() {
+			updatedGWConfig := &egressgatewayv1alpha1.StaticGatewayConfiguration{}
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), updatedGWConfig)).ToNot(HaveOccurred())
+			oldPubKey = updatedGWConfig.Status.PublicKey
+			secretKey = types.NamespacedName{
+				Name:      updatedGWConfig.Status.PrivateKeySecretRef.Name,
+				Namespace: updatedGWConfig.Status.PrivateKeySecretRef.Namespace,
+			}
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      secretKey.Name,
+					Namespace: secretKey.Namespace,
+				},
+			}
+			Expect(k8sClient.Delete(ctx, secret)).NotTo(HaveOccurred())
+		})
+
+		It("should recreate the secret and update gwConfig", func() {
+			secret := &corev1.Secret{}
+			Eventually(func() error {
+				return k8sClient.Get(ctx, secretKey, secret)
+			}, timeout, interval).ShouldNot(HaveOccurred())
+
+			Expect(len(secret.Data)).To(Equal(2))
+			privateKeyBytes, ok := secret.Data[consts.WireguardPrivateKeyName]
+			Expect(ok).To(BeTrue())
+			Expect(privateKeyBytes).NotTo(BeEmpty())
+
+			wgPrivateKey, err := wgtypes.ParseKey(string(privateKeyBytes))
+			Expect(err).To(BeNil())
+			wgPublicKey := wgPrivateKey.PublicKey().String()
+			Expect(wgPublicKey).NotTo(Equal(oldPubKey))
+
+			Eventually(func() error {
+				updatedGWConfig := &egressgatewayv1alpha1.StaticGatewayConfiguration{}
+				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(gwConfig), updatedGWConfig); err != nil {
+					return err
+				}
+				if updatedGWConfig.Status.PublicKey != wgPublicKey {
+					return errors.New("public key is not updated yet")
+				}
+				return nil
+			}, timeout, interval).ShouldNot(HaveOccurred())
 		})
 	})
 
@@ -223,14 +289,13 @@ var _ = Describe("StaticGatewayConfiguration controller in testenv", Ordered, fu
 		})
 
 		It("should delete the new secret", func() {
-			secret := &corev1.Secret{}
+			secrets := &corev1.SecretList{}
 			Eventually(func() bool {
-				err := k8sClient.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: testName}, secret)
-				if err == nil {
+				if err := k8sClient.List(ctx, secrets, &client.ListOptions{Namespace: testNamespace}); err != nil {
+					GinkgoWriter.Println(err.Error())
 					return false
 				}
-				GinkgoWriter.Println(err.Error())
-				return apierrors.IsNotFound(err)
+				return len(secrets.Items) == 0
 			}, timeout, interval).Should(BeTrue())
 		})
 

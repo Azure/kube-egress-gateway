@@ -236,6 +236,7 @@ spec:
         - --cloud-config=/azure/config/azure-cloud-config.json
         - --leader-elect={{ .Values.gatewayControllerManager.leaderElect }}
         - --leader-election-namespace={{ .Release.Namespace }}
+        - --secret-namespace={{ .Release.Namespace }}
         - --metrics-bind-port={{ .Values.gatewayControllerManager.metricsBindPort }}
         - --health-probe-bind-port={{ .Values.gatewayControllerManager.healthProbeBindPort }}
         - --gateway-lb-probe-port={{ .Values.common.gatewayLbProbePort }}

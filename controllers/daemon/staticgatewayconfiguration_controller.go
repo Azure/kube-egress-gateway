@@ -57,7 +57,7 @@ type StaticGatewayConfigurationReconciler struct {
 
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations,verbs=get;list;watch
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch
+//+kubebuilder:rbac:groups=core,namespace=kube-egress-gateway-system,resources=secrets,verbs=get;list;watch
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaystatuses,verbs=get;list;watch;create;update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -291,7 +291,7 @@ func (r *StaticGatewayConfigurationReconciler) getWireguardPrivateKey(
 	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
 ) (*wgtypes.Key, error) {
 	secretKey := &types.NamespacedName{
-		Namespace: gwConfig.Namespace,
+		Namespace: gwConfig.Status.PrivateKeySecretRef.Namespace,
 		Name:      gwConfig.Status.PrivateKeySecretRef.Name,
 	}
 	secret := &corev1.Secret{}

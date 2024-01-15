@@ -58,6 +58,7 @@ var (
 	gatewayLBProbePort      int
 	enableLeaderElection    bool
 	leaderElectionNamespace string
+	secretNamespace         string
 	probePort               int
 	zapOpts                 = zap.Options{
 		Development: true,
@@ -85,6 +86,7 @@ func init() {
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	rootCmd.Flags().StringVar(&leaderElectionNamespace, "leader-election-namespace", os.Getenv(consts.PodNamespaceEnvKey), "the namespace to create leader election objects")
+	rootCmd.Flags().StringVar(&secretNamespace, "secret-namespace", os.Getenv(consts.PodNamespaceEnvKey), "The namespace to store server privateKey secrets")
 
 	zapOpts.BindFlags(goflag.CommandLine)
 	rootCmd.Flags().AddGoFlagSet(goflag.CommandLine)
@@ -172,8 +174,9 @@ func startControllers(cmd *cobra.Command, args []string) {
 	}
 
 	if err = (&controllers.StaticGatewayConfigurationReconciler{
-		Client:   mgr.GetClient(),
-		Recorder: mgr.GetEventRecorderFor("staticGatewayConfiguration-controller"),
+		Client:          mgr.GetClient(),
+		SecretNamespace: secretNamespace,
+		Recorder:        mgr.GetEventRecorderFor("staticGatewayConfiguration-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "StaticGatewayConfiguration")
 		os.Exit(1)

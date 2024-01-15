@@ -6,6 +6,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	corev1 "k8s.io/api/core/v1"
@@ -15,9 +16,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
@@ -29,7 +34,8 @@ var _ reconcile.Reconciler = &StaticGatewayConfigurationReconciler{}
 // StaticGatewayConfigurationReconciler reconciles gateway loadBalancer according to a StaticGatewayConfiguration object
 type StaticGatewayConfigurationReconciler struct {
 	client.Client
-	Recorder record.EventRecorder
+	SecretNamespace string
+	Recorder        record.EventRecorder
 }
 
 //+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
@@ -65,11 +71,52 @@ func (r *StaticGatewayConfigurationReconciler) Reconcile(ctx context.Context, re
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *StaticGatewayConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	secretPredicate := predicate.Funcs{
+		CreateFunc: func(e event.CreateEvent) bool {
+			// no need to trigger reconcile for secrets creation
+			return false
+		},
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			return strings.EqualFold(e.ObjectOld.GetNamespace(), r.SecretNamespace)
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			return strings.EqualFold(e.Object.GetNamespace(), r.SecretNamespace)
+		},
+		GenericFunc: func(e event.GenericEvent) bool {
+			return false
+		},
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&egressgatewayv1alpha1.StaticGatewayConfiguration{}).
-		Owns(&corev1.Secret{}).
 		Owns(&egressgatewayv1alpha1.GatewayLBConfiguration{}).
+		// generated secrets created in the dedicated namespace
+		Watches(&corev1.Secret{}, enqueueOwningSGCFromLabels(), builder.WithPredicates(secretPredicate)).
 		Complete(r)
+}
+
+func enqueueOwningSGCFromLabels() handler.EventHandler {
+	return handler.EnqueueRequestsFromMapFunc(func(_ context.Context, o client.Object) []reconcile.Request {
+		labels := o.GetLabels()
+		if labels == nil {
+			return nil
+		}
+
+		owningSGCNamespace, foundNamespace := labels[consts.OwningSGCNamespaceLabel]
+		owningSGCName, foundName := labels[consts.OwningSGCNameLabel]
+
+		if !foundNamespace || !foundName {
+			return nil
+		}
+
+		return []reconcile.Request{
+			{
+				NamespacedName: client.ObjectKey{
+					Name:      owningSGCName,
+					Namespace: owningSGCNamespace,
+				},
+			},
+		}
+	})
 }
 
 func (r *StaticGatewayConfigurationReconciler) reconcile(
@@ -80,6 +127,16 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 	log.Info(fmt.Sprintf("Reconciling staticGatewayConfiguration %s/%s", gwConfig.Namespace, gwConfig.Name))
 
 	if err := validate(gwConfig); err != nil {
+		return err
+	}
+
+	if !controllerutil.ContainsFinalizer(gwConfig, consts.SGCFinalizerName) {
+		log.Info("Adding finalizer")
+		controllerutil.AddFinalizer(gwConfig, consts.SGCFinalizerName)
+		err := r.Update(ctx, gwConfig)
+		if err != nil {
+			log.Error(err, "failed to add finalizer")
+		}
 		return err
 	}
 
@@ -101,11 +158,11 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 		return nil
 	})
 
-	prefix := "nil"
+	prefix, reconcileStatus := "<pending>", "Reconciling"
 	if gwConfig.Status.EgressIpPrefix != "" {
-		prefix = gwConfig.Status.EgressIpPrefix
+		prefix, reconcileStatus = gwConfig.Status.EgressIpPrefix, "Reconciled"
 	}
-	r.Recorder.Eventf(gwConfig, corev1.EventTypeNormal, "Reconciled", "StaticGatewayConfiguration provisioned with egress prefix %s", prefix)
+	r.Recorder.Eventf(gwConfig, corev1.EventTypeNormal, reconcileStatus, "StaticGatewayConfiguration provisioned with egress prefix %s", prefix)
 	log.Info("staticGatewayConfiguration reconciled")
 	return err
 }
@@ -117,20 +174,29 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 	log := log.FromContext(ctx)
 	log.Info(fmt.Sprintf("Reconciling staticGatewayConfiguration deletion %s/%s", gwConfig.Namespace, gwConfig.Name))
 
+	if !controllerutil.ContainsFinalizer(gwConfig, consts.SGCFinalizerName) {
+		log.Info("gwConfig does not have finalizer, no additional cleanup needed")
+		return nil
+	}
+
+	secretDeleted := false
 	log.Info("Deleting wireguard key")
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      gwConfig.Name,
-			Namespace: gwConfig.Namespace,
+			Name:      fmt.Sprintf("sgw-%s", string(gwConfig.UID)),
+			Namespace: r.SecretNamespace,
 		},
 	}
 	if err := r.Delete(ctx, secret); err != nil {
 		if !apierrors.IsNotFound(err) {
 			log.Error(err, "failed to delete existing gateway LB configuration")
 			return err
+		} else {
+			secretDeleted = true
 		}
 	}
 
+	lbConfigDeleted := false
 	log.Info("Deleting gateway LB configuration")
 	lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
@@ -141,6 +207,17 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 	if err := r.Delete(ctx, lbConfig); err != nil {
 		if !apierrors.IsNotFound(err) {
 			log.Error(err, "failed to delete existing gateway LB configuration")
+			return err
+		} else {
+			lbConfigDeleted = true
+		}
+	}
+
+	if secretDeleted && lbConfigDeleted {
+		log.Info("Secret and LBConfig are deleted, removing finalizer")
+		controllerutil.RemoveFinalizer(gwConfig, consts.SGCFinalizerName)
+		if err := r.Update(ctx, gwConfig); err != nil {
+			log.Error(err, "failed to remove finalizer")
 			return err
 		}
 	}
@@ -211,12 +288,21 @@ func (r *StaticGatewayConfigurationReconciler) reconcileWireguardKey(
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      gwConfig.Name,
-			Namespace: gwConfig.Namespace,
+			Name:      fmt.Sprintf("sgw-%s", string(gwConfig.UID)),
+			Namespace: r.SecretNamespace,
 		},
 	}
 	if _, err := controllerutil.CreateOrUpdate(ctx, r, secret, func() error {
-		// new secret
+		if secret.Labels == nil {
+			secret.Labels = make(map[string]string)
+		}
+		if sgcNS, ok := secret.Labels[consts.OwningSGCNamespaceLabel]; !ok || sgcNS != gwConfig.Namespace {
+			secret.Labels[consts.OwningSGCNamespaceLabel] = gwConfig.Namespace
+		}
+		if sgcName, ok := secret.Labels[consts.OwningSGCNameLabel]; !ok || sgcName != gwConfig.Name {
+			secret.Labels[consts.OwningSGCNameLabel] = gwConfig.Name
+		}
+
 		if secret.Data == nil {
 			secret.Data = make(map[string][]byte)
 		}
@@ -232,8 +318,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcileWireguardKey(
 			secret.Data[consts.WireguardPublicKeyName] = []byte(wgPrivateKey.PublicKey().String())
 		}
 
-		//update ownerReference
-		return controllerutil.SetControllerReference(gwConfig, secret, r.Client.Scheme())
+		return nil
 	}); err != nil {
 		log.Error(err, "failed to reconcile wireguard keypair secret")
 		return err
@@ -244,6 +329,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcileWireguardKey(
 			APIVersion: "v1",
 			Kind:       "Secret",
 			Name:       secret.Name,
+			Namespace:  secret.Namespace,
 		}
 
 		// Update public key

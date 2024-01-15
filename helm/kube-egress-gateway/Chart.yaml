@@ -7,6 +7,8 @@ maintainers:
   name: Wantong Jiang
 - email: fanshangxiang@gmail.com
   name: Shangxiang Fan
+- email: mali_no2@hotmail.com
+  name: Li Ma
 sources:
 - https://github.com/Azure/kube-egress-gateway
-version: 0.1.0
+version: 0.1.1
