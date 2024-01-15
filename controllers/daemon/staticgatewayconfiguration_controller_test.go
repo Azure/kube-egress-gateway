@@ -52,19 +52,20 @@ import (
 )
 
 const (
-	testName         = "test"
-	testNamespace    = "testns"
-	testNodepoolName = "testgw"
-	testPodNamespace = "testns2"
-	testNodeName     = "testNode"
-	testUID          = "1234567890"
-	vmssRG           = "vmssRG"
-	vmssName         = "vmssName"
-	privK            = "GHuMwljFfqd2a7cs6BaUOmHflK23zME8VNvC5B37S3k="
-	pubK             = "aPxGwq8zERHQ3Q1cOZFdJ+cvJX5Ka4mLN38AyYKYF10="
-	ilbIP            = "10.0.0.4"
-	ilbIPCidr        = "10.0.0.4/31"
-	nsName           = "gw-1234567890-10_0_0_4"
+	testName            = "test"
+	testNamespace       = "testns"
+	testSecretNamespace = "testns2"
+	testNodepoolName    = "testgw"
+	testPodNamespace    = "testns2"
+	testNodeName        = "testNode"
+	testUID             = "1234567890"
+	vmssRG              = "vmssRG"
+	vmssName            = "vmssName"
+	privK               = "GHuMwljFfqd2a7cs6BaUOmHflK23zME8VNvC5B37S3k="
+	pubK                = "aPxGwq8zERHQ3Q1cOZFdJ+cvJX5Ka4mLN38AyYKYF10="
+	ilbIP               = "10.0.0.4"
+	ilbIPCidr           = "10.0.0.4/31"
+	nsName              = "gw-1234567890-10_0_0_4"
 )
 
 var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func() {
@@ -195,7 +196,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			secret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      testName,
-					Namespace: testNamespace,
+					Namespace: testSecretNamespace,
 				},
 				Data: map[string][]byte{
 					consts.WireguardPrivateKeyName: []byte(privK),
@@ -796,6 +797,7 @@ func getTestGwConfigStatus() egressgatewayv1alpha1.StaticGatewayConfigurationSta
 				APIVersion: "v1",
 				Kind:       "Secret",
 				Name:       testName,
+				Namespace:  testSecretNamespace,
 			},
 		},
 	}

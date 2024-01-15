@@ -3,6 +3,9 @@
 package consts
 
 const (
+	// StaticGatewayConfiguration finalizer name
+	SGCFinalizerName = "static-gateway-configuration-controller.microsoft.com"
+
 	// GatewayLBConfiguration finalizer name
 	LBConfigFinalizerName = "gateway-lb-configuration-controller.microsoft.com"
 
@@ -32,6 +35,12 @@ const (
 
 	// gateway nodepool ip prefix size tag key in aks clusters
 	AKSNodepoolIPPrefixSizeTagKey = "aks-managed-gatewayIPPrefixSize"
+
+	// Owning StaticGatewayConfiguration namespace key on secret label
+	OwningSGCNamespaceLabel = "egressgateway.kubernetes.azure.com/owning-gateway-config-namespace"
+
+	// Owning StaticGatewayConfiguration name key on secret label
+	OwningSGCNameLabel = "egressgateway.kubernetes.azure.com/owning-gateway-config-name"
 )
 
 const (

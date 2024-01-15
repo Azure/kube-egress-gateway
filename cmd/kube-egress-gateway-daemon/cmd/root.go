@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -18,6 +19,8 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -32,6 +35,7 @@ import (
 	controllers "github.com/Azure/kube-egress-gateway/controllers/daemon"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
+	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/healthprobe"
 )
 
@@ -60,6 +64,7 @@ var (
 	metricsPort        int
 	probePort          int
 	gatewayLBProbePort int
+	secretNamespace    string
 	zapOpts            = zap.Options{
 		Development: true,
 	}
@@ -83,6 +88,7 @@ func init() {
 	rootCmd.Flags().IntVar(&metricsPort, "metrics-bind-port", 8080, "The port the metric endpoint binds to.")
 	rootCmd.Flags().IntVar(&probePort, "health-probe-bind-port", 8081, "The port the probe endpoint binds to.")
 	rootCmd.Flags().IntVar(&gatewayLBProbePort, "gateway-lb-probe-port", 8082, "The port the gateway lb probe endpoint binds to.")
+	rootCmd.Flags().StringVar(&secretNamespace, "secret-namespace", os.Getenv(consts.PodNamespaceEnvKey), "The namespace to retrieve server privateKey secrets")
 
 	zapOpts.BindFlags(goflag.CommandLine)
 	rootCmd.Flags().AddGoFlagSet(goflag.CommandLine)
@@ -101,6 +107,14 @@ func startControllers(cmd *cobra.Command, args []string) {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Cache: cache.Options{
+			// we only watch secrets in the namespace where the kube-egress-gateway pods are running
+			ByObject: map[client.Object]cache.ByObject{
+				&corev1.Secret{}: {
+					Field: client.InNamespace(secretNamespace).AsSelector(),
+				},
+			},
+		},
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
 			BindAddress: ":" + strconv.Itoa(metricsPort),
