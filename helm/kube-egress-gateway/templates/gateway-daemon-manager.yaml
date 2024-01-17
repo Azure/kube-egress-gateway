@@ -100,7 +100,7 @@ roleRef:
   name: kube-egress-gateway-daemon-manager-role
 subjects:
 - kind: ServiceAccount
-  name: daemon-manager
+  name: kube-egress-gateway-daemon-manager
   namespace: {{ .Release.Namespace }}
 ---
 apiVersion: apps/v1
