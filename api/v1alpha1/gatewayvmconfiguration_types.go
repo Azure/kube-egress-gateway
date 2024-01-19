@@ -39,6 +39,17 @@ type GatewayVMConfigurationStatus struct {
 
 	// The egress source IP for traffic using this configuration.
 	EgressIpPrefix string `json:"egressIpPrefix,omitempty"`
+
+	// Gateway VM profile
+	GatewayVMProfiles []GatewayVMProfile `json:"gatewayVMProfiles,omitempty"`
+}
+
+// GatewayVMProfile provides details about gateway VM side configuration.
+type GatewayVMProfile struct {
+	NodeName string `json:"nodeName,omitempty"`
+	// todo: remove PrimaryIP once we change the routing logic to have everything configured in host network
+	PrimaryIP   string `json:"primaryIP,omitempty"`
+	SecondaryIP string `json:"secondaryIP,omitempty"`
 }
 
 //+kubebuilder:object:root=true

@@ -21,9 +21,13 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
@@ -43,6 +47,7 @@ var (
 )
 
 //+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
+//+kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/finalizers,verbs=update
@@ -58,6 +63,44 @@ var (
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.0/pkg/reconcile
 func (r *GatewayVMConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
+
+	// handle node events and enqueue corresponding gatewayVMConfigurations if nodepool matches
+	if req.Namespace == "" && req.Name != "" {
+		log.Info(fmt.Sprintf("Reconciling node event %s", req.Name))
+		node := &corev1.Node{}
+		if err := r.Get(ctx, req.NamespacedName, node); err != nil {
+			if apierrors.IsNotFound(err) {
+				return ctrl.Result{}, nil
+			}
+			log.Error(err, "unable to fetch node instance")
+			return ctrl.Result{}, err
+		}
+
+		vmConfigList := &egressgatewayv1alpha1.GatewayVMConfigurationList{}
+		if err := r.List(ctx, vmConfigList); err != nil {
+			log.Error(err, "failed to list GatewayVMConfiguration")
+			return ctrl.Result{}, err
+		}
+		for _, vmConfig := range vmConfigList.Items {
+			if vmConfig.Spec.GatewayNodepoolName != "" {
+				if v, ok := node.Labels[consts.AKSNodepoolNameLabel]; ok {
+					if strings.EqualFold(v, vmConfig.Spec.GatewayNodepoolName) {
+						if _, err := r.reconcile(ctx, &vmConfig); err != nil {
+							log.Error(err, "failed to reconcile GatewayVMConfiguration")
+							return ctrl.Result{}, err
+						}
+					}
+				} else {
+					log.Info(fmt.Sprintf("Node %s does not %s label, requeue this vmConfig", req.Name, consts.AKSNodepoolNameLabel))
+					if _, err := r.reconcile(ctx, &vmConfig); err != nil {
+						log.Error(err, "failed to reconcile GatewayVMConfiguration")
+						return ctrl.Result{}, err
+					}
+				}
+			}
+		}
+		return ctrl.Result{}, nil
+	}
 
 	vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{}
 	if err := r.Get(ctx, req.NamespacedName, vmConfig); err != nil {
@@ -85,7 +128,55 @@ func (r *GatewayVMConfigurationReconciler) Reconcile(ctx context.Context, req ct
 func (r *GatewayVMConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&egressgatewayv1alpha1.GatewayVMConfiguration{}).
+		// allow for node events to trigger reconciliation when either node label matches
+		Watches(&corev1.Node{}, &handler.EnqueueRequestForObject{}, builder.WithPredicates(resourceHasFilterLabel(
+			map[string]string{consts.AKSNodepoolModeLabel: consts.AKSNodepoolModeValue, consts.UpstreamNodepoolModeLabel: "true"}))).
 		Complete(r)
+}
+
+// resourceHasFilterLabel returns a predicate that returns true only if the provided resource contains a label
+func resourceHasFilterLabel(m map[string]string) predicate.Funcs {
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			return ifLabelMatch(e.ObjectNew, m)
+		},
+		CreateFunc: func(e event.CreateEvent) bool {
+			return ifLabelMatch(e.Object, m)
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			return ifLabelMatch(e.Object, m)
+		},
+		GenericFunc: func(e event.GenericEvent) bool {
+			return ifLabelMatch(e.Object, m)
+		},
+	}
+}
+
+func ifLabelMatch(obj client.Object, m map[string]string) bool {
+	if len(m) == 0 {
+		return true
+	}
+
+	// return true if any label matches
+	for labelKey, labelValue := range m {
+		if labelKey == "" {
+			return true
+		}
+
+		lables := obj.GetLabels()
+		if v, ok := lables[labelKey]; ok {
+			// Return early if no labelValue was set.
+			if labelValue == "" {
+				return true
+			}
+
+			if strings.EqualFold(v, labelValue) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func (r *GatewayVMConfigurationReconciler) reconcile(
@@ -389,6 +480,25 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSS(
 			privateIPs = append(privateIPs, privateIP)
 		}
 	}
+	// clean up VMProfiles for deleted nodes
+	var vmprofiles []egressgatewayv1alpha1.GatewayVMProfile
+	if vmConfig.Status != nil {
+		for i := range vmConfig.Status.GatewayVMProfiles {
+			profile := vmConfig.Status.GatewayVMProfiles[i]
+			for _, instance := range instances {
+				if profile.NodeName == to.Val(instance.Properties.OSProfile.ComputerName) {
+					vmprofiles = append(vmprofiles, profile)
+					break
+				}
+			}
+		}
+		vmConfig.Status.GatewayVMProfiles = vmprofiles
+	}
+
+	err = r.Status().Update(ctx, vmConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update vm config status: %w", err)
+	}
 
 	return privateIPs, nil
 }
@@ -407,6 +517,9 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 
 	if vm.Properties == nil || vm.Properties.NetworkProfileConfiguration == nil {
 		return "", fmt.Errorf("vmss vm(%s) has empty network profile", to.Val(vm.InstanceID))
+	}
+	if vm.Properties.OSProfile == nil {
+		return "", fmt.Errorf("vmss vm(%s) has empty os profile", to.Val(vm.InstanceID))
 	}
 
 	interfaces := vm.Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations
@@ -428,32 +541,59 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 		}
 	}
 
-	privateIP := ""
-	if wantIPConfig && ipPrefixID == "" {
-		// to reduce arm api call, only get private IPs when ipConfig is created and no public ip prefix is specified
-	out:
-		for _, nic := range interfaces {
-			if nic.Properties != nil && to.Val(nic.Properties.Primary) {
-				vmNic, err := r.GetVMSSInterface(ctx, "", vmssName, to.Val(vm.InstanceID), to.Val(nic.Name))
-				if err != nil {
-					return "", fmt.Errorf("failed to get vmss(%s) instance(%s) nic(%s): %w", vmssName, to.Val(vm.InstanceID), to.Val(nic.Name), err)
-				}
-				if vmNic.Properties == nil || vmNic.Properties.IPConfigurations == nil {
-					return "", fmt.Errorf("vmss(%s) instance(%s) nic(%s) has empty ip configurations", vmssName, to.Val(vm.InstanceID), to.Val(nic.Name))
-				}
-				for _, ipConfig := range vmNic.Properties.IPConfigurations {
-					if ipConfig != nil && ipConfig.Properties != nil && strings.EqualFold(to.Val(ipConfig.Name), ipConfigName) {
-						privateIP = to.Val(ipConfig.Properties.PrivateIPAddress)
-						break out
-					}
+	// return earlier if it's deleting event
+	if !wantIPConfig {
+		return "", nil
+	}
+
+	var primaryIP, secondaryIP string
+	for _, nic := range interfaces {
+		if nic.Properties != nil && to.Val(nic.Properties.Primary) {
+			vmNic, err := r.GetVMSSInterface(ctx, "", vmssName, to.Val(vm.InstanceID), to.Val(nic.Name))
+			if err != nil {
+				return "", fmt.Errorf("failed to get vmss(%s) instance(%s) nic(%s): %w", vmssName, to.Val(vm.InstanceID), to.Val(nic.Name), err)
+			}
+			if vmNic.Properties == nil || vmNic.Properties.IPConfigurations == nil {
+				return "", fmt.Errorf("vmss(%s) instance(%s) nic(%s) has empty ip configurations", vmssName, to.Val(vm.InstanceID), to.Val(nic.Name))
+			}
+			for _, ipConfig := range vmNic.Properties.IPConfigurations {
+				if ipConfig != nil && ipConfig.Properties != nil && strings.EqualFold(to.Val(ipConfig.Name), ipConfigName) {
+					secondaryIP = to.Val(ipConfig.Properties.PrivateIPAddress)
+				} else if ipConfig != nil && ipConfig.Properties != nil && to.Val(ipConfig.Properties.Primary) {
+					primaryIP = to.Val(ipConfig.Properties.PrivateIPAddress)
 				}
 			}
 		}
-		if privateIP == "" {
-			return "", fmt.Errorf("failed to find private IP from vmss(%s), instance(%s), ipConfig(%s)", vmssName, to.Val(vm.InstanceID), ipConfigName)
+	}
+	if primaryIP == "" || secondaryIP == "" {
+		return "", fmt.Errorf("failed to find private IP from vmss(%s), instance(%s), ipConfig(%s)", vmssName, to.Val(vm.InstanceID), ipConfigName)
+	}
+
+	vmprofile := egressgatewayv1alpha1.GatewayVMProfile{
+		NodeName:    to.Val(vm.Properties.OSProfile.ComputerName),
+		PrimaryIP:   primaryIP,
+		SecondaryIP: secondaryIP,
+	}
+	if vmConfig.Status == nil {
+		vmConfig.Status = &egressgatewayv1alpha1.GatewayVMConfigurationStatus{}
+	}
+	for i, profile := range vmConfig.Status.GatewayVMProfiles {
+		if profile.NodeName == vmprofile.NodeName {
+			if profile.PrimaryIP != primaryIP || profile.SecondaryIP != secondaryIP {
+				vmConfig.Status.GatewayVMProfiles[i].PrimaryIP = primaryIP
+				vmConfig.Status.GatewayVMProfiles[i].SecondaryIP = secondaryIP
+				log.Info("GatewayVMConfiguration status updated", "primaryIP", primaryIP, "secondaryIP", secondaryIP)
+				return secondaryIP, nil
+			}
+			log.Info("GatewayVMConfiguration status not changed", "primaryIP", primaryIP, "secondaryIP", secondaryIP)
+			return secondaryIP, nil
 		}
 	}
-	return privateIP, nil
+
+	log.Info("GatewayVMConfiguration status updated for new nodes", "nodeName", vmprofile.NodeName, "primaryIP", primaryIP, "secondaryIP", secondaryIP)
+	vmConfig.Status.GatewayVMProfiles = append(vmConfig.Status.GatewayVMProfiles, vmprofile)
+
+	return secondaryIP, nil
 }
 
 func (r *GatewayVMConfigurationReconciler) reconcileVMSSNetworkInterface(

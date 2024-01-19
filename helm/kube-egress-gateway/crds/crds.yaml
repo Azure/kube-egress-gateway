@@ -292,6 +292,20 @@ spec:
               egressIpPrefix:
                 description: The egress source IP for traffic using this configuration.
                 type: string
+              gatewayVMProfiles:
+                description: Gateway VM profile
+                items:
+                  description: GatewayVMProfile provides details about gateway VM
+                    side configuration.
+                  properties:
+                    nodeName:
+                      type: string
+                    primaryIP:
+                      type: string
+                    secondaryIP:
+                      type: string
+                  type: object
+                type: array
             type: object
         type: object
     served: true

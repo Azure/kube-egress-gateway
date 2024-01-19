@@ -48,6 +48,20 @@ rules:
 - apiGroups:
   - egressgateway.kubernetes.azure.com
   resources:
+  - gatewayvmconfigurations
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - gatewayvmconfigurations/status
+  verbs:
+  - get
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
   - staticgatewayconfigurations
   verbs:
   - get
@@ -123,7 +137,6 @@ spec:
     spec:
       containers:
       - args:
-        - --cloud-config=/azure/config/azure-cloud-config.json
         - --metrics-bind-port={{ .Values.gatewayDaemonManager.metricsBindPort }}
         - --health-probe-bind-port={{ .Values.gatewayDaemonManager.healthProbeBindPort }}
         - --gateway-lb-probe-port={{ .Values.common.gatewayLbProbePort }}
@@ -170,9 +183,6 @@ spec:
         - mountPath: /var/run/netns
           mountPropagation: Bidirectional
           name: hostpath-var
-        - mountPath: /azure/config
-          name: azure-cloud-config
-          readOnly: true
       hostNetwork: true
       hostPID: true
       nodeSelector:
@@ -191,7 +201,4 @@ spec:
       - hostPath:
           path: /var/run/netns
         name: hostpath-var
-      - name: azure-cloud-config
-        secret:
-          secretName: kube-egress-gateway-azure-cloud-config
 {{- end }}
