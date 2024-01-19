@@ -26,6 +26,20 @@ rules:
 - apiGroups:
   - egressgateway.kubernetes.azure.com
   resources:
+  - gatewayvmconfigurations
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - gatewayvmconfigurations/status
+  verbs:
+  - get
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
   - podendpoints
   verbs:
   - get

@@ -8,19 +8,24 @@ type InstanceMetadata struct {
 }
 
 type ComputeMetadata struct {
-	AzEnvironment     string `json:"azEnvironment"`
-	Location          string `json:"location"`
-	Name              string `json:"name"`
-	OSType            string `json:"osType"`
-	ResourceGroupName string `json:"resourceGroupName"`
-	ResourceID        string `json:"resourceId"`
-	SubscriptionID    string `json:"subscriptionId"`
-	Tags              string `json:"tags"`
-	VMScaleSetName    string `json:"vmScaleSetName"`
+	AzEnvironment     string    `json:"azEnvironment"`
+	Location          string    `json:"location"`
+	Name              string    `json:"name"`
+	OSType            string    `json:"osType"`
+	OSProfile         OSProfile `json:"osProfile"`
+	ResourceGroupName string    `json:"resourceGroupName"`
+	ResourceID        string    `json:"resourceId"`
+	SubscriptionID    string    `json:"subscriptionId"`
+	Tags              string    `json:"tags"`
+	VMScaleSetName    string    `json:"vmScaleSetName"`
 }
 
 type NetworkMetadata struct {
 	Interface []NetworkInterface `json:"interface"`
+}
+
+type OSProfile struct {
+	ComputerName string `json:"computerName"`
 }
 
 type NetworkInterface struct {

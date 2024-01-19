@@ -33,6 +33,18 @@ const (
 	// nodepool name tag key in aks clusters
 	AKSNodepoolTagKey = "aks-managed-poolName"
 
+	// nodepool name label key in aks clusters
+	AKSNodepoolNameLabel = "kubernetes.azure.com/agentpool"
+
+	// nodepool mode label key in aks clusters
+	AKSNodepoolModeLabel = "kubernetes.azure.com/mode"
+
+	// nodepool mode label value for upstream usage
+	UpstreamNodepoolModeLabel = "kubeegressgateway.azure.com/mode"
+
+	// nodepool mode label value in aks clusters
+	AKSNodepoolModeValue = "gateway"
+
 	// gateway nodepool ip prefix size tag key in aks clusters
 	AKSNodepoolIPPrefixSizeTagKey = "aks-managed-gatewayIPPrefixSize"
 

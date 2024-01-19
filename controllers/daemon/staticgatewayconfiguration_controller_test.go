@@ -10,8 +10,6 @@ import (
 	"os"
 	"sort"
 
-	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
-	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
@@ -25,22 +23,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient/mock_publicipprefixclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient/mock_subnetclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
-
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
-	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
-	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/healthprobe"
 	"github.com/Azure/kube-egress-gateway/pkg/imds"
@@ -82,9 +69,8 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 
 	getTestReconciler := func(objects ...runtime.Object) {
 		mctrl := gomock.NewController(GinkgoT())
-		az := getMockAzureManager(mctrl)
 		cl := fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(objects...).Build()
-		r = &StaticGatewayConfigurationReconciler{Client: cl, AzureManager: az, LBProbeServer: healthprobe.NewLBProbeServer(1000)}
+		r = &StaticGatewayConfigurationReconciler{Client: cl, LBProbeServer: healthprobe.NewLBProbeServer(1000)}
 		r.Netlink = mocknetlinkwrapper.NewMockInterface(mctrl)
 		r.NetNS = mocknetnswrapper.NewMockInterface(mctrl)
 		r.IPTables = mockiptableswrapper.NewMockInterface(mctrl)
@@ -183,6 +169,9 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 				Compute: &imds.ComputeMetadata{
 					VMScaleSetName:    vmssName,
 					ResourceGroupName: vmssRG,
+					OSProfile: imds.OSProfile{
+						ComputerName: testNodeName,
+					},
 					ResourceID: "/subscriptions/testSub/resourceGroups/" + vmssRG + "/providers/" +
 						"Microsoft.Compute/virtualMachineScaleSets/" + vmssName + "/virtualMachines/0",
 					Tags: "a:b; c : d ;e",
@@ -202,7 +191,24 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 					consts.WireguardPrivateKeyName: []byte(privK),
 				},
 			}
-			getTestReconciler(gwConfig, secret)
+			vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testName,
+					Namespace: testNamespace,
+				},
+				Status: &egressgatewayv1alpha1.GatewayVMConfigurationStatus{
+					GatewayVMProfiles: []egressgatewayv1alpha1.GatewayVMProfile{
+						{
+							NodeName:    testNodeName,
+							PrimaryIP:   "10.0.0.5",
+							SecondaryIP: "10.0.0.6",
+						},
+					},
+				},
+			}
+			gwConfig.Status = getTestGwConfigStatus()
+			getTestReconciler(gwConfig, secret, vmConfig)
+
 		})
 
 		It("should parse node tags correctly", func() {
@@ -261,28 +267,10 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 		})
 
 		It("should retrieve vm ips", func() {
-			vm, nic := getTestVM(), getTestNic()
-			mockVMSSVMClient := r.AzureManager.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMSSVMClient.EXPECT().Get(gomock.Any(), vmssRG, vmssName, "0").Return(vm, nil)
-			mockInterfaceClient := r.AzureManager.InterfaceClient.(*mock_interfaceclient.MockInterface)
-			mockInterfaceClient.EXPECT().
-				GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "primary").
-				Return(nic, nil)
 			primaryIP, secondaryIP, err := r.getVMIP(context.TODO(), gwConfig)
+			Expect(err).To(BeNil())
 			Expect(primaryIP).To(Equal("10.0.0.5"))
 			Expect(secondaryIP).To(Equal("10.0.0.6"))
-			Expect(err).To(BeNil())
-		})
-
-		It("should report when errors happen during retrieving vm ips", func() {
-			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
-			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
-			mnl.EXPECT().LinkByName("eth0").Return(eth0, nil)
-			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(ilbIPCidr)}}, nil)
-			mockVMSSVMClient := r.AzureManager.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMSSVMClient.EXPECT().Get(gomock.Any(), vmssRG, vmssName, "0").Return(nil, fmt.Errorf("failed"))
-			_, reconcileErr = r.Reconcile(context.TODO(), req)
-			Expect(errors.Unwrap(reconcileErr)).To(Equal(fmt.Errorf("failed")))
 		})
 
 		It("should remove secondary ip from eth0", func() {
@@ -305,39 +293,26 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 		})
 
 		It("should report when errors happen during removing secondary ip", func() {
-			vm, nic := getTestVM(), getTestNic()
 			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
-			mockVMSSVMClient := r.AzureManager.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockInterfaceClient := r.AzureManager.InterfaceClient.(*mock_interfaceclient.MockInterface)
 			gomock.InOrder(
 				mnl.EXPECT().LinkByName("eth0").Return(eth0, nil),
 				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(ilbIPCidr)}}, nil),
-				mockVMSSVMClient.EXPECT().Get(gomock.Any(), vmssRG, vmssName, "0").Return(vm, nil),
-				mockInterfaceClient.EXPECT().
-					GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "primary").
-					Return(nic, nil),
 				mnl.EXPECT().LinkByName("eth0").Return(eth0, fmt.Errorf("failed")),
 			)
 			_, reconcileErr = r.Reconcile(context.TODO(), req)
-			Expect(errors.Unwrap(reconcileErr)).To(Equal(fmt.Errorf("failed")))
+			Expect(errors.Unwrap(reconcileErr)).NotTo(BeNil())
+			Expect(reconcileErr.Error()).To(ContainSubstring("failed"))
 		})
 
 		It("should add iptables rule when it does not exist", func() {
-			vm, nic := getTestVM(), getTestNic()
 			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
 			mns := r.NetNS.(*mocknetnswrapper.MockInterface)
 			mipt := r.IPTables.(*mockiptableswrapper.MockInterface)
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
-			mockVMSSVMClient := r.AzureManager.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockInterfaceClient := r.AzureManager.InterfaceClient.(*mock_interfaceclient.MockInterface)
 			gomock.InOrder(
 				mnl.EXPECT().LinkByName("eth0").Return(eth0, nil),
 				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(ilbIPCidr)}}, nil),
-				mockVMSSVMClient.EXPECT().Get(gomock.Any(), vmssRG, vmssName, "0").Return(vm, nil),
-				mockInterfaceClient.EXPECT().
-					GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "primary").
-					Return(nic, nil),
 				mnl.EXPECT().LinkByName("eth0").Return(eth0, nil),
 				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{}, nil),
 				mipt.EXPECT().New().Return(mtable, nil),
@@ -350,7 +325,8 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 				mns.EXPECT().GetNS(nsName).Return(nil, fmt.Errorf("failed")),
 			)
 			_, reconcileErr = r.Reconcile(context.TODO(), req)
-			Expect(errors.Unwrap(reconcileErr)).To(Equal(fmt.Errorf("failed")))
+			Expect(errors.Unwrap(reconcileErr)).NotTo(BeNil())
+			Expect(reconcileErr.Error()).To(ContainSubstring("failed"))
 		})
 
 		It("should create new network namespace, wireguard interface and veth pair, routes, and iptables rules", func() {
@@ -764,28 +740,6 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 	})
 })
 
-func getMockAzureManager(ctrl *gomock.Controller) *azmanager.AzureManager {
-	conf := &config.CloudConfig{
-		ARMClientConfig: azclient.ARMClientConfig{
-			Cloud:     "AzureTest",
-			UserAgent: "testUserAgent",
-		},
-		Location:         "location",
-		SubscriptionID:   "testSub",
-		ResourceGroup:    "rg",
-		LoadBalancerName: "lb",
-	}
-	factory := mock_azclient.NewMockClientFactory(ctrl)
-	factory.EXPECT().GetLoadBalancerClient().Return(mock_loadbalancerclient.NewMockInterface(ctrl))
-	factory.EXPECT().GetVirtualMachineScaleSetClient().Return(mock_virtualmachinescalesetclient.NewMockInterface(ctrl))
-	factory.EXPECT().GetVirtualMachineScaleSetVMClient().Return(mock_virtualmachinescalesetvmclient.NewMockInterface(ctrl))
-	factory.EXPECT().GetPublicIPPrefixClient().Return(mock_publicipprefixclient.NewMockInterface(ctrl))
-	factory.EXPECT().GetInterfaceClient().Return(mock_interfaceclient.NewMockInterface(ctrl))
-	factory.EXPECT().GetSubnetClient().Return(mock_subnetclient.NewMockInterface(ctrl))
-	az, _ := azmanager.CreateAzureManager(conf, factory)
-	return az
-}
-
 func getTestGwConfigStatus() egressgatewayv1alpha1.StaticGatewayConfigurationStatus {
 	return egressgatewayv1alpha1.StaticGatewayConfigurationStatus{
 		EgressIpPrefix: "1.2.3.4/31",
@@ -811,42 +765,4 @@ func getIPNet(ipCidr string) *net.IPNet {
 func getIPNetWithActualIP(ipCidr string) *net.IPNet {
 	ipNet, _ := netlink.ParseIPNet(ipCidr)
 	return ipNet
-}
-
-func getTestVM() *compute.VirtualMachineScaleSetVM {
-	return &compute.VirtualMachineScaleSetVM{
-		Properties: &compute.VirtualMachineScaleSetVMProperties{
-			NetworkProfileConfiguration: &compute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
-				NetworkInterfaceConfigurations: []*compute.VirtualMachineScaleSetNetworkConfiguration{
-					{
-						Name: to.Ptr("primary"),
-						Properties: &compute.VirtualMachineScaleSetNetworkConfigurationProperties{
-							Primary: to.Ptr(true),
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-func getTestNic() *network.Interface {
-	return &network.Interface{
-		Properties: &network.InterfacePropertiesFormat{
-			IPConfigurations: []*network.InterfaceIPConfiguration{
-				{
-					Properties: &network.InterfaceIPConfigurationPropertiesFormat{
-						Primary:          to.Ptr(true),
-						PrivateIPAddress: to.Ptr("10.0.0.5"),
-					},
-				},
-				{
-					Name: to.Ptr(testNamespace + "_" + testName),
-					Properties: &network.InterfaceIPConfigurationPropertiesFormat{
-						PrivateIPAddress: to.Ptr("10.0.0.6"),
-					},
-				},
-			},
-		},
-	}
 }

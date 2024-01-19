@@ -16,8 +16,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -29,12 +27,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
-
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	controllers "github.com/Azure/kube-egress-gateway/controllers/daemon"
-	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
-	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/healthprobe"
 )
@@ -57,8 +51,6 @@ func Execute() {
 }
 
 var (
-	cloudConfigFile    string
-	cloudConfig        *config.CloudConfig
 	scheme             = runtime.NewScheme()
 	setupLog           = ctrl.Log.WithName("setup")
 	metricsPort        int
@@ -76,8 +68,6 @@ func init() {
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
-
-	rootCmd.PersistentFlags().StringVar(&cloudConfigFile, "cloud-config", "/etc/kubernetes/kube-egress-gateway/azure.json", "cloud config file")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
@@ -128,43 +118,6 @@ func startControllers(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	cloudConfig, err = configloader.Load[config.CloudConfig](context.Background(), nil, &configloader.FileLoaderConfig{FilePath: cloudConfigFile})
-	if err != nil {
-		setupLog.Error(err, "unable to parse config file")
-		os.Exit(1)
-	}
-	cloudConfig.TrimSpace()
-	if err := cloudConfig.Validate(); err != nil {
-		setupLog.Error(err, "cloud configuration is invalid")
-		os.Exit(1)
-	}
-
-	var authProvider *azclient.AuthProvider
-	authProvider, err = azclient.NewAuthProvider(
-		&cloudConfig.ARMClientConfig,
-		&cloudConfig.AzureAuthConfig)
-	if err != nil {
-		setupLog.Error(err, "unable to create auth provider")
-		os.Exit(1)
-	}
-	var cred azcore.TokenCredential
-	if cloudConfig.UseManagedIdentityExtension {
-		cred = authProvider.ManagedIdentityCredential
-	} else {
-		cred = authProvider.ClientSecretCredential
-	}
-
-	factory, err := azclient.NewClientFactory(&azclient.ClientFactoryConfig{SubscriptionID: cloudConfig.SubscriptionID}, &azclient.ARMClientConfig{Cloud: cloudConfig.Cloud}, cred)
-	if err != nil {
-		setupLog.Error(err, "unable to create client factory")
-		os.Exit(1)
-	}
-	az, err := azmanager.CreateAzureManager(cloudConfig, factory)
-	if err != nil {
-		setupLog.Error(err, "unable to create azure manager")
-		os.Exit(1)
-	}
-
 	if err := controllers.InitNodeMetadata(); err != nil {
 		setupLog.Error(err, "unable to retrieve node metadata")
 		os.Exit(1)
@@ -179,7 +132,6 @@ func startControllers(cmd *cobra.Command, args []string) {
 	netnsCleanupEvents := make(chan event.GenericEvent)
 	if err = (&controllers.StaticGatewayConfigurationReconciler{
 		Client:        mgr.GetClient(),
-		AzureManager:  az,
 		TickerEvents:  netnsCleanupEvents,
 		LBProbeServer: lbProbeServer,
 	}).SetupWithManager(mgr); err != nil {

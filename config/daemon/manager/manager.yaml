@@ -40,7 +40,6 @@ spec:
         args:
         - --secret-namespace=$(MY_POD_NAMESPACE)
         - --gateway-lb-probe-port=8082
-        - --cloud-config=/etc/config/azure.json
         image: daemon:latest
         name: daemon
         securityContext:

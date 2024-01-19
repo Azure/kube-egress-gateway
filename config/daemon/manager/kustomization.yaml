@@ -1,5 +1,2 @@
 resources:
 - manager.yaml
-
-patches:
-  - path: cloud_config_patch.yaml

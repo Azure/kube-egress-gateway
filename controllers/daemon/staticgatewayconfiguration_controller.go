@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -30,7 +29,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
-	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/healthprobe"
 	"github.com/Azure/kube-egress-gateway/pkg/imds"
@@ -46,7 +44,6 @@ var _ reconcile.Reconciler = &StaticGatewayConfigurationReconciler{}
 // StaticGatewayConfigurationReconciler reconciles gateway node network according to a StaticGatewayConfiguration object
 type StaticGatewayConfigurationReconciler struct {
 	client.Client
-	*azmanager.AzureManager
 	TickerEvents  chan event.GenericEvent
 	LBProbeServer *healthprobe.LBProbeServer
 	Netlink       netlinkwrapper.Interface
@@ -57,6 +54,8 @@ type StaticGatewayConfigurationReconciler struct {
 
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations,verbs=get;list;watch
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get
 //+kubebuilder:rbac:groups=core,namespace=kube-egress-gateway-system,resources=secrets,verbs=get;list;watch
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaystatuses,verbs=get;list;watch;create;update;patch
 
@@ -71,10 +70,9 @@ type StaticGatewayConfigurationReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.0/pkg/reconcile
 
 var (
-	nodeMeta       *imds.InstanceMetadata
-	lbMeta         *imds.LoadBalancerMetadata
-	nodeTags       map[string]string
-	vmssInstanceRE = regexp.MustCompile(`.*/subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Compute/virtualMachineScaleSets/(.+)/virtualMachines/(.+)`)
+	nodeMeta *imds.InstanceMetadata
+	lbMeta   *imds.LoadBalancerMetadata
+	nodeTags map[string]string
 )
 
 func InitNodeMetadata() error {
@@ -315,64 +313,31 @@ func (r *StaticGatewayConfigurationReconciler) getVMIP(
 	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
 ) (string, string, error) {
 	log := log.FromContext(ctx)
-	matches := vmssInstanceRE.FindStringSubmatch(nodeMeta.Compute.ResourceID)
-	if len(matches) != 5 {
-		return "", "", fmt.Errorf("failed to parse vmss instance resource ID: %s", nodeMeta.Compute.ResourceID)
-	}
-	subscriptionID, resourceGroupName, vmssName, instanceID := matches[1], matches[2], matches[3], matches[4]
-	if subscriptionID != r.SubscriptionID() {
-		return "", "", fmt.Errorf("node subscription(%s) is different from configured subscription(%s)", subscriptionID, r.SubscriptionID())
-	}
-	vm, err := r.GetVMSSInstance(ctx, resourceGroupName, vmssName, instanceID)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to get vmss instance: %w", err)
-	}
-	if vm.Properties == nil || vm.Properties.NetworkProfileConfiguration == nil {
-		return "", "", fmt.Errorf("vm has empty network properties")
+
+	nodeName := nodeMeta.Compute.OSProfile.ComputerName
+	var primaryIP, secondaryIP string
+
+	// Fetch the StaticGatewayConfiguration instance.
+	vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{}
+	if err := r.Get(ctx, types.NamespacedName{Namespace: gwConfig.Namespace, Name: gwConfig.Name}, vmConfig); err != nil {
+		return "", "", err
 	}
 
-	ipConfigName := gwConfig.Namespace + "_" + gwConfig.Name
-	interfaces := vm.Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations
-	nicName := ""
-	for _, nic := range interfaces {
-		if nic.Properties != nil && to.Val(nic.Properties.Primary) {
-			nicName = to.Val(nic.Name)
+	for _, vmProfile := range vmConfig.Status.GatewayVMProfiles {
+		if vmProfile.NodeName == nodeName {
+			primaryIP = vmProfile.PrimaryIP
+			secondaryIP = vmProfile.SecondaryIP
 			break
 		}
 	}
 
-	if nicName == "" {
-		return "", "", fmt.Errorf("failed to find primary interface of vmss instance(%s_%s)", vmssName, instanceID)
-	}
-	nic, err := r.GetVMSSInterface(ctx, resourceGroupName, vmssName, instanceID, nicName)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to get vmss instance primary interface: %w", err)
-	}
-	if nic.Properties == nil {
-		return "", "", fmt.Errorf("nic has empty properties")
+	if primaryIP == "" || secondaryIP == "" {
+		return "", "", fmt.Errorf("failed to find primary or secondary IP for node %s", nodeName)
 	}
 
-	var primaryIP, ipConfigIP string
-	for _, ipConfig := range nic.Properties.IPConfigurations {
-		if ipConfig != nil && ipConfig.Properties != nil && strings.EqualFold(to.Val(ipConfig.Name), ipConfigName) {
-			if ipConfig.Properties.PrivateIPAddress == nil {
-				return "", "", fmt.Errorf("ipConfig(%s) does not have private ip address", ipConfigName)
-			}
-			ipConfigIP = to.Val(ipConfig.Properties.PrivateIPAddress)
-			log.Info("Found vm ip corresponding to gwConfig", "IP", ipConfigIP)
-		} else if ipConfig != nil && ipConfig.Properties != nil && to.Val(ipConfig.Properties.Primary) {
-			if ipConfig.Properties.PrivateIPAddress == nil {
-				return "", "", fmt.Errorf("primary ipConfig does not have ip address")
-			}
-			primaryIP = to.Val(ipConfig.Properties.PrivateIPAddress)
-			log.Info("Found vm primary ip", "IP", primaryIP)
-		}
-	}
+	log.Info("Found primary and secondary IP for node", "nodeName", nodeName, "primaryIP", primaryIP, "secondaryIP", secondaryIP)
 
-	if primaryIP == "" || ipConfigIP == "" {
-		return "", "", fmt.Errorf("failed to find vm ips, primaryIP(%s), ipConfigIP(%s)", primaryIP, ipConfigIP)
-	}
-	return primaryIP, ipConfigIP, nil
+	return primaryIP, secondaryIP, nil
 }
 
 func isReady(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) bool {
