@@ -129,10 +129,10 @@ func startControllers(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	netnsCleanupEvents := make(chan event.GenericEvent)
+	gwCleanupEvents := make(chan event.GenericEvent)
 	if err = (&controllers.StaticGatewayConfigurationReconciler{
 		Client:        mgr.GetClient(),
-		TickerEvents:  netnsCleanupEvents,
+		TickerEvents:  gwCleanupEvents,
 		LBProbeServer: lbProbeServer,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "StaticGatewayConfiguration")
@@ -160,8 +160,8 @@ func startControllers(cmd *cobra.Command, args []string) {
 
 	setupLog.Info("starting manager")
 	ctx := ctrl.SetupSignalHandler()
-	startCleanupTicker(ctx, netnsCleanupEvents, 1*time.Minute) // clean up gwConfig network namespace every 1 min
-	startCleanupTicker(ctx, peerCleanupEvents, 1*time.Minute)  // clean up wireguard peer configurations every 1 min
+	startCleanupTicker(ctx, gwCleanupEvents, 1*time.Minute)   // clean up gwConfig network namespace every 1 min
+	startCleanupTicker(ctx, peerCleanupEvents, 1*time.Minute) // clean up wireguard peer configurations every 1 min
 	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)

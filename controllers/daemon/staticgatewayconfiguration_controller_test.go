@@ -3,14 +3,17 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"net"
 	"os"
 	"sort"
+	"strconv"
+	"strings"
+	"time"
 
-	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -23,15 +26,17 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/healthprobe"
 	"github.com/Azure/kube-egress-gateway/pkg/imds"
-	"github.com/Azure/kube-egress-gateway/pkg/iptableswrapper/mockiptableswrapper"
+	fakeiptables "github.com/Azure/kube-egress-gateway/pkg/iptableswrapper"
 	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper/mocknetlinkwrapper"
 	"github.com/Azure/kube-egress-gateway/pkg/netnswrapper/mocknetnswrapper"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
@@ -52,7 +57,11 @@ const (
 	pubK                = "aPxGwq8zERHQ3Q1cOZFdJ+cvJX5Ka4mLN38AyYKYF10="
 	ilbIP               = "10.0.0.4"
 	ilbIPCidr           = "10.0.0.4/31"
-	nsName              = "gw-1234567890-10_0_0_4"
+	natBuiltinChains    = `*nat
+:PREROUTING - [0:0]
+:INPUT - [0:0]
+:OUTPUT - [0:0]
+:POSTROUTING - [0:0]`
 )
 
 var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func() {
@@ -63,7 +72,6 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 		reconcileErr error
 		gwConfig     *egressgatewayv1alpha1.StaticGatewayConfiguration
 		mclient      *mockwgctrlwrapper.MockClient
-		mtable       *mockiptableswrapper.MockIpTables
 		node         = &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: testNodeName}}
 	)
 
@@ -73,10 +81,9 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 		r = &StaticGatewayConfigurationReconciler{Client: cl, LBProbeServer: healthprobe.NewLBProbeServer(1000)}
 		r.Netlink = mocknetlinkwrapper.NewMockInterface(mctrl)
 		r.NetNS = mocknetnswrapper.NewMockInterface(mctrl)
-		r.IPTables = mockiptableswrapper.NewMockInterface(mctrl)
+		r.IPTables = fakeiptables.NewFake()
 		r.WgCtrl = mockwgctrlwrapper.NewMockInterface(mctrl)
 		mclient = mockwgctrlwrapper.NewMockClient(mctrl)
-		mtable = mockiptableswrapper.NewMockIpTables(mctrl)
 	}
 
 	Context("Test ignore reconcile", func() {
@@ -225,8 +232,8 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
 			mnl.EXPECT().LinkByName("eth0").Return(eth0, nil)
 			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{}, nil)
-			mnl.EXPECT().AddrAdd(eth0, &netlink.Addr{IPNet: getIPNetWithActualIP(ilbIPCidr)}).Return(nil)
-			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig.Status.GatewayServerProfile.Ip, false)
+			mnl.EXPECT().AddrAdd(eth0, &netlink.Addr{IPNet: getIPNetWithActualIP(ilbIPCidr), Label: "eth0:egress"}).Return(nil)
+			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig.Status.GatewayServerProfile.Ip)
 			Expect(err).To(BeNil())
 		})
 
@@ -234,8 +241,8 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
 			mnl.EXPECT().LinkByName("eth0").Return(eth0, nil)
-			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(ilbIPCidr)}}, nil)
-			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig.Status.GatewayServerProfile.Ip, false)
+			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(ilbIPCidr), Label: "eth0:egress"}}, nil)
+			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig.Status.GatewayServerProfile.Ip)
 			Expect(err).To(BeNil())
 		})
 
@@ -243,9 +250,9 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
 			mnl.EXPECT().LinkByName("eth0").Return(eth0, nil)
-			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(ilbIPCidr)}}, nil)
-			mnl.EXPECT().AddrDel(eth0, &netlink.Addr{IPNet: getIPNetWithActualIP(ilbIPCidr)}).Return(nil)
-			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig.Status.GatewayServerProfile.Ip, true)
+			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(ilbIPCidr), Label: "eth0:egress"}}, nil)
+			mnl.EXPECT().AddrDel(eth0, &netlink.Addr{IPNet: getIPNetWithActualIP(ilbIPCidr), Label: "eth0:egress"}).Return(nil)
+			err := r.reconcileIlbIPOnHost(context.TODO(), "")
 			Expect(err).To(BeNil())
 		})
 
@@ -254,7 +261,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
 			mnl.EXPECT().LinkByName("eth0").Return(eth0, nil)
 			mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{}, nil)
-			err := r.reconcileIlbIPOnHost(context.TODO(), gwConfig.Status.GatewayServerProfile.Ip, true)
+			err := r.reconcileIlbIPOnHost(context.TODO(), "")
 			Expect(err).To(BeNil())
 		})
 
@@ -308,64 +315,62 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 		It("should add iptables rule when it does not exist", func() {
 			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
 			mns := r.NetNS.(*mocknetnswrapper.MockInterface)
-			mipt := r.IPTables.(*mockiptableswrapper.MockInterface)
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
 			gomock.InOrder(
 				mnl.EXPECT().LinkByName("eth0").Return(eth0, nil),
 				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(ilbIPCidr)}}, nil),
 				mnl.EXPECT().LinkByName("eth0").Return(eth0, nil),
 				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{}, nil),
-				mipt.EXPECT().New().Return(mtable, nil),
-				mtable.EXPECT().Exists(
-					"nat", "POSTROUTING", "-s", "10.0.0.6/32", "-m", "comment", "--comment", "no SNAT for traffic from netns gw-1234567890-10_0_0_4",
-					"-j", "RETURN").Return(false, nil),
-				mtable.EXPECT().Insert(
-					"nat", "POSTROUTING", 1, "-s", "10.0.0.6/32", "-m", "comment", "--comment", "no SNAT for traffic from netns gw-1234567890-10_0_0_4",
-					"-j", "RETURN").Return(nil),
-				mns.EXPECT().GetNS(nsName).Return(nil, fmt.Errorf("failed")),
+				mns.EXPECT().GetNS(consts.GatewayNetnsName).Return(nil, fmt.Errorf("failed")),
 			)
 			_, reconcileErr = r.Reconcile(context.TODO(), req)
 			Expect(errors.Unwrap(reconcileErr)).NotTo(BeNil())
 			Expect(reconcileErr.Error()).To(ContainSubstring("failed"))
+
+			expectedDump := getHostNamespaceIptablesDump("10.0.0.6")
+			fipt, ok := r.IPTables.(*fakeiptables.FakeIPTables)
+			Expect(ok).To(BeTrue())
+			buf := bytes.NewBuffer(nil)
+			Expect(fipt.SaveInto("nat", buf)).NotTo(HaveOccurred())
+			Expect(buf.String()).To(Equal(expectedDump))
 		})
 
-		It("should create new network namespace, wireguard interface and veth pair, routes, and iptables rules", func() {
+		It("should create new wireguard interface and veth pair, routes, and iptables rules", func() {
 			pk, _ := wgtypes.ParseKey(privK)
 			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
 			mns := r.NetNS.(*mocknetnswrapper.MockInterface)
 			mwg := r.WgCtrl.(*mockwgctrlwrapper.MockInterface)
-			mipt := r.IPTables.(*mockiptableswrapper.MockInterface)
 			la1, la2 := netlink.NewLinkAttrs(), netlink.NewLinkAttrs()
-			la1.Name = "wg0"
-			la2.Name = "gw-12345678"
+			la1.Name = "wg-6000"
+			la1.Alias = testUID // gwConfig UID
+			la2.Name = "host-gateway"
 			wg0 := &netlink.Wireguard{LinkAttrs: la1}
 			veth := &netlink.Veth{LinkAttrs: la2, PeerName: "host0"}
 			host0 := &netlink.Veth{}
 			loop := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "lo"}}
-			device := &wgtypes.Device{Name: "wg0"}
-			gwns := &mocknetnswrapper.MockNetNS{Name: nsName}
+			device := &wgtypes.Device{Name: "wg-6000"}
+			gwns := &mocknetnswrapper.MockNetNS{Name: consts.GatewayNetnsName}
 			gomock.InOrder(
 				// create network namespace
-				mns.EXPECT().GetNS(nsName).Return(nil, ns.NSPathNotExistErr{}),
-				mns.EXPECT().NewNS(nsName).Return(gwns, nil),
-				mnl.EXPECT().LinkByName("wg0").Return(wg0, netlink.LinkNotFoundError{}),
+				mns.EXPECT().GetNS(consts.GatewayNetnsName).Return(gwns, nil),
+				mnl.EXPECT().LinkByName("wg-6000").Return(wg0, netlink.LinkNotFoundError{}),
 				// create wireguard link, wg0
 				mnl.EXPECT().LinkAdd(wg0).Return(nil),
-				mnl.EXPECT().LinkByName("wg0").Return(wg0, nil),
+				mnl.EXPECT().LinkByName("wg-6000").Return(wg0, nil),
 				mnl.EXPECT().LinkSetNsFd(wg0, int(gwns.Fd())).Return(nil),
 				// add address to wg0
-				mnl.EXPECT().LinkByName("wg0").Return(wg0, nil),
+				mnl.EXPECT().LinkByName("wg-6000").Return(wg0, nil),
 				mnl.EXPECT().AddrList(wg0, nl.FAMILY_ALL).Return([]netlink.Addr{}, nil),
 				mnl.EXPECT().AddrAdd(wg0, &netlink.Addr{IPNet: getIPNetWithActualIP(consts.GatewayIP)}),
 				mnl.EXPECT().LinkSetUp(wg0).Return(nil),
 				mwg.EXPECT().New().Return(mclient, nil),
-				mclient.EXPECT().Device("wg0").Return(device, nil),
-				mclient.EXPECT().ConfigureDevice("wg0", wgtypes.Config{ListenPort: to.Ptr[int](6000), PrivateKey: &pk}).Return(nil),
+				mclient.EXPECT().Device("wg-6000").Return(device, nil),
+				mclient.EXPECT().ConfigureDevice("wg-6000", wgtypes.Config{ListenPort: to.Ptr[int](6000), PrivateKey: &pk}).Return(nil),
 				mclient.EXPECT().Close().Return(nil),
 				// add veth pair in host
-				mnl.EXPECT().LinkByName("gw-12345678").Return(veth, netlink.LinkNotFoundError{}),
+				mnl.EXPECT().LinkByName("host-gateway").Return(veth, netlink.LinkNotFoundError{}),
 				mnl.EXPECT().LinkAdd(veth).Return(nil),
-				mnl.EXPECT().LinkByName("gw-12345678").Return(veth, nil),
+				mnl.EXPECT().LinkByName("host-gateway").Return(veth, nil),
 				mnl.EXPECT().LinkSetUp(veth).Return(nil),
 				mnl.EXPECT().RouteList(nil, nl.FAMILY_ALL).Return([]netlink.Route{}, nil),
 				mnl.EXPECT().RouteReplace(&netlink.Route{LinkIndex: 0, Scope: netlink.SCOPE_UNIVERSE, Dst: getIPNet("10.0.0.6/32")}).Return(nil),
@@ -374,7 +379,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 				// add address and routes in gw namespace
 				mnl.EXPECT().LinkByName("host0").Return(host0, nil),
 				mnl.EXPECT().AddrList(host0, nl.FAMILY_ALL).Return([]netlink.Addr{}, nil),
-				mnl.EXPECT().AddrReplace(host0, &netlink.Addr{IPNet: getIPNet("10.0.0.6/32")}).Return(nil),
+				mnl.EXPECT().AddrAdd(host0, &netlink.Addr{IPNet: getIPNet("10.0.0.6/32")}).Return(nil),
 				mnl.EXPECT().LinkSetUp(host0).Return(nil),
 				mnl.EXPECT().RouteList(nil, nl.FAMILY_ALL).Return([]netlink.Route{}, nil),
 				mnl.EXPECT().RouteReplace(&netlink.Route{LinkIndex: 0, Scope: netlink.SCOPE_LINK, Dst: getIPNet("10.0.0.5/32")}).Return(nil),
@@ -383,12 +388,17 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 				mnl.EXPECT().LinkByName("lo").Return(loop, nil),
 				mnl.EXPECT().LinkSetUp(loop).Return(nil),
 				// setup iptables rule
-				mipt.EXPECT().New().Return(mtable, nil),
-				mtable.EXPECT().Exists("nat", "POSTROUTING", "-o", "host0", "-j", "MASQUERADE").Return(false, nil),
-				mtable.EXPECT().Insert("nat", "POSTROUTING", 1, "-o", "host0", "-j", "MASQUERADE").Return(nil),
 			)
 			err := r.configureGatewayNamespace(context.TODO(), gwConfig, &pk, "10.0.0.5", "10.0.0.6")
 			Expect(err).To(BeNil())
+
+			// verify iptables rules
+			expectedDump := getGatewayNamespaceIptablesDump(6000)
+			fipt, ok := r.IPTables.(*fakeiptables.FakeIPTables)
+			Expect(ok).To(BeTrue())
+			buf := bytes.NewBuffer(nil)
+			Expect(fipt.SaveInto("nat", buf)).NotTo(HaveOccurred())
+			Expect(buf.String()).To(Equal(expectedDump))
 		})
 
 		It("should not change anything when setup is complete", func() {
@@ -396,29 +406,28 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
 			mns := r.NetNS.(*mocknetnswrapper.MockInterface)
 			mwg := r.WgCtrl.(*mockwgctrlwrapper.MockInterface)
-			mipt := r.IPTables.(*mockiptableswrapper.MockInterface)
 			la1, la2 := netlink.NewLinkAttrs(), netlink.NewLinkAttrs()
-			la1.Name = "wg0"
-			la2.Name = "gw-12345678"
+			la1.Name = "wg-6000"
+			la2.Name = "host-gateway"
 			wg0 := &netlink.Wireguard{LinkAttrs: la1}
 			veth := &netlink.Veth{LinkAttrs: la2, PeerName: "host0"}
 			host0 := &netlink.Veth{}
 			loop := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "lo"}}
-			device := &wgtypes.Device{Name: "wg0", ListenPort: 6000, PrivateKey: pk}
-			gwns := &mocknetnswrapper.MockNetNS{Name: nsName}
+			device := &wgtypes.Device{Name: "wg-6000", ListenPort: 6000, PrivateKey: pk}
+			gwns := &mocknetnswrapper.MockNetNS{Name: consts.GatewayNetnsName}
 			gomock.InOrder(
 				// create network namespace
-				mns.EXPECT().GetNS(nsName).Return(gwns, nil),
-				mnl.EXPECT().LinkByName("wg0").Return(wg0, nil),
+				mns.EXPECT().GetNS(consts.GatewayNetnsName).Return(gwns, nil),
+				mnl.EXPECT().LinkByName("wg-6000").Return(wg0, nil),
 				// check address and wg config for wg0
-				mnl.EXPECT().LinkByName("wg0").Return(wg0, nil),
+				mnl.EXPECT().LinkByName("wg-6000").Return(wg0, nil),
 				mnl.EXPECT().AddrList(wg0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(consts.GatewayIP)}}, nil),
 				mnl.EXPECT().LinkSetUp(wg0).Return(nil),
 				mwg.EXPECT().New().Return(mclient, nil),
-				mclient.EXPECT().Device("wg0").Return(device, nil),
+				mclient.EXPECT().Device("wg-6000").Return(device, nil),
 				mclient.EXPECT().Close().Return(nil),
 				// check veth pair in host
-				mnl.EXPECT().LinkByName("gw-12345678").Return(veth, nil),
+				mnl.EXPECT().LinkByName("host-gateway").Return(veth, nil),
 				mnl.EXPECT().LinkSetUp(veth).Return(nil),
 				mnl.EXPECT().RouteList(nil, nl.FAMILY_ALL).Return([]netlink.Route{{LinkIndex: 0, Scope: netlink.SCOPE_UNIVERSE, Dst: getIPNet("10.0.0.6/32")}}, nil),
 				mnl.EXPECT().LinkByName("host0").Return(host0, netlink.LinkNotFoundError{}),
@@ -437,11 +446,17 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 				mnl.EXPECT().LinkByName("lo").Return(loop, nil),
 				mnl.EXPECT().LinkSetUp(loop).Return(nil),
 				// check iptables rule
-				mipt.EXPECT().New().Return(mtable, nil),
-				mtable.EXPECT().Exists("nat", "POSTROUTING", "-o", "host0", "-j", "MASQUERADE").Return(true, nil),
 			)
 			err := r.configureGatewayNamespace(context.TODO(), gwConfig, &pk, "10.0.0.5", "10.0.0.6")
 			Expect(err).To(BeNil())
+
+			// verify iptables rules
+			expectedDump := getGatewayNamespaceIptablesDump(6000)
+			fipt, ok := r.IPTables.(*fakeiptables.FakeIPTables)
+			Expect(ok).To(BeTrue())
+			buf := bytes.NewBuffer(nil)
+			Expect(fipt.SaveInto("nat", buf)).NotTo(HaveOccurred())
+			Expect(buf.String()).To(Equal(expectedDump))
 		})
 
 		It("should delete wireguard link if any setup fails", func() {
@@ -449,17 +464,18 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
 			mns := r.NetNS.(*mocknetnswrapper.MockInterface)
 			la1, la2 := netlink.NewLinkAttrs(), netlink.NewLinkAttrs()
-			la1.Name = "wg0"
-			la2.Name = "gw-12345678"
+			la1.Name = "wg-6000"
+			la1.Alias = testUID // gwConfig UID
+			la2.Name = "host-gateway"
 			wg0 := &netlink.Wireguard{LinkAttrs: la1}
-			gwns := &mocknetnswrapper.MockNetNS{Name: nsName}
+			gwns := &mocknetnswrapper.MockNetNS{Name: consts.GatewayNetnsName}
 			gomock.InOrder(
 				// create network namespace
-				mns.EXPECT().GetNS(nsName).Return(gwns, nil),
-				mnl.EXPECT().LinkByName("wg0").Return(wg0, netlink.LinkNotFoundError{}),
+				mns.EXPECT().GetNS(consts.GatewayNetnsName).Return(gwns, nil),
+				mnl.EXPECT().LinkByName("wg-6000").Return(wg0, netlink.LinkNotFoundError{}),
 				// create wireguard link, wg0
 				mnl.EXPECT().LinkAdd(wg0).Return(nil),
-				mnl.EXPECT().LinkByName("wg0").Return(wg0, nil),
+				mnl.EXPECT().LinkByName("wg-6000").Return(wg0, nil),
 				mnl.EXPECT().LinkSetNsFd(wg0, int(gwns.Fd())).Return(fmt.Errorf("failed")),
 				mnl.EXPECT().LinkDel(wg0).Return(nil),
 			)
@@ -473,27 +489,27 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			mns := r.NetNS.(*mocknetnswrapper.MockInterface)
 			mwg := r.WgCtrl.(*mockwgctrlwrapper.MockInterface)
 			la1, la2 := netlink.NewLinkAttrs(), netlink.NewLinkAttrs()
-			la1.Name = "wg0"
-			la2.Name = "gw-12345678"
+			la1.Name = "wg-6000"
+			la2.Name = "host-gateway"
 			wg0 := &netlink.Wireguard{LinkAttrs: la1}
 			veth := &netlink.Veth{LinkAttrs: la2, PeerName: "host0"}
-			device := &wgtypes.Device{Name: "wg0", ListenPort: 6000, PrivateKey: pk}
-			gwns := &mocknetnswrapper.MockNetNS{Name: nsName}
+			device := &wgtypes.Device{Name: "wg-6000", ListenPort: 6000, PrivateKey: pk}
+			gwns := &mocknetnswrapper.MockNetNS{Name: consts.GatewayNetnsName}
 			gomock.InOrder(
 				// get network namespace
-				mns.EXPECT().GetNS(nsName).Return(gwns, nil),
-				mnl.EXPECT().LinkByName("wg0").Return(wg0, nil),
+				mns.EXPECT().GetNS(consts.GatewayNetnsName).Return(gwns, nil),
+				mnl.EXPECT().LinkByName("wg-6000").Return(wg0, nil),
 				// check address and wg config for wg0
-				mnl.EXPECT().LinkByName("wg0").Return(wg0, nil),
+				mnl.EXPECT().LinkByName("wg-6000").Return(wg0, nil),
 				mnl.EXPECT().AddrList(wg0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNetWithActualIP(consts.GatewayIP)}}, nil),
 				mnl.EXPECT().LinkSetUp(wg0).Return(nil),
 				mwg.EXPECT().New().Return(mclient, nil),
-				mclient.EXPECT().Device("wg0").Return(device, nil),
+				mclient.EXPECT().Device("wg-6000").Return(device, nil),
 				mclient.EXPECT().Close().Return(nil),
 				// add veth pair in host
-				mnl.EXPECT().LinkByName("gw-12345678").Return(veth, netlink.LinkNotFoundError{}),
+				mnl.EXPECT().LinkByName("host-gateway").Return(veth, netlink.LinkNotFoundError{}),
 				mnl.EXPECT().LinkAdd(veth).Return(nil),
-				mnl.EXPECT().LinkByName("gw-12345678").Return(veth, nil),
+				mnl.EXPECT().LinkByName("host-gateway").Return(veth, nil),
 				mnl.EXPECT().LinkSetUp(veth).Return(fmt.Errorf("failed")),
 				mnl.EXPECT().LinkDel(veth).Return(nil),
 			)
@@ -512,8 +528,8 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 				os.Setenv(consts.NodeNameEnvKey, "")
 			})
 
-			gwNamespace := egressgatewayv1alpha1.GatewayNamespace{
-				NetnsName: "ns",
+			gwNamespace := egressgatewayv1alpha1.GatewayConfiguration{
+				InterfaceName: "wg",
 			}
 
 			It("should create new gateway status object if not exist", func() {
@@ -523,8 +539,8 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 				gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
 				err = getGatewayStatus(r.Client, gwStatus)
 				Expect(err).To(BeNil())
-				Expect(len(gwStatus.Spec.ReadyGatewayNamespaces)).To(Equal(1))
-				Expect(gwStatus.Spec.ReadyGatewayNamespaces[0]).To(Equal(gwNamespace))
+				Expect(len(gwStatus.Spec.ReadyGatewayConfigurations)).To(Equal(1))
+				Expect(gwStatus.Spec.ReadyGatewayConfigurations[0]).To(Equal(gwNamespace))
 			})
 
 			It("should add to existing gateway status object", func() {
@@ -534,9 +550,9 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 						Namespace: testPodNamespace,
 					},
 					Spec: egressgatewayv1alpha1.GatewayStatusSpec{
-						ReadyGatewayNamespaces: []egressgatewayv1alpha1.GatewayNamespace{
+						ReadyGatewayConfigurations: []egressgatewayv1alpha1.GatewayConfiguration{
 							{
-								NetnsName: "ns1",
+								InterfaceName: "wg1",
 							},
 						},
 					},
@@ -548,11 +564,11 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 				err = getGatewayStatus(r.Client, gwStatus)
 				Expect(err).To(BeNil())
 				var namespaces []string
-				for _, peer := range gwStatus.Spec.ReadyGatewayNamespaces {
-					namespaces = append(namespaces, peer.NetnsName)
+				for _, peer := range gwStatus.Spec.ReadyGatewayConfigurations {
+					namespaces = append(namespaces, peer.InterfaceName)
 				}
 				sort.Strings(namespaces)
-				Expect(namespaces).To(Equal([]string{"ns", "ns1"}))
+				Expect(namespaces).To(Equal([]string{"wg", "wg1"}))
 			})
 
 			It("should remove from existing gateway status object", func() {
@@ -562,26 +578,26 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 						Namespace: testPodNamespace,
 					},
 					Spec: egressgatewayv1alpha1.GatewayStatusSpec{
-						ReadyGatewayNamespaces: []egressgatewayv1alpha1.GatewayNamespace{
+						ReadyGatewayConfigurations: []egressgatewayv1alpha1.GatewayConfiguration{
 							{
-								NetnsName: "ns",
+								InterfaceName: "wg",
 							},
 							{
-								NetnsName: "ns1",
+								InterfaceName: "wg1",
 							},
 						},
 						ReadyPeerConfigurations: []egressgatewayv1alpha1.PeerConfiguration{
 							{
-								NetnsName: "ns",
-								PublicKey: "pubk1",
+								InterfaceName: "wg",
+								PublicKey:     "pubk1",
 							},
 							{
-								NetnsName: "ns1",
-								PublicKey: "pubk2",
+								InterfaceName: "wg1",
+								PublicKey:     "pubk2",
 							},
 							{
-								NetnsName: "ns",
-								PublicKey: "pubk3",
+								InterfaceName: "wg",
+								PublicKey:     "pubk3",
 							},
 						},
 					},
@@ -592,15 +608,17 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 				gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
 				err = getGatewayStatus(r.Client, gwStatus)
 				Expect(err).To(BeNil())
-				Expect(len(gwStatus.Spec.ReadyGatewayNamespaces)).To(Equal(1))
+				Expect(len(gwStatus.Spec.ReadyGatewayConfigurations)).To(Equal(1))
 				Expect(len(gwStatus.Spec.ReadyPeerConfigurations)).To(Equal(1))
-				Expect(gwStatus.Spec.ReadyGatewayNamespaces[0].NetnsName).To(Equal("ns1"))
-				Expect(gwStatus.Spec.ReadyPeerConfigurations[0].NetnsName).To(Equal("ns1"))
+				Expect(gwStatus.Spec.ReadyGatewayConfigurations[0].InterfaceName).To(Equal("wg1"))
+				Expect(gwStatus.Spec.ReadyPeerConfigurations[0].InterfaceName).To(Equal("wg1"))
 			})
 		})
 	})
 
 	Context("Test reconcile deletion", func() {
+		var vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration
+		var gwStatus *egressgatewayv1alpha1.GatewayStatus
 		BeforeEach(func() {
 			req = reconcile.Request{
 				NamespacedName: types.NamespacedName{
@@ -623,25 +641,47 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 				},
 				Status: getTestGwConfigStatus(),
 			}
-			gwStatus := &egressgatewayv1alpha1.GatewayStatus{
+			vmConfig = &egressgatewayv1alpha1.GatewayVMConfiguration{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testName,
+					Namespace: testNamespace,
+				},
+				Status: &egressgatewayv1alpha1.GatewayVMConfigurationStatus{
+					GatewayVMProfiles: []egressgatewayv1alpha1.GatewayVMProfile{
+						{
+							NodeName:    testNodeName,
+							PrimaryIP:   "10.0.0.5",
+							SecondaryIP: "10.0.0.6",
+						},
+					},
+				},
+			}
+			gwStatus = &egressgatewayv1alpha1.GatewayStatus{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      testNodeName,
 					Namespace: testPodNamespace,
 				},
 				Spec: egressgatewayv1alpha1.GatewayStatusSpec{
-					ReadyGatewayNamespaces: []egressgatewayv1alpha1.GatewayNamespace{
+					ReadyGatewayConfigurations: []egressgatewayv1alpha1.GatewayConfiguration{
 						{
-							NetnsName: "gw-ns-10_0_0_6",
+							InterfaceName: "wg-6000",
+						},
+						{
+							InterfaceName: "wg-6001",
 						},
 					},
 					ReadyPeerConfigurations: []egressgatewayv1alpha1.PeerConfiguration{
 						{
-							NetnsName: "gw-ns-10_0_0_6",
-							PublicKey: "pubk1",
+							InterfaceName: "wg-6001",
+							PublicKey:     "pubk1",
 						},
 						{
-							NetnsName: "gw-ns-10_0_0_6",
-							PublicKey: "pubk2",
+							InterfaceName: "wg-6001",
+							PublicKey:     "pubk2",
+						},
+						{
+							InterfaceName: "wg-6000",
+							PublicKey:     "pubk3",
 						},
 					},
 				},
@@ -650,6 +690,9 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 				Compute: &imds.ComputeMetadata{
 					VMScaleSetName:    vmssName,
 					ResourceGroupName: vmssRG,
+					OSProfile: imds.OSProfile{
+						ComputerName: testNodeName,
+					},
 				},
 				Network: &imds.NetworkMetadata{
 					Interface: []imds.NetworkInterface{
@@ -659,7 +702,6 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			}
 			os.Setenv(consts.PodNamespaceEnvKey, testPodNamespace)
 			os.Setenv(consts.NodeNameEnvKey, testNodeName)
-			getTestReconciler(node, gwConfig, gwStatus)
 		})
 
 		AfterEach(func() {
@@ -667,75 +709,108 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 			os.Setenv(consts.NodeNameEnvKey, "")
 		})
 
-		It("should delete ilb ip from eth0, delete iptables rule, delete gateway namespace and update gwStatus", func() {
+		It("should delete wglink, vmSecondaryIP, iptables rules and update gwStatus, while not delete ilb IP", func() {
+			getTestReconciler(node, gwConfig, vmConfig, gwStatus)
+			// existing gwConfig takes wglink wg-6000 and vmSecondaryIP 10.0.0.6, other links and ips should be deleted
 			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
 			mns := r.NetNS.(*mocknetnswrapper.MockInterface)
-			mipt := r.IPTables.(*mockiptableswrapper.MockInterface)
+			host0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "host0"}}
+			gwns := &mocknetnswrapper.MockNetNS{Name: consts.GatewayNetnsName}
+			linkToDel := &netlink.Wireguard{LinkAttrs: netlink.LinkAttrs{Name: "wg-6001", Alias: "deletingUID"}}
+			routeToDel := netlink.Route{LinkIndex: 0, Scope: netlink.SCOPE_UNIVERSE, Dst: getIPNet("10.0.0.7/32")}
+
+			// create existing iptables rules first
+			existingHostDump := getHostNamespaceIptablesDump("10.0.0.6", "10.0.0.7")
+			existingGWDump := getGatewayNamespaceIptablesDump(6000, 6001)
+			fipt, ok := r.IPTables.(*fakeiptables.FakeIPTables)
+			Expect(ok).To(BeTrue())
+			Expect(fipt.RestoreAll([]byte(existingHostDump), utiliptables.NoFlushTables, utiliptables.NoRestoreCounters)).NotTo(HaveOccurred())
+			Expect(fipt.RestoreAll([]byte(existingGWDump), utiliptables.NoFlushTables, utiliptables.NoRestoreCounters)).NotTo(HaveOccurred())
+
+			// add ActiveGateways
+			Expect(r.LBProbeServer.AddGateway("deletingUID")).To(Succeed())
+			Expect(r.LBProbeServer.AddGateway("notDeletingUID")).To(Succeed())
+
+			gomock.InOrder(
+				mns.EXPECT().GetNS(consts.GatewayNetnsName).Return(gwns, nil),
+				mnl.EXPECT().LinkList().Return([]netlink.Link{
+					&netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "wg-6000"}},
+					&netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "host0"}},
+					&netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "lo"}},
+					linkToDel,
+				}, nil),
+				mnl.EXPECT().LinkByName("host0").Return(host0, nil),
+				mnl.EXPECT().AddrList(host0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNet("10.0.0.6/32")}, {IPNet: getIPNet("10.0.0.7/32")}}, nil),
+				mnl.EXPECT().LinkByName("host0").Return(host0, nil),
+				mnl.EXPECT().AddrDel(host0, &netlink.Addr{IPNet: getIPNet("10.0.0.7/32")}).Return(nil),
+				mnl.EXPECT().RouteList(nil, nl.FAMILY_ALL).Return([]netlink.Route{
+					{LinkIndex: 0, Scope: netlink.SCOPE_UNIVERSE, Dst: getIPNet("10.0.0.6/32")},
+					routeToDel,
+				}, nil),
+				mnl.EXPECT().RouteDel(&routeToDel).Return(nil),
+				mnl.EXPECT().LinkDel(linkToDel).Return(nil),
+			)
+			res, reconcileErr = r.Reconcile(context.TODO(), req)
+			Expect(reconcileErr).To(BeNil())
+			Expect(res).To(Equal(ctrl.Result{}))
+			gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
+			err := getGatewayStatus(r.Client, gwStatus)
+			Expect(err).To(BeNil())
+			Expect(len(gwStatus.Spec.ReadyGatewayConfigurations)).To(Equal(1))
+			Expect(len(gwStatus.Spec.ReadyPeerConfigurations)).To(Equal(1))
+
+			tmpipt := fakeiptables.NewFake()
+			leftHostDump := getHostNamespaceIptablesDump("10.0.0.6")
+			leftGWDump := getGatewayNamespaceIptablesDump(6000)
+			Expect(tmpipt.RestoreAll([]byte(leftHostDump), utiliptables.NoFlushTables, utiliptables.NoRestoreCounters)).NotTo(HaveOccurred())
+			Expect(tmpipt.RestoreAll([]byte(leftGWDump), utiliptables.NoFlushTables, utiliptables.NoRestoreCounters)).NotTo(HaveOccurred())
+			expectedBuf := bytes.NewBuffer(nil)
+			Expect(tmpipt.SaveInto("nat", expectedBuf)).NotTo(HaveOccurred())
+			existingBuf := bytes.NewBuffer(nil)
+			Expect(fipt.SaveInto("nat", existingBuf)).NotTo(HaveOccurred())
+			Expect(existingBuf.String()).To(Equal(expectedBuf.String()))
+
+			Expect(r.LBProbeServer.GetGateways()).To(Equal([]string{"notDeletingUID"}))
+		})
+
+		It("should do fully cleanup when there's no active gwConfig", func() {
+			gwConfig.ObjectMeta.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+			controllerutil.AddFinalizer(gwConfig, consts.SGCFinalizerName)
+			getTestReconciler(node, gwConfig, vmConfig, gwStatus)
+			mns := r.NetNS.(*mocknetnswrapper.MockInterface)
+			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
 			eth0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}}
-			nsToDel := "gw-ns-10_0_0_6"
-			gwns := &mocknetnswrapper.MockNetNS{Name: nsToDel}
+			host0 := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "host0"}}
+			gwns := &mocknetnswrapper.MockNetNS{Name: consts.GatewayNetnsName}
+			linkToDel := netlink.Addr{IPNet: getIPNetWithActualIP(ilbIPCidr), Label: "eth0:egress"}
+
+			existingHostDump := getHostNamespaceIptablesDump()
+			fipt, ok := r.IPTables.(*fakeiptables.FakeIPTables)
+			Expect(ok).To(BeTrue())
+			Expect(fipt.RestoreAll([]byte(existingHostDump), utiliptables.NoFlushTables, utiliptables.NoRestoreCounters)).NotTo(HaveOccurred())
+
 			gomock.InOrder(
-				mns.EXPECT().ListNS().Return([]string{nsToDel}, nil).Times(2),
+				mns.EXPECT().GetNS(consts.GatewayNetnsName).Return(gwns, nil),
+				mnl.EXPECT().LinkList().Return([]netlink.Link{
+					&netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "host0"}},
+					&netlink.Device{LinkAttrs: netlink.LinkAttrs{Name: "lo"}},
+				}, nil),
+				mnl.EXPECT().LinkByName("host0").Return(host0, nil),
+				mnl.EXPECT().AddrList(host0, nl.FAMILY_ALL).Return([]netlink.Addr{}, nil),
 				mnl.EXPECT().LinkByName("eth0").Return(eth0, nil),
-				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{{IPNet: getIPNet("10.0.0.6/31")}}, nil),
-				mnl.EXPECT().AddrDel(eth0, &netlink.Addr{IPNet: getIPNetWithActualIP("10.0.0.6/31")}).Return(nil),
-				mipt.EXPECT().New().Return(mtable, nil),
-				mtable.EXPECT().List("nat", "POSTROUTING").Return([]string{"-s 10.0.0.7/32 --comment no SNAT for traffic from netns gw-ns-10_0_0_6"}, nil),
-				mtable.EXPECT().Delete(
-					"nat", "POSTROUTING", "-s", "10.0.0.7/32", "-m", "comment", "--comment", "no SNAT for traffic from netns gw-ns-10_0_0_6",
-					"-j", "RETURN").Return(nil),
-				mns.EXPECT().GetNS(nsToDel).Return(gwns, nil),
-				mns.EXPECT().UnmountNS(nsToDel).Return(nil),
+				mnl.EXPECT().AddrList(eth0, nl.FAMILY_ALL).Return([]netlink.Addr{linkToDel}, nil),
+				mnl.EXPECT().AddrDel(eth0, &linkToDel).Return(nil),
 			)
 			res, reconcileErr = r.Reconcile(context.TODO(), req)
 			Expect(reconcileErr).To(BeNil())
 			Expect(res).To(Equal(ctrl.Result{}))
-			gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
-			err := getGatewayStatus(r.Client, gwStatus)
-			Expect(err).To(BeNil())
-			Expect(gwStatus.Spec.ReadyGatewayNamespaces).To(BeEmpty())
-			Expect(gwStatus.Spec.ReadyPeerConfigurations).To(BeEmpty())
-		})
 
-		It("should not delete ilb ip from eth0 if there are other gateway namespaces", func() {
-			mns := r.NetNS.(*mocknetnswrapper.MockInterface)
-			mipt := r.IPTables.(*mockiptableswrapper.MockInterface)
-			nsToDel := "gw-ns-10_0_0_6"
-			gwns := &mocknetnswrapper.MockNetNS{Name: nsToDel}
-			gomock.InOrder(
-				mns.EXPECT().ListNS().Return([]string{nsName, nsToDel}, nil).Times(2),
-				mipt.EXPECT().New().Return(mtable, nil),
-				mtable.EXPECT().List("nat", "POSTROUTING").Return([]string{"-s 10.0.0.7/32 --comment no SNAT for traffic from netns gw-ns-10_0_0_6"}, nil),
-				mtable.EXPECT().Delete(
-					"nat", "POSTROUTING", "-s", "10.0.0.7/32", "-m", "comment", "--comment", "no SNAT for traffic from netns gw-ns-10_0_0_6",
-					"-j", "RETURN").Return(nil),
-				mns.EXPECT().GetNS(nsToDel).Return(gwns, nil),
-				mns.EXPECT().UnmountNS(nsToDel).Return(nil),
-			)
-			res, reconcileErr = r.Reconcile(context.TODO(), req)
-			Expect(reconcileErr).To(BeNil())
-			Expect(res).To(Equal(ctrl.Result{}))
-			gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
-			err := getGatewayStatus(r.Client, gwStatus)
-			Expect(err).To(BeNil())
-			Expect(gwStatus.Spec.ReadyGatewayNamespaces).To(BeEmpty())
-			Expect(gwStatus.Spec.ReadyPeerConfigurations).To(BeEmpty())
-		})
-
-		It("should not do anything if all namespaces are cleaned", func() {
-			mns := r.NetNS.(*mocknetnswrapper.MockInterface)
-			mns.EXPECT().ListNS().Return([]string{nsName}, nil)
-			res, reconcileErr = r.Reconcile(context.TODO(), req)
-			Expect(reconcileErr).To(BeNil())
-			Expect(res).To(Equal(ctrl.Result{}))
-		})
-
-		It("should report any error", func() {
-			mns := r.NetNS.(*mocknetnswrapper.MockInterface)
-			mns.EXPECT().ListNS().Return(nil, fmt.Errorf("failed"))
-			res, reconcileErr = r.Reconcile(context.TODO(), req)
-			Expect(errors.Unwrap(errors.Unwrap(reconcileErr))).To(Equal(fmt.Errorf("failed")))
-			Expect(res).To(Equal(ctrl.Result{}))
+			expectedDump := natBuiltinChains + `
+COMMIT
+`
+			buf := bytes.NewBuffer(nil)
+			Expect(fipt.SaveInto("nat", buf)).NotTo(HaveOccurred())
+			Expect(buf.String()).To(Equal(expectedDump))
 		})
 	})
 })
@@ -765,4 +840,50 @@ func getIPNet(ipCidr string) *net.IPNet {
 func getIPNetWithActualIP(ipCidr string) *net.IPNet {
 	ipNet, _ := netlink.ParseIPNet(ipCidr)
 	return ipNet
+}
+
+func getHostNamespaceIptablesDump(ips ...string) string {
+	res := natBuiltinChains + `
+:` + `EGRESS-GATEWAY-SNAT` + ` - [0:0]
+`
+	for _, ip := range ips {
+		res += `:` + `EGRESS-` + strings.ReplaceAll(ip, ".", "-") + ` - [0:0]
+`
+	}
+	res += `-A ` + string(utiliptables.ChainPostrouting) + ` -m comment --comment kube-egress-gateway no MASQUERADE -j EGRESS-GATEWAY-SNAT
+`
+	for _, ip := range ips {
+		res += `-A ` + `EGRESS-GATEWAY-SNAT` + ` -m comment --comment kube-egress-gateway no sNAT packet from ip ` + ip + ` -j EGRESS-` + strings.ReplaceAll(ip, ".", "-") + `
+`
+	}
+	for _, ip := range ips {
+		res += `-A ` + `EGRESS-` + strings.ReplaceAll(ip, ".", "-") + ` -s ` + ip + `/32 -j ACCEPT
+`
+	}
+	res += `COMMIT
+`
+	return res
+}
+
+func getGatewayNamespaceIptablesDump(marks ...int) string {
+	res := natBuiltinChains + `
+`
+	for _, mark := range marks {
+		res += `:` + `EGRESS-GATEWAY-MARK-` + strconv.Itoa(mark) + ` - [0:0]
+:` + `EGRESS-GATEWAY-SNAT-` + strconv.Itoa(mark) + ` - [0:0]
+`
+	}
+	for _, mark := range marks {
+		res += `-A ` + string(utiliptables.ChainPrerouting) + ` -m comment --comment kube-egress-gateway mark packets from gateway link wg-` + strconv.Itoa(mark) + ` -j EGRESS-GATEWAY-MARK-` + strconv.Itoa(mark) + `
+-A ` + string(utiliptables.ChainPostrouting) + ` -m comment --comment kube-egress-gateway sNAT packets from gateway link wg-` + strconv.Itoa(mark) + ` -j EGRESS-GATEWAY-SNAT-` + strconv.Itoa(mark) + `
+`
+	}
+	for _, mark := range marks {
+		res += `-A ` + `EGRESS-GATEWAY-MARK-` + strconv.Itoa(mark) + ` -i wg-` + strconv.Itoa(mark) + ` -j CONNMARK --set-mark ` + strconv.Itoa(mark) + `
+-A ` + `EGRESS-GATEWAY-SNAT-` + strconv.Itoa(mark) + ` -o host0 -m connmark --mark ` + strconv.Itoa(mark) + ` -j SNAT --to-source 10.0.0.6
+`
+	}
+	res += `COMMIT
+`
+	return res
 }

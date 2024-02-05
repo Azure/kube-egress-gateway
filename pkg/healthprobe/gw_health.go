@@ -80,6 +80,17 @@ func (svr *LBProbeServer) RemoveGateway(gatewayUID string) error {
 	return nil
 }
 
+func (svr *LBProbeServer) GetGateways() []string {
+	var res []string
+	svr.lock.RLock()
+	defer svr.lock.RUnlock()
+
+	for gatewayUID := range svr.activeGateways {
+		res = append(res, gatewayUID)
+	}
+	return res
+}
+
 func (svr *LBProbeServer) serveHTTP(resp http.ResponseWriter, req *http.Request) {
 	reqPath := req.URL.Path
 	subPaths := strings.Split(reqPath, "/")

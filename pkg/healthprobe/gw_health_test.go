@@ -12,7 +12,7 @@ import (
 
 func TestGatewayHealthServer(t *testing.T) {
 	svr := NewLBProbeServer(1000)
-	assert.Empty(t, svr.activeGateways, "active gateway map should be empty at the beginning")
+	assert.Empty(t, svr.GetGateways(), "active gateway map should be empty at the beginning")
 
 	// test unexpected request path
 	testHandler(svr, "", http.StatusBadRequest, t)
@@ -22,17 +22,17 @@ func TestGatewayHealthServer(t *testing.T) {
 	// Add gateway
 	err := svr.AddGateway("123")
 	assert.Nil(t, err, "AddGateway should not report error")
-	assert.Equal(t, 1, len(svr.activeGateways), "active gateway map should have 1 element")
+	assert.Equal(t, 1, len(svr.GetGateways()), "active gateway map should have 1 element")
 	testHandler(svr, "/gw/123", http.StatusOK, t)
 	testHandler(svr, "/gw/456", http.StatusServiceUnavailable, t)
 
 	// Remove gateway
 	err = svr.RemoveGateway("456")
 	assert.Nil(t, err, "RemoveGateway should not report error")
-	assert.Equal(t, 1, len(svr.activeGateways), "active gateway map should have 1 element")
+	assert.Equal(t, 1, len(svr.GetGateways()), "active gateway map should have 1 element")
 	err = svr.RemoveGateway("123")
 	assert.Nil(t, err, "RemoveGateway should not report error")
-	assert.Empty(t, svr.activeGateways, "active gateway map should be empty")
+	assert.Empty(t, svr.GetGateways(), "active gateway map should be empty")
 	testHandler(svr, "/gw/123", http.StatusServiceUnavailable, t)
 	testHandler(svr, "/gw/456", http.StatusServiceUnavailable, t)
 
@@ -43,7 +43,7 @@ func TestGatewayHealthServer(t *testing.T) {
 	assert.Nil(t, err, "AddGateway should not report error")
 	err = svr.AddGateway("ghi")
 	assert.Nil(t, err, "AddGateway should not report error")
-	assert.Equal(t, 3, len(svr.activeGateways), "active gateway map should have 3 elements")
+	assert.Equal(t, 3, len(svr.GetGateways()), "active gateway map should have 3 elements")
 	testHandler(svr, "/gw/def", http.StatusOK, t)
 	testHandler(svr, "/gw/xyz", http.StatusServiceUnavailable, t)
 
@@ -52,7 +52,7 @@ func TestGatewayHealthServer(t *testing.T) {
 	assert.Nil(t, err, "RemoveGateway should not report error")
 	err = svr.RemoveGateway("abc")
 	assert.Nil(t, err, "RemoveGateway should not report error")
-	assert.Equal(t, 1, len(svr.activeGateways), "active gateway map should have 1 element")
+	assert.Equal(t, 1, len(svr.GetGateways()), "active gateway map should have 1 element")
 	testHandler(svr, "/gw/abc", http.StatusServiceUnavailable, t)
 	testHandler(svr, "/gw/ghi", http.StatusOK, t)
 }

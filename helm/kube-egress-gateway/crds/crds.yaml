@@ -348,12 +348,12 @@ spec:
           spec:
             description: GatewayStatusSpec defines the desired state of GatewayStatus
             properties:
-              readyGatewayNamespaces:
-                description: List of ready gateway namespaces
+              readyGatewayConfigurations:
+                description: List of ready gateway configurations
                 items:
                   properties:
-                    netnsName:
-                      description: Network namespace name
+                    interfaceName:
+                      description: Network interface name
                       type: string
                     staticGatewayConfiguration:
                       description: StaticGatewayConfiguration in <namespace>/<name>
@@ -365,8 +365,8 @@ spec:
                 description: List of ready peer configurations
                 items:
                   properties:
-                    netnsName:
-                      description: Network namespace name
+                    interfaceName:
+                      description: Network interface name
                       type: string
                     podEndpoint:
                       description: PodEndpoint in <namespace>/<name> pattern
