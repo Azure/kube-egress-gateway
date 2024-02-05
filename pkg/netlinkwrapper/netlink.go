@@ -9,6 +9,8 @@ type Interface interface {
 	LinkByName(name string) (netlink.Link, error)
 	// LinkAdd adds a new link device
 	LinkAdd(link netlink.Link) error
+	// LinkList lists all link devices
+	LinkList() ([]netlink.Link, error)
 	// LinkDel deletes link device
 	LinkDel(link netlink.Link) error
 	// LinkSetUp enables the link device
@@ -51,6 +53,10 @@ func (*nl) LinkByName(name string) (netlink.Link, error) {
 
 func (*nl) LinkAdd(link netlink.Link) error {
 	return netlink.LinkAdd(link)
+}
+
+func (*nl) LinkList() ([]netlink.Link, error) {
+	return netlink.LinkList()
 }
 
 func (*nl) LinkDel(link netlink.Link) error {

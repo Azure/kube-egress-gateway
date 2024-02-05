@@ -10,18 +10,18 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-type GatewayNamespace struct {
+type GatewayConfiguration struct {
 	// StaticGatewayConfiguration in <namespace>/<name> pattern
 	StaticGatewayConfiguration string `json:"staticGatewayConfiguration,omitempty"`
-	// Network namespace name
-	NetnsName string `json:"netnsName,omitempty"`
+	// Network interface name
+	InterfaceName string `json:"interfaceName,omitempty"`
 }
 
 type PeerConfiguration struct {
 	// PodEndpoint in <namespace>/<name> pattern
 	PodEndpoint string `json:"podEndpoint,omitempty"`
-	// Network namespace name
-	NetnsName string `json:"netnsName,omitempty"`
+	// Network interface name
+	InterfaceName string `json:"interfaceName,omitempty"`
 	// Public Key
 	PublicKey string `json:"publicKey,omitempty"`
 }
@@ -31,8 +31,8 @@ type GatewayStatusSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// List of ready gateway namespaces
-	ReadyGatewayNamespaces []GatewayNamespace `json:"readyGatewayNamespaces,omitempty"`
+	// List of ready gateway configurations
+	ReadyGatewayConfigurations []GatewayConfiguration `json:"readyGatewayConfigurations,omitempty"`
 	// List of ready peer configurations
 	ReadyPeerConfigurations []PeerConfiguration `json:"readyPeerConfigurations,omitempty"`
 }

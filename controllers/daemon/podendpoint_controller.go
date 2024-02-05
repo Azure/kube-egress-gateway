@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
@@ -94,7 +95,7 @@ func (r *PodEndpointReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// Reconcile wireguard peer
-	return r.reconcile(ctx, getGatewayNamespaceName(gwConfig), podEndpoint)
+	return r.reconcile(ctx, gwConfig, podEndpoint)
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -111,15 +112,16 @@ func (r *PodEndpointReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *PodEndpointReconciler) reconcile(
 	ctx context.Context,
-	gwNamespaceName string,
+	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
 	podEndpoint *egressgatewayv1alpha1.PodEndpoint,
 ) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 	log.Info("Reconciling PodEndpoint")
 
-	gwns, err := r.NetNS.GetNS(gwNamespaceName)
+	nsName := consts.GatewayNetnsName
+	gwns, err := r.NetNS.GetNS(nsName)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to get gateway network namespace %s: %w", gwNamespaceName, err)
+		return ctrl.Result{}, fmt.Errorf("failed to get gateway network namespace %s: %w", nsName, err)
 	}
 	defer gwns.Close()
 
@@ -152,11 +154,11 @@ func (r *PodEndpointReconciler) reconcile(
 			},
 		}
 
-		if err := wgClient.ConfigureDevice(consts.WireguardLinkName, wgConfig); err != nil {
+		if err := wgClient.ConfigureDevice(getWireguardInterfaceName(gwConfig), wgConfig); err != nil {
 			return fmt.Errorf("failed to add peer to wireguard device: %w", err)
 		}
 
-		if err := r.addWireguardPeerRoutes(podEndpoint); err != nil {
+		if err := r.addWireguardPeerRoutes(gwConfig, podEndpoint); err != nil {
 			return fmt.Errorf("failed to add pod route: %w", err)
 		}
 		return nil
@@ -166,9 +168,9 @@ func (r *PodEndpointReconciler) reconcile(
 
 	peerConfigs := []egressgatewayv1alpha1.PeerConfiguration{
 		{
-			PodEndpoint: fmt.Sprintf("%s/%s", podEndpoint.Namespace, podEndpoint.Name),
-			NetnsName:   gwNamespaceName,
-			PublicKey:   podEndpoint.Spec.PodPublicKey,
+			PodEndpoint:   fmt.Sprintf("%s/%s", podEndpoint.Namespace, podEndpoint.Name),
+			InterfaceName: getWireguardInterfaceName(gwConfig),
+			PublicKey:     podEndpoint.Spec.PodPublicKey,
 		},
 	}
 	if err := r.updateGatewayNodeStatus(ctx, peerConfigs, true /* add */); err != nil {
@@ -194,28 +196,29 @@ func (r *PodEndpointReconciler) cleanUp(ctx context.Context) error {
 	gwConfigMap := make(map[string]string)
 	for _, gwConfig := range gwConfigList.Items {
 		gwConfig := gwConfig
-		if applyToNode(&gwConfig) {
-			gwConfigMap[fmt.Sprintf("%s/%s", gwConfig.Namespace, gwConfig.Name)] = getGatewayNamespaceName(&gwConfig)
+		// skip deleting gwConfig, as the wglink will be deleted in staticGatewayConfiguration controller
+		if applyToNode(&gwConfig) && gwConfig.ObjectMeta.DeletionTimestamp.IsZero() {
+			gwConfigMap[strings.ToLower(fmt.Sprintf("%s/%s", gwConfig.Namespace, gwConfig.Name))] = getWireguardInterfaceName(&gwConfig)
 		}
 	}
 
 	// map: gw-namespace-name -> set of peer public keys
-	peerMap := make(map[string]map[string]bool)
+	peerMap := make(map[string]map[string]struct{})
 	for _, podEndpoint := range podEndpointList.Items {
-		if nsName, ok := gwConfigMap[fmt.Sprintf("%s/%s", podEndpoint.Namespace, podEndpoint.Spec.StaticGatewayConfiguration)]; ok {
-			if _, exists := peerMap[nsName]; !exists {
-				peerMap[nsName] = make(map[string]bool)
+		if wglinkName, ok := gwConfigMap[strings.ToLower(fmt.Sprintf("%s/%s", podEndpoint.Namespace, podEndpoint.Spec.StaticGatewayConfiguration))]; ok {
+			if _, exists := peerMap[wglinkName]; !exists {
+				peerMap[wglinkName] = make(map[string]struct{})
 			}
-			peerMap[nsName][podEndpoint.Spec.PodPublicKey] = true
+			peerMap[wglinkName][podEndpoint.Spec.PodPublicKey] = struct{}{}
 		}
 	}
 
 	var peersToDelete []egressgatewayv1alpha1.PeerConfiguration
-	for _, ns := range gwConfigMap {
-		peers, err := r.cleanUpNetNS(ctx, ns, peerMap)
+	for _, wglinkName := range gwConfigMap {
+		peers, err := r.cleanUpWgLink(ctx, wglinkName, peerMap)
 		if err != nil {
 			// do not block cleaning up rest namespaces
-			log.Error(err, fmt.Sprintf("failed to clean up peers in namespace %s", ns))
+			log.Error(err, fmt.Sprintf("failed to clean up peers for wgLink %s", wglinkName))
 		}
 		peersToDelete = append(peersToDelete, peers...)
 	}
@@ -227,18 +230,18 @@ func (r *PodEndpointReconciler) cleanUp(ctx context.Context) error {
 	return nil
 }
 
-func (r *PodEndpointReconciler) cleanUpNetNS(
+func (r *PodEndpointReconciler) cleanUpWgLink(
 	ctx context.Context,
-	nsName string,
-	peerMap map[string]map[string]bool,
+	wglinkName string,
+	peerMap map[string]map[string]struct{},
 ) ([]egressgatewayv1alpha1.PeerConfiguration, error) {
 	log := log.FromContext(ctx)
 
 	peersToDelete := make([]egressgatewayv1alpha1.PeerConfiguration, 0)
 
-	gwns, err := r.NetNS.GetNS(nsName)
+	gwns, err := r.NetNS.GetNS(consts.GatewayNetnsName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get gateway network namespace %s: %w", nsName, err)
+		return nil, fmt.Errorf("failed to get gateway network namespace %s: %w", consts.GatewayNetnsName, err)
 	}
 	defer gwns.Close()
 
@@ -249,7 +252,7 @@ func (r *PodEndpointReconciler) cleanUpNetNS(
 		}
 		defer func() { _ = wgClient.Close() }()
 
-		device, err := wgClient.Device(consts.WireguardLinkName)
+		device, err := wgClient.Device(wglinkName)
 		if err != nil {
 			return fmt.Errorf("failed to get wireguard link configuration: %w", err)
 		}
@@ -257,7 +260,7 @@ func (r *PodEndpointReconciler) cleanUpNetNS(
 		wgConfig := wgtypes.Config{}
 		podIPToDel := make(map[string]bool)
 		for i := range device.Peers {
-			if _, ok := peerMap[nsName][device.Peers[i].PublicKey.String()]; !ok {
+			if _, ok := peerMap[wglinkName][device.Peers[i].PublicKey.String()]; !ok {
 				wgConfig.Peers = append(wgConfig.Peers, wgtypes.PeerConfig{
 					PublicKey: device.Peers[i].PublicKey,
 					Remove:    true,
@@ -265,16 +268,16 @@ func (r *PodEndpointReconciler) cleanUpNetNS(
 				for _, ipNet := range device.Peers[i].AllowedIPs {
 					podIPToDel[ipNet.IP.String()] = true
 				}
-				log.Info(fmt.Sprintf("Removing peer %s from gw namespace %s", device.Peers[i].PublicKey.String(), nsName))
+				log.Info(fmt.Sprintf("Removing peer %s from wgLink %s", device.Peers[i].PublicKey.String(), wglinkName))
 			}
 		}
 		if len(wgConfig.Peers) > 0 {
-			if err := r.deleteWireguardPeerRoutes(podIPToDel); err != nil {
-				return fmt.Errorf("failed to delete pod route: %w", err)
+			if err := r.deleteWireguardPeerRoutes(wglinkName, podIPToDel); err != nil {
+				return fmt.Errorf("failed to delete pod route on wglink %s: %w", wglinkName, err)
 			}
 
-			if err := wgClient.ConfigureDevice(consts.WireguardLinkName, wgConfig); err != nil {
-				return fmt.Errorf("failed to remove peers from wireguard device: %w", err)
+			if err := wgClient.ConfigureDevice(wglinkName, wgConfig); err != nil {
+				return fmt.Errorf("failed to remove peers from wireguard device %s: %w", wglinkName, err)
 			}
 
 			for _, peer := range wgConfig.Peers {
@@ -289,11 +292,12 @@ func (r *PodEndpointReconciler) cleanUpNetNS(
 }
 
 func (r *PodEndpointReconciler) addWireguardPeerRoutes(
+	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
 	podEndpoint *egressgatewayv1alpha1.PodEndpoint,
 ) error {
-	wgLink, err := r.Netlink.LinkByName(consts.WireguardLinkName)
+	wgLink, err := r.Netlink.LinkByName(getWireguardInterfaceName(gwConfig))
 	if err != nil {
-		return fmt.Errorf("failed to retrive wireguard device: %w", err)
+		return fmt.Errorf("failed to retrieve wireguard device: %w", err)
 	}
 
 	_, dst, err := net.ParseCIDR(podEndpoint.Spec.PodIpAddress)
@@ -314,16 +318,17 @@ func (r *PodEndpointReconciler) addWireguardPeerRoutes(
 }
 
 func (r *PodEndpointReconciler) deleteWireguardPeerRoutes(
+	wglinkName string,
 	podIPToDel map[string]bool,
 ) error {
-	wgLink, err := r.Netlink.LinkByName(consts.WireguardLinkName)
+	wgLink, err := r.Netlink.LinkByName(wglinkName)
 	if err != nil {
-		return fmt.Errorf("failed to retrive wireguard device wg0: %w", err)
+		return fmt.Errorf("failed to get wglink %s: %w", wglinkName, err)
 	}
 
 	routes, err := r.Netlink.RouteList(wgLink, netlink.FAMILY_ALL)
 	if err != nil {
-		return fmt.Errorf("failed to list routes: %w", err)
+		return fmt.Errorf("failed to list routes on wglink %s: %w", wglinkName, err)
 	}
 
 	for _, route := range routes {

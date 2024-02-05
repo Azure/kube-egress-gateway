@@ -135,6 +135,21 @@ spec:
       labels:
         kube-egress-gateway-control-plane: daemon-manager
     spec:
+      initContainers:
+      - command: ["/bin/bash", "-c"]
+        args:
+        - |
+          apt-get update
+          apt-get install iproute2 -y
+          ip netns exec ns-static-egress-gateway ip a || ip netns add ns-static-egress-gateway
+        image: debian:latest
+        name: ip-netns-add
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - mountPath: /var/run/netns
+          name: hostpath-var
+          mountPropagation: Bidirectional
       containers:
       - args:
         - --metrics-bind-port={{ .Values.gatewayDaemonManager.metricsBindPort }}
@@ -175,16 +190,17 @@ spec:
             cpu: 10m
             memory: 64Mi
         securityContext:
-          privileged: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+            add: ["NET_ADMIN", "NET_RAW", "SYS_ADMIN"]
         volumeMounts:
-        - mountPath: /run/netns
-          mountPropagation: Bidirectional
-          name: hostpath-run
         - mountPath: /var/run/netns
-          mountPropagation: Bidirectional
+          mountPropagation: HostToContainer
           name: hostpath-var
+        - mountPath: /run/xtables.lock
+          name: iptableslock
       hostNetwork: true
-      hostPID: true
       nodeSelector:
         kubeegressgateway.azure.com/mode: "true"
       serviceAccountName: kube-egress-gateway-daemon-manager
@@ -196,9 +212,10 @@ spec:
         value: "true"
       volumes:
       - hostPath:
-          path: /run/netns
-        name: hostpath-run
-      - hostPath:
           path: /var/run/netns
         name: hostpath-var
+      - hostPath:
+          path: /run/xtables.lock
+          type: FileOrCreate
+        name: iptableslock
 {{- end }}

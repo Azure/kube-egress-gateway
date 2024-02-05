@@ -16,16 +16,6 @@ spec:
       labels:
         kube-egress-gateway-control-plane: daemon-manager
     spec:
-      # securityContext:
-      #   runAsNonRoot: true
-        # TODO(user): For common cases that do not require escalating privileges
-        # it is recommended to ensure that all your Pods/Containers are restrictive.
-        # More info: https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted
-        # Please uncomment the following code if your project does NOT have to work on old Kubernetes
-        # versions < 1.19 or on vendors versions which do NOT support this field by default (i.e. Openshift < 4.11 ).
-        # seccompProfile:
-        #   type: RuntimeDefault
-      hostPID: true
       hostNetwork: true
       nodeSelector:
         kubeegressgateway.azure.com/mode: "true"
@@ -34,6 +24,21 @@ spec:
         operator: "Equal"
         value: "true"
         effect: "NoSchedule"
+      initContainers:
+      - command: ["/bin/bash", "-c"]
+        args:
+        - |
+          apt-get update
+          apt-get install iproute2 -y
+          ip netns exec ns-static-egress-gateway ip a || ip netns add ns-static-egress-gateway
+        image: debian:latest
+        name: ip-netns-add
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - mountPath: /var/run/netns
+          name: hostpath-var
+          mountPropagation: Bidirectional
       containers:
       - command:
         - /kube-egress-gateway-daemon
@@ -43,14 +48,16 @@ spec:
         image: daemon:latest
         name: daemon
         securityContext:
-          privileged: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+            add: ["NET_ADMIN", "NET_RAW", "SYS_ADMIN"]
         volumeMounts:
-        - mountPath: /run/netns
-          name: hostpath-run
-          mountPropagation: Bidirectional
         - mountPath: /var/run/netns
           name: hostpath-var
-          mountPropagation: Bidirectional
+          mountPropagation: HostToContainer
+        - mountPath: /run/xtables.lock
+          name: iptableslock
         env:
         - name: MY_NODE_NAME
           valueFrom:
@@ -84,9 +91,10 @@ spec:
       serviceAccountName: daemon-manager
       terminationGracePeriodSeconds: 10
       volumes:
-        - name: hostpath-run
-          hostPath:
-              path: /run/netns
-        - name: hostpath-var
-          hostPath:
-              path: /var/run/netns
+      - name: hostpath-var
+        hostPath:
+          path: /var/run/netns
+      - hostPath:
+          path: /run/xtables.lock
+          type: FileOrCreate
+        name: iptableslock
