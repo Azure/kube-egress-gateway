@@ -1,14 +1,19 @@
-name: Build
+name: Build And Publish to MCR
 
 # Controls when the workflow will run
 on:
-  pull_request:
-    branches:
-      - 'main'
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  # `public` indicates images to MCR wil be publicly available, and will be removed in the final MCR images
+  REGISTRY_REPO: public/aks
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on:
+      labels: [self-hosted, "1ES.Pool=1es-aks-kube-egress-gateway-pool-ubuntu"]
     permissions:
       packages: write
       actions: read
@@ -25,13 +30,17 @@ jobs:
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v3
+      - name: Login the ACR
+        run: |
+          az login --identity
+          az acr login -n ${{ secrets.AZURE_REGISTRY }}
       - name: Docker meta
         id: daemon # you'll use this in the next step
         uses: docker/metadata-action@v5
         with:
           # list of Docker images to use as base name for tags
           images: |
-            ghcr.io/azure/kube-egress-gateway-daemon
+            ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO }}/kube-egress-gateway-daemon
           tags: |
             type=semver,pattern={{raw}}
           bake-target: daemon-tags
@@ -41,7 +50,7 @@ jobs:
         with:
           # list of Docker images to use as base name for tags
           images: |
-            ghcr.io/azure/kube-egress-gateway-controller
+            ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO }}/kube-egress-gateway-controller
           tags: |
             type=semver,pattern={{raw}}
           bake-target: controller-tags
@@ -51,7 +60,7 @@ jobs:
         with:
           # list of Docker images to use as base name for tags
           images: |
-            ghcr.io/azure/kube-egress-gateway-cnimanager
+            ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO }}/kube-egress-gateway-cnimanager
           tags: |
             type=semver,pattern={{raw}}
           bake-target: cnimanager-tags
@@ -61,7 +70,7 @@ jobs:
         with:
           # list of Docker images to use as base name for tags
           images: |
-            ghcr.io/azure/kube-egress-gateway-cni
+            ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO }}/kube-egress-gateway-cni
           tags: |
             type=semver,pattern={{raw}}
           bake-target: cni-tags
@@ -71,19 +80,19 @@ jobs:
         with:
           # list of Docker images to use as base name for tags
           images: |
-            ghcr.io/azure/kube-egress-gateway-cni-ipam
+            ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO }}/kube-egress-gateway-cni-ipam
           tags: |
             type=semver,pattern={{raw}}
           bake-target: cni-ipam-tags
-      - name: Set platform env for pr build
+      - name: Set platform env for release
         run: |
-          echo "TARGET_PLATFORMS=linux/amd64" >> $GITHUB_ENV
+          echo "TARGET_PLATFORMS=linux/amd64,linux/arm64,linux/arm" >> $GITHUB_ENV
       - name: Build and push
         uses: docker/bake-action@v4
         env:
           PLATFORMS: ${{env.TARGET_PLATFORMS}}
         with:
-          push: false
+          push: true
           files: |
             docker/docker-bake.hcl
             ${{ steps.daemon.outputs.bake-file }}
