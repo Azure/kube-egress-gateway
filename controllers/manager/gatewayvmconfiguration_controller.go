@@ -82,21 +82,18 @@ func (r *GatewayVMConfigurationReconciler) Reconcile(ctx context.Context, req ct
 			return ctrl.Result{}, err
 		}
 		for _, vmConfig := range vmConfigList.Items {
-			if vmConfig.Spec.GatewayNodepoolName != "" {
-				if v, ok := node.Labels[consts.AKSNodepoolNameLabel]; ok {
-					if strings.EqualFold(v, vmConfig.Spec.GatewayNodepoolName) {
-						if _, err := r.reconcile(ctx, &vmConfig); err != nil {
-							log.Error(err, "failed to reconcile GatewayVMConfiguration")
-							return ctrl.Result{}, err
-						}
-					}
-				} else {
-					log.Info(fmt.Sprintf("Node %s does not %s label, requeue this vmConfig", req.Name, consts.AKSNodepoolNameLabel))
-					if _, err := r.reconcile(ctx, &vmConfig); err != nil {
-						log.Error(err, "failed to reconcile GatewayVMConfiguration")
-						return ctrl.Result{}, err
-					}
+			// skip reconciling when
+			// 1. node has agentpool label
+			// 2. vmConfig has GatewayNodepoolName and node agentpool label does not match
+			if v, ok := node.Labels[consts.AKSNodepoolNameLabel]; ok {
+				if npName := vmConfig.Spec.GatewayNodepoolName; npName != "" && !strings.EqualFold(v, npName) {
+					continue
 				}
+			}
+			log.Info(fmt.Sprintf("reconcile vmConfig (%s/%s) upon node (%s) event", vmConfig.GetNamespace(), vmConfig.GetName(), req.Name))
+			if _, err := r.reconcile(ctx, &vmConfig); err != nil {
+				log.Error(err, "failed to reconcile GatewayVMConfiguration")
+				return ctrl.Result{}, err
 			}
 		}
 		return ctrl.Result{}, nil
@@ -112,14 +109,26 @@ func (r *GatewayVMConfigurationReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, err
 	}
 
+	gwConfig := &egressgatewayv1alpha1.StaticGatewayConfiguration{}
+	if err := r.Get(ctx, req.NamespacedName, gwConfig); err != nil {
+		log.Error(err, "failed to fetch StaticGatewayConfiguration instance")
+		return ctrl.Result{}, err
+	}
+
 	if !vmConfig.ObjectMeta.DeletionTimestamp.IsZero() {
 		// Clean up gatewayVMConfiguration
-		return r.ensureDeleted(ctx, vmConfig)
+		res, err := r.ensureDeleted(ctx, vmConfig)
+		if err != nil {
+			r.Recorder.Event(gwConfig, corev1.EventTypeWarning, "EnsureDeleteGatewayVMConfigurationError", err.Error())
+		}
+		return res, err
 	}
 
 	res, err := r.reconcile(ctx, vmConfig)
 	if err != nil {
-		r.Recorder.Event(vmConfig, corev1.EventTypeWarning, "ReconcileError", err.Error())
+		r.Recorder.Event(gwConfig, corev1.EventTypeWarning, "ReconcileGatewayVMConfigurationError", err.Error())
+	} else {
+		r.Recorder.Event(gwConfig, corev1.EventTypeNormal, "ReconcileGatewayVMConfigurationSuccess", "GatewayVMConfiguration reconciled")
 	}
 	return res, err
 }
@@ -184,14 +193,16 @@ func (r *GatewayVMConfigurationReconciler) reconcile(
 	vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
 ) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
+	log.Info(fmt.Sprintf("Reconciling GatewayVMConfiguration %s/%s", vmConfig.Namespace, vmConfig.Name))
+
 	if !controllerutil.ContainsFinalizer(vmConfig, consts.VMConfigFinalizerName) {
 		log.Info("Adding finalizer")
 		controllerutil.AddFinalizer(vmConfig, consts.VMConfigFinalizerName)
 		err := r.Update(ctx, vmConfig)
 		if err != nil {
 			log.Error(err, "failed to add finalizer")
+			return ctrl.Result{}, err
 		}
-		return ctrl.Result{}, err
 	}
 
 	existing := &egressgatewayv1alpha1.GatewayVMConfiguration{}
@@ -238,11 +249,6 @@ func (r *GatewayVMConfigurationReconciler) reconcile(
 		}
 	}
 
-	prefix := "nil"
-	if vmConfig.Status != nil && vmConfig.Status.EgressIpPrefix != "" {
-		prefix = vmConfig.Status.EgressIpPrefix
-	}
-	r.Recorder.Eventf(vmConfig, corev1.EventTypeNormal, "Reconciled", "GatewayVMConfiguration provisioned with egress prefix %s", prefix)
 	log.Info("GatewayVMConfiguration reconciled")
 	return ctrl.Result{}, nil
 }
@@ -322,7 +328,7 @@ func (r *GatewayVMConfigurationReconciler) getGatewayVMSS(
 }
 
 func managedSubresourceName(vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration) string {
-	return vmConfig.GetNamespace() + "_" + vmConfig.GetName()
+	return consts.ManagedResourcePrefix + string(vmConfig.GetUID())
 }
 
 func isErrorNotFound(err error) bool {
@@ -643,7 +649,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSNetworkInterface(
 		needUpdate = true
 	}
 
-	changed, err := r.reconcileLbBackendPool(lbBackendpoolID, primaryNic, len(primaryNic.Properties.IPConfigurations) > 1 /* needBackendPool */)
+	changed, err := r.reconcileLbBackendPool(lbBackendpoolID, primaryNic)
 	if err != nil {
 		return false, err
 	}
@@ -655,10 +661,17 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSNetworkInterface(
 func (r *GatewayVMConfigurationReconciler) reconcileLbBackendPool(
 	lbBackendpoolID string,
 	primaryNic *compute.VirtualMachineScaleSetNetworkConfiguration,
-	needBackendPool bool,
 ) (needUpdate bool, err error) {
 	if primaryNic == nil {
 		return false, fmt.Errorf("vmss(vm) primary network interface not found")
+	}
+
+	needBackendPool := false
+	for _, ipConfig := range primaryNic.Properties.IPConfigurations {
+		if strings.HasPrefix(to.Val(ipConfig.Name), consts.ManagedResourcePrefix) {
+			needBackendPool = true
+			break
+		}
 	}
 
 	for _, ipConfig := range primaryNic.Properties.IPConfigurations {

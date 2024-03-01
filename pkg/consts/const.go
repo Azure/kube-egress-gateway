@@ -15,6 +15,9 @@ const (
 	// Default gateway LoadBalancer name
 	DefaultGatewayLBName = "kubeegressgateway-ilb"
 
+	// Prefix for managed Azure resources (public IPPrefix, VMSS ipConfig, etc)
+	ManagedResourcePrefix = "egressgateway-"
+
 	// Key name in the wireugard private key secret
 	WireguardPrivateKeyName = "PrivateKey"
 

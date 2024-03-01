@@ -46,8 +46,7 @@ type GatewayVMConfigurationStatus struct {
 
 // GatewayVMProfile provides details about gateway VM side configuration.
 type GatewayVMProfile struct {
-	NodeName string `json:"nodeName,omitempty"`
-	// todo: remove PrimaryIP once we change the routing logic to have everything configured in host network
+	NodeName    string `json:"nodeName,omitempty"`
 	PrimaryIP   string `json:"primaryIP,omitempty"`
 	SecondaryIP string `json:"secondaryIP,omitempty"`
 }

@@ -68,6 +68,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			cl            client.Client
 			reconcileErr  error
 			getErr        error
+			gwConfig      *egressgatewayv1alpha1.StaticGatewayConfiguration
 			lbConfig      *egressgatewayv1alpha1.GatewayLBConfiguration
 			foundLBConfig = &egressgatewayv1alpha1.GatewayLBConfiguration{}
 			foundVMConfig = &egressgatewayv1alpha1.GatewayVMConfiguration{}
@@ -76,6 +77,12 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 		BeforeEach(func() {
 			req = reconcile.Request{
 				NamespacedName: types.NamespacedName{
+					Name:      testName,
+					Namespace: testNamespace,
+				},
+			}
+			gwConfig = &egressgatewayv1alpha1.StaticGatewayConfiguration{
+				ObjectMeta: metav1.ObjectMeta{
 					Name:      testName,
 					Namespace: testNamespace,
 				},
@@ -118,26 +125,6 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			})
 		})
 
-		When("lbConfig is newly created", func() {
-			BeforeEach(func() {
-				az = getMockAzureManager(gomock.NewController(GinkgoT()))
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(lbConfig).Build()
-				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
-				res, reconcileErr = r.Reconcile(context.TODO(), req)
-				getErr = getResource(cl, foundLBConfig)
-			})
-
-			It("should not error", func() {
-				Expect(reconcileErr).To(BeNil())
-				Expect(getErr).To(BeNil())
-				Expect(res).To(Equal(ctrl.Result{}))
-			})
-
-			It("should add finalizer", func() {
-				Expect(controllerutil.ContainsFinalizer(foundLBConfig, consts.LBConfigFinalizerName)).To(BeTrue())
-			})
-		})
-
 		Context("TestGetGatewayVMSS", func() {
 			BeforeEach(func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
@@ -155,7 +142,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			It("should return error when vmss in list does not have expected tag", func() {
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{
-					&compute.VirtualMachineScaleSet{ID: to.Ptr("test")},
+					{ID: to.Ptr("test")},
 				}, nil)
 				vmss, err := r.getGatewayVMSS(context.Background(), lbConfig)
 				Expect(vmss).To(BeNil())
@@ -166,7 +153,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				vmss := &compute.VirtualMachineScaleSet{Tags: map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")}}
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{
-					&compute.VirtualMachineScaleSet{ID: to.Ptr("dummy")},
+					{ID: to.Ptr("dummy")},
 					vmss,
 				}, nil)
 				foundVMSS, err := r.getGatewayVMSS(context.Background(), lbConfig)
@@ -194,11 +181,11 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			})
 		})
 
-		When("lbConfig has finalizer and GatewayNodepoolName", func() {
+		When("lbConfig has GatewayNodepoolName", func() {
 			BeforeEach(func() {
 				controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(lbConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(gwConfig, lbConfig).Build()
 				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 			})
 
@@ -207,7 +194,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(nil, fmt.Errorf("lb not found"))
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(Equal(fmt.Errorf("lb not found")))
-				assertEqualEvents([]string{"Warning ReconcileError lb not found"}, recorder.Events)
+				assertEqualEvents([]string{"Warning ReconcileGatewayLBConfigurationError lb not found"}, recorder.Events)
 			})
 
 			It("should report error if gateway VMSS is not found", func() {
@@ -217,7 +204,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return(nil, fmt.Errorf("failed to list vmss"))
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(Equal(fmt.Errorf("failed to list vmss")))
-				assertEqualEvents([]string{"Warning ReconcileError failed to list vmss"}, recorder.Events)
+				assertEqualEvents([]string{"Warning ReconcileGatewayLBConfigurationError failed to list vmss"}, recorder.Events)
 			})
 
 			It("should report error if gateway VMSS does not have UID", func() {
@@ -228,7 +215,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(Equal(fmt.Errorf("gateway vmss does not have UID")))
-				assertEqualEvents([]string{"Warning ReconcileError gateway vmss does not have UID"}, recorder.Events)
+				assertEqualEvents([]string{"Warning ReconcileGatewayLBConfigurationError gateway vmss does not have UID"}, recorder.Events)
 			})
 
 			It("should report error if lb property is empty", func() {
@@ -242,7 +229,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(Equal(fmt.Errorf("lb property is empty")))
-				assertEqualEvents([]string{"Warning ReconcileError lb property is empty"}, recorder.Events)
+				assertEqualEvents([]string{"Warning ReconcileGatewayLBConfigurationError lb property is empty"}, recorder.Events)
 			})
 
 			Context("test frontend search", func() {
@@ -270,14 +257,14 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				It("should report error if lb frontend does not properties", func() {
 					_, reconcileErr = r.Reconcile(context.TODO(), req)
 					Expect(reconcileErr).To(Equal(frontendNotFoundErr))
-					assertEqualEvents([]string{"Warning ReconcileError " + frontendNotFoundErr.Error()}, recorder.Events)
+					assertEqualEvents([]string{"Warning ReconcileGatewayLBConfigurationError " + frontendNotFoundErr.Error()}, recorder.Events)
 				})
 
 				It("should report error if lb frontend does not have ip version", func() {
 					lb.Properties.FrontendIPConfigurations[0].Properties = &network.FrontendIPConfigurationPropertiesFormat{}
 					_, reconcileErr = r.Reconcile(context.TODO(), req)
 					Expect(reconcileErr).To(Equal(frontendNotFoundErr))
-					assertEqualEvents([]string{"Warning ReconcileError " + frontendNotFoundErr.Error()}, recorder.Events)
+					assertEqualEvents([]string{"Warning ReconcileGatewayLBConfigurationError " + frontendNotFoundErr.Error()}, recorder.Events)
 				})
 
 				It("should report error if lb frontend does not have ipv4", func() {
@@ -286,7 +273,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					}
 					_, reconcileErr = r.Reconcile(context.TODO(), req)
 					Expect(reconcileErr).To(Equal(frontendNotFoundErr))
-					assertEqualEvents([]string{"Warning ReconcileError " + frontendNotFoundErr.Error()}, recorder.Events)
+					assertEqualEvents([]string{"Warning ReconcileGatewayLBConfigurationError " + frontendNotFoundErr.Error()}, recorder.Events)
 				})
 
 				It("should report error if lb frontend does not have private ip", func() {
@@ -295,7 +282,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					}
 					_, reconcileErr = r.Reconcile(context.TODO(), req)
 					Expect(reconcileErr).To(Equal(frontendNotFoundErr))
-					assertEqualEvents([]string{"Warning ReconcileError " + frontendNotFoundErr.Error()}, recorder.Events)
+					assertEqualEvents([]string{"Warning ReconcileGatewayLBConfigurationError " + frontendNotFoundErr.Error()}, recorder.Events)
 				})
 			})
 
@@ -325,7 +312,10 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(BeNil())
-				assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and egress prefix()"}, recorder.Events)
+				assertEqualEvents([]string{"Normal ReconcileGatewayLBConfigurationSuccess GatewayLBConfiguration reconciled"}, recorder.Events)
+
+				Expect(getResource(cl, foundLBConfig)).ShouldNot(HaveOccurred())
+				Expect(controllerutil.ContainsFinalizer(foundLBConfig, consts.LBConfigFinalizerName)).To(BeTrue())
 			})
 
 			Context("reconcile lbRule, lbProbe and vmConfig", func() {
@@ -355,7 +345,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					Expect(getErr).To(BeNil())
 					Expect(foundLBConfig.Status.FrontendIp).To(Equal("10.0.0.4"))
 					Expect(foundLBConfig.Status.ServerPort).To(Equal(int32(6000)))
-					assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and egress prefix()"}, recorder.Events)
+					assertEqualEvents([]string{"Normal ReconcileGatewayLBConfigurationSuccess GatewayLBConfiguration reconciled"}, recorder.Events)
 				})
 
 				It("should not update LB when lb rule and probe are expected", func() {
@@ -367,7 +357,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					Expect(res).To(Equal(ctrl.Result{}))
 					Expect(foundLBConfig.Status.FrontendIp).To(Equal("10.0.0.4"))
 					Expect(foundLBConfig.Status.ServerPort).To(Equal(int32(6000)))
-					assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and egress prefix()"}, recorder.Events)
+					assertEqualEvents([]string{"Normal ReconcileGatewayLBConfigurationSuccess GatewayLBConfiguration reconciled"}, recorder.Events)
 				})
 
 				It("should drop incorrect lbRule and create new one", func() {
@@ -387,7 +377,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					Expect(getErr).To(BeNil())
 					Expect(foundLBConfig.Status.FrontendIp).To(Equal("10.0.0.4"))
 					Expect(foundLBConfig.Status.ServerPort).To(Equal(int32(6000)))
-					assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and egress prefix()"}, recorder.Events)
+					assertEqualEvents([]string{"Normal ReconcileGatewayLBConfigurationSuccess GatewayLBConfiguration reconciled"}, recorder.Events)
 				})
 
 				It("should drop incorrect lbProbe and create new one", func() {
@@ -424,7 +414,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 						Expect(getErr).To(BeNil())
 						Expect(foundLBConfig.Status.FrontendIp).To(Equal("10.0.0.4"))
 						Expect(foundLBConfig.Status.ServerPort).To(Equal(int32(6000)))
-						assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and egress prefix()"}, recorder.Events)
+						assertEqualEvents([]string{"Normal ReconcileGatewayLBConfigurationSuccess GatewayLBConfiguration reconciled"}, recorder.Events)
 					}
 				})
 
@@ -451,7 +441,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					Expect(getErr).To(BeNil())
 					Expect(foundLBConfig.Status.FrontendIp).To(Equal("10.0.0.4"))
 					Expect(foundLBConfig.Status.ServerPort).To(Equal(int32(6001)))
-					assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6001), and egress prefix()"}, recorder.Events)
+					assertEqualEvents([]string{"Normal ReconcileGatewayLBConfigurationSuccess GatewayLBConfiguration reconciled"}, recorder.Events)
 				})
 			})
 		})
@@ -472,7 +462,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			})
 
 			It("should create a new vmConfig", func() {
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(lbConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(gwConfig, lbConfig).Build()
 				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(BeNil())
@@ -493,7 +483,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				getErr = getResource(cl, foundLBConfig)
 				Expect(getErr).To(BeNil())
 				Expect(foundLBConfig.Status.EgressIpPrefix).To(BeEmpty())
-				assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and egress prefix()"}, recorder.Events)
+				assertEqualEvents([]string{"Normal ReconcileGatewayLBConfigurationSuccess GatewayLBConfiguration reconciled"}, recorder.Events)
 			})
 
 			It("should update status from existing vmConfig", func() {
@@ -517,7 +507,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					},
 				}
 
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(lbConfig, vmConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(gwConfig, lbConfig, vmConfig).Build()
 				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(BeNil())
@@ -526,7 +516,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				getErr = getResource(cl, foundLBConfig)
 				Expect(getErr).To(BeNil())
 				Expect(foundLBConfig.Status.EgressIpPrefix).To(Equal("1.2.3.4/31"))
-				assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and egress prefix(1.2.3.4/31)"}, recorder.Events)
+				assertEqualEvents([]string{"Normal ReconcileGatewayLBConfigurationSuccess GatewayLBConfiguration reconciled"}, recorder.Events)
 			})
 
 			It("should update existing vmConfig accordingly", func() {
@@ -549,7 +539,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 					},
 				}
 
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(lbConfig, vmConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(gwConfig, lbConfig, vmConfig).Build()
 				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(BeNil())
@@ -559,7 +549,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				Expect(getErr).To(BeNil())
 				Expect(foundVMConfig.Spec.GatewayNodepoolName).To(Equal(lbConfig.Spec.GatewayNodepoolName))
 				Expect(foundVMConfig.Spec.ProvisionPublicIps).To(Equal(lbConfig.Spec.ProvisionPublicIps))
-				assertEqualEvents([]string{"Normal Reconciled GatewayLBConfiguration updated with frontendIP(10.0.0.4), port(6000), and egress prefix(1.2.3.4/31)"}, recorder.Events)
+				assertEqualEvents([]string{"Normal ReconcileGatewayLBConfigurationSuccess GatewayLBConfiguration reconciled"}, recorder.Events)
 			})
 		})
 
@@ -577,7 +567,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 						Namespace: testNamespace,
 					},
 				}
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(lbConfig, vmConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(gwConfig, lbConfig, vmConfig).Build()
 				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(BeNil())
@@ -591,7 +581,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
 				lbConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
-				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(lbConfig).Build()
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(gwConfig, lbConfig).Build()
 				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 				vmss := &compute.VirtualMachineScaleSet{
 					Properties: &compute.VirtualMachineScaleSetProperties{UniqueID: to.Ptr(testVMSSUID)},
@@ -819,7 +809,7 @@ func getEmptyLB() *network.LoadBalancer {
 		},
 		Properties: &network.LoadBalancerPropertiesFormat{
 			FrontendIPConfigurations: []*network.FrontendIPConfiguration{
-				&network.FrontendIPConfiguration{
+				{
 					Name: to.Ptr(testVMSSUID),
 					ID:   to.Ptr(fmt.Sprintf("/subscriptions/testSub/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/frontendIPConfigurations/%s", testLBRG, testLBName, testVMSSUID)),
 					Properties: &network.FrontendIPConfigurationPropertiesFormat{
@@ -831,7 +821,7 @@ func getEmptyLB() *network.LoadBalancer {
 				},
 			},
 			BackendAddressPools: []*network.BackendAddressPool{
-				&network.BackendAddressPool{
+				{
 					Name:       to.Ptr(testVMSSUID),
 					ID:         to.Ptr(fmt.Sprintf("/subscriptions/testSub/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s", testLBRG, testLBName, testVMSSUID)),
 					Properties: &network.BackendAddressPoolPropertiesFormat{},
@@ -851,7 +841,7 @@ func getExpectedLB() *network.LoadBalancer {
 		},
 		Properties: &network.LoadBalancerPropertiesFormat{
 			FrontendIPConfigurations: []*network.FrontendIPConfiguration{
-				&network.FrontendIPConfiguration{
+				{
 					Name: to.Ptr(testVMSSUID),
 					ID:   to.Ptr(fmt.Sprintf("/subscriptions/testSub/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/frontendIPConfigurations/%s", testLBRG, testLBName, testVMSSUID)),
 					Properties: &network.FrontendIPConfigurationPropertiesFormat{
@@ -863,7 +853,7 @@ func getExpectedLB() *network.LoadBalancer {
 				},
 			},
 			BackendAddressPools: []*network.BackendAddressPool{
-				&network.BackendAddressPool{
+				{
 					Name:       to.Ptr(testVMSSUID),
 					ID:         to.Ptr(fmt.Sprintf("/subscriptions/testSub/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s", testLBRG, testLBName, testVMSSUID)),
 					Properties: &network.BackendAddressPoolPropertiesFormat{},
