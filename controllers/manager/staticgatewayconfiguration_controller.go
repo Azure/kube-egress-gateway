@@ -136,8 +136,8 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 		err := r.Update(ctx, gwConfig)
 		if err != nil {
 			log.Error(err, "failed to add finalizer")
+			return err
 		}
-		return err
 	}
 
 	_, err := controllerutil.CreateOrPatch(ctx, r, gwConfig, func() error {

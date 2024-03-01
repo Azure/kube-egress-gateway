@@ -74,14 +74,26 @@ func (r *GatewayLBConfigurationReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, err
 	}
 
+	gwConfig := &egressgatewayv1alpha1.StaticGatewayConfiguration{}
+	if err := r.Get(ctx, req.NamespacedName, gwConfig); err != nil {
+		log.Error(err, "unable to fetch StaticGatewayConfiguration instance")
+		return ctrl.Result{}, err
+	}
+
 	if !lbConfig.ObjectMeta.DeletionTimestamp.IsZero() {
 		// Clean up gatewayLBConfiguration
-		return r.ensureDeleted(ctx, lbConfig)
+		res, err := r.ensureDeleted(ctx, lbConfig)
+		if err != nil {
+			r.Recorder.Event(gwConfig, corev1.EventTypeWarning, "EnsureDeleteGatewayLBConfigurationError", err.Error())
+		}
+		return res, err
 	}
 
 	res, err := r.reconcile(ctx, lbConfig)
 	if err != nil {
-		r.Recorder.Event(lbConfig, corev1.EventTypeWarning, "ReconcileError", err.Error())
+		r.Recorder.Event(gwConfig, corev1.EventTypeWarning, "ReconcileGatewayLBConfigurationError", err.Error())
+	} else {
+		r.Recorder.Event(gwConfig, corev1.EventTypeNormal, "ReconcileGatewayLBConfigurationSuccess", "GatewayLBConfiguration reconciled")
 	}
 	return res, err
 }
@@ -107,8 +119,8 @@ func (r *GatewayLBConfigurationReconciler) reconcile(
 		err := r.Update(ctx, lbConfig)
 		if err != nil {
 			log.Error(err, "failed to add finalizer")
+			return ctrl.Result{}, err
 		}
-		return ctrl.Result{}, err
 	}
 
 	existing := &egressgatewayv1alpha1.GatewayLBConfiguration{}
@@ -140,18 +152,6 @@ func (r *GatewayLBConfigurationReconciler) reconcile(
 		}
 	}
 
-	frontend, po, prefix := "nil", "nil", "nil"
-	if lbConfig.Status != nil {
-		frontend = lbConfig.Status.FrontendIp
-		po = fmt.Sprintf("%d", lbConfig.Status.ServerPort)
-		prefix = lbConfig.Status.EgressIpPrefix
-	}
-	r.Recorder.Eventf(lbConfig,
-		corev1.EventTypeNormal,
-		"Reconciled",
-		"GatewayLBConfiguration updated with frontendIP(%s), port(%s), and egress prefix(%s)",
-		frontend, po, prefix,
-	)
 	log.Info("GatewayLBConfiguration reconciled")
 	return ctrl.Result{}, nil
 }
