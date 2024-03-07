@@ -81,10 +81,15 @@ func (r *GatewayVMConfigurationReconciler) Reconcile(ctx context.Context, req ct
 			log.Error(err, "failed to list GatewayVMConfiguration")
 			return ctrl.Result{}, err
 		}
+		var aggregateError error
 		for _, vmConfig := range vmConfigList.Items {
 			// skip reconciling when
 			// 1. node has agentpool label
 			// 2. vmConfig has GatewayNodepoolName and node agentpool label does not match
+			// or vmConfig is deleting
+			if !vmConfig.ObjectMeta.DeletionTimestamp.IsZero() {
+				continue
+			}
 			if v, ok := node.Labels[consts.AKSNodepoolNameLabel]; ok {
 				if npName := vmConfig.Spec.GatewayNodepoolName; npName != "" && !strings.EqualFold(v, npName) {
 					continue
@@ -93,10 +98,11 @@ func (r *GatewayVMConfigurationReconciler) Reconcile(ctx context.Context, req ct
 			log.Info(fmt.Sprintf("reconcile vmConfig (%s/%s) upon node (%s) event", vmConfig.GetNamespace(), vmConfig.GetName(), req.Name))
 			if _, err := r.reconcile(ctx, &vmConfig); err != nil {
 				log.Error(err, "failed to reconcile GatewayVMConfiguration")
-				return ctrl.Result{}, err
+				aggregateError = errors.Join(aggregateError, err)
+				continue // continue to reconcile other vmConfigs
 			}
 		}
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, aggregateError
 	}
 
 	vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{}

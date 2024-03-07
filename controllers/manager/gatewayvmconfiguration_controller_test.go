@@ -14,6 +14,7 @@ import (
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1007,6 +1008,73 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				Expect(reconcileErr).To(BeNil())
 				getErr = getResource(cl, foundVMConfig)
 				Expect(apierrors.IsNotFound(getErr)).To(BeTrue())
+			})
+		})
+
+		Context("Test node event reconciler", func() {
+			var node *corev1.Node
+			BeforeEach(func() {
+				req.NamespacedName = types.NamespacedName{Name: "node1", Namespace: ""}
+				az = getMockAzureManager(gomock.NewController(GinkgoT()))
+				node = &corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "node1",
+					},
+				}
+			})
+
+			It("should return nil when node not found", func() {
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(vmConfig).WithRuntimeObjects(gwConfig, vmConfig).Build()
+				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
+				_, err := r.Reconcile(context.TODO(), req)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should reconcile vmConfig when node does not have agentpool name label", func() {
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(vmConfig).WithRuntimeObjects(node, gwConfig, vmConfig).Build()
+				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return(nil, errors.New("failed"))
+				_, err := r.Reconcile(context.TODO(), req)
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("should not reconcile vmConfig when vmConfig is deleting", func() {
+				vmConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
+				controllerutil.AddFinalizer(vmConfig, consts.VMConfigFinalizerName)
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(vmConfig).WithRuntimeObjects(node, gwConfig, vmConfig).Build()
+				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
+				_, err := r.Reconcile(context.TODO(), req)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should reconcile vmConfig if node has label but vmConfig does not have GatewayNodepoolName", func() {
+				node.Labels = map[string]string{"kubernetes.azure.com/agentpool": "testgw"}
+				vmConfig.Spec.GatewayNodepoolName = ""
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(vmConfig).WithRuntimeObjects(node, gwConfig, vmConfig).Build()
+				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().Get(gomock.Any(), vmssRG, vmssName, gomock.Any()).Return(nil, errors.New("failed"))
+				_, err := r.Reconcile(context.TODO(), req)
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("should reconcile vmConfig if node has label and vmConfig has the same GatewayNodepoolName", func() {
+				node.Labels = map[string]string{"kubernetes.azure.com/agentpool": "testgw"}
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(vmConfig).WithRuntimeObjects(node, gwConfig, vmConfig).Build()
+				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return(nil, errors.New("failed"))
+				_, err := r.Reconcile(context.TODO(), req)
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("should not reconcile vmConfig is node has label but vmConfig has different GatewayNodepoolName", func() {
+				node.Labels = map[string]string{"kubernetes.azure.com/agentpool": "testgw1"}
+				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(vmConfig).WithRuntimeObjects(node, gwConfig, vmConfig).Build()
+				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
+				_, err := r.Reconcile(context.TODO(), req)
+				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 	})
