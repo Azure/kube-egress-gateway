@@ -10,9 +10,9 @@ import (
 
 	"github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/golang/mock/gomock"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netlink/nl"
+	"go.uber.org/mock/gomock"
 	"golang.org/x/sys/unix"
 
 	"github.com/Azure/kube-egress-gateway/pkg/iptableswrapper/mockiptableswrapper"
