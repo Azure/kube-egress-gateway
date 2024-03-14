@@ -11,7 +11,7 @@ package mockiptableswrapper
 import (
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 
 	iptableswrapper "github.com/Azure/kube-egress-gateway/pkg/iptableswrapper"
 )

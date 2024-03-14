@@ -11,7 +11,7 @@ package mockwgctrlwrapper
 import (
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	wgtypes "golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	wgctrlwrapper "github.com/Azure/kube-egress-gateway/pkg/wgctrlwrapper"

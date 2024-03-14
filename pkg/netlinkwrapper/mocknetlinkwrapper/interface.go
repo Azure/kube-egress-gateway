@@ -7,8 +7,8 @@ package mocknetlinkwrapper
 import (
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
 	netlink "github.com/vishvananda/netlink"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockInterface is a mock of Interface interface.
