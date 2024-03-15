@@ -98,7 +98,10 @@ func TestNewCNIConfManager(t *testing.T) {
 }
 
 func TestStart(t *testing.T) {
-	mgr, err := NewCNIConfManager(testDir, testConfList, "", testCniUninstallConfigMapName, fake.NewFakeClient(), testGrpcPort)
+	os.Setenv(consts.PodNamespaceEnvKey, "default")
+	defer os.Unsetenv(consts.PodNamespaceEnvKey)
+	client := fake.NewFakeClient(&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: testCniUninstallConfigMapName, Namespace: "default"}, Data: map[string]string{"uninstall": "true"}})
+	mgr, err := NewCNIConfManager(testDir, testConfList, "", testCniUninstallConfigMapName, client, testGrpcPort)
 	if err != nil {
 		t.Fatalf("failed to create cni conf manager: %v", err)
 	}
@@ -151,9 +154,9 @@ func TestRemoveCNIPluginConf(t *testing.T) {
 		client        client.Client
 		expectDeleted bool
 	}{
-		"confManager should delete cni conf file upon stop when cniUninstall cm is not found": {
+		"confManager should not delete cni conf file upon stop when cniUninstall cm is not found": {
 			client:        fake.NewFakeClient(),
-			expectDeleted: true,
+			expectDeleted: false,
 		},
 		"confManager should delete cni conf file upon stop when cniUninstall cm enables cni uninstall": {
 			client:        fake.NewFakeClient(&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: testCniUninstallConfigMapName, Namespace: "default"}, Data: map[string]string{"uninstall": "true"}}),
