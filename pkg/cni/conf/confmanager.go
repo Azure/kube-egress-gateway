@@ -146,15 +146,19 @@ func (mgr *Manager) removeCNIPluginConf() error {
 	cm := &corev1.ConfigMap{}
 	cmKey := client.ObjectKey{Name: mgr.cniUninstallConfigMapName, Namespace: os.Getenv(consts.PodNamespaceEnvKey)}
 	err := mgr.k8sClient.Get(context.Background(), cmKey, cm)
-	if err != nil && !apierrors.IsNotFound(err) {
-		return fmt.Errorf("failed to get cni uninstall configMap (%s/%s): %w", cmKey.Namespace, cmKey.Name, err)
-	} else if err == nil {
+	if err == nil {
 		if cm.Data["uninstall"] == "false" {
 			log.Info("Uninstall flag is NOT set, skip removing cni configuration file")
 			return nil
 		}
+	} else if apierrors.IsNotFound(err) {
+		log.Info(fmt.Sprintf("CNI uninstall configMap (%s/%s) is not found, skip removing cni configuration file", cmKey.Namespace, cmKey.Name))
+		return nil
+	} else {
+		return fmt.Errorf("failed to get cni uninstall configMap (%s/%s): %w", cmKey.Namespace, cmKey.Name, err)
 	}
 
+	// only remove the cniConf file when the uninstall configMap is found and uninstall flag is set to true
 	log.Info("Removing cni configuration file...")
 	file := filepath.Join(mgr.cniConfDir, mgr.cniConfFile)
 	if _, err := os.Stat(file); err != nil {
