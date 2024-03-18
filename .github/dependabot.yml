@@ -16,6 +16,14 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/cleanup"
+    groups:
+      k8s:
+        applies-to: version-updates
+        patterns:
+        - "k8s.io*"
+        update-types:
+        - "patch"
+        - "minor"
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
