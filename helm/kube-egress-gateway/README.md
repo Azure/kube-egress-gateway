@@ -19,7 +19,7 @@ $ helm install \
   --namespace kube-egress-gateway-system \
   --create-namespace \
   --set common.imageRepository=mcr.microsoft.com/aks \
-  --set common.imageTag=v0.0.1 \ 
+  --set common.imageTag=v0.0.9 \ 
   -f azure_config.yaml
 ```
 
