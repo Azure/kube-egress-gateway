@@ -74,7 +74,14 @@ jobs:
     #   modify them (or add more) to build your code if your project, please refer to the EXAMPLE below for guidance.
 
     - run: |
-       make install-dependencies unit-test build
+        make install-dependencies unit-test build
+
+    - name: Send coverage
+      env:
+        COVERALLS_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+      run: |
+        go install github.com/mattn/goveralls@latest
+        $(go env GOPATH)/bin/goveralls -coverprofile=profile.cov -service=github
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3

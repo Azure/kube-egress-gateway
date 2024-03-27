@@ -1,5 +1,6 @@
 # kube-egress-gateway
 [![Build Status](https://msazure.visualstudio.com/CloudNativeCompute/_apis/build/status%2FAKS%2Fkube-egress-gateway%2FAzure.kube-egress-gateway-e2e?branchName=main)](https://msazure.visualstudio.com/CloudNativeCompute/_build/latest?definitionId=319204&branchName=main)
+[![Coverage Status](https://coveralls.io/repos/github/Azure/kube-egress-gateway/badge.svg)](https://coveralls.io/github/Azure/kube-egress-gateway)
 
 kube-egress-gateway provides a scalable and cost-efficient way to configure fixed source IP for Kubernetes pod egress traffic on Azure.
 kube-egress-gateway components run in kubernetes clusters, either managed (Azure Kubernetes Service, AKS) or unmanaged, utilize one or more dedicated kubernetes nodes as pod egress gateways and route pod outbound traffic to gateway via wireguard tunnel.
