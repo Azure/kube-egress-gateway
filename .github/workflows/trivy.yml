@@ -40,7 +40,7 @@ jobs:
           make docker-build
 
       - name: Run Trivy scanner for controller
-        uses: aquasecurity/trivy-action@062f2592684a31eb3aa050cc61e7ca1451cecd3d # master
+        uses: aquasecurity/trivy-action@d710430a6722f083d3b36b8339ff66b32f22ee55 # master
         if: success() || failure()
         with:
           image-ref: 'local/kube-egress-gateway-controller:${{ github.sha }}'
@@ -52,7 +52,7 @@ jobs:
           timeout: '5m0s'
 
       - name: Run Trivy scanner for daemon
-        uses: aquasecurity/trivy-action@062f2592684a31eb3aa050cc61e7ca1451cecd3d # master
+        uses: aquasecurity/trivy-action@d710430a6722f083d3b36b8339ff66b32f22ee55 # master
         if: success() || failure()
         with:
           image-ref: 'local/kube-egress-gateway-daemon:${{ github.sha }}'
@@ -64,7 +64,7 @@ jobs:
           timeout: '5m0s'
 
       - name: Run Trivy scanner for cnimanager
-        uses: aquasecurity/trivy-action@062f2592684a31eb3aa050cc61e7ca1451cecd3d # master
+        uses: aquasecurity/trivy-action@d710430a6722f083d3b36b8339ff66b32f22ee55 # master
         if: success() || failure()
         with:
           image-ref: 'local/kube-egress-gateway-cnimanager:${{ github.sha }}'
@@ -76,7 +76,7 @@ jobs:
           timeout: '5m0s'
 
       - name: Run Trivy scanner for cni
-        uses: aquasecurity/trivy-action@062f2592684a31eb3aa050cc61e7ca1451cecd3d # master
+        uses: aquasecurity/trivy-action@d710430a6722f083d3b36b8339ff66b32f22ee55 # master
         if: success() || failure()
         with:
           image-ref: 'local/kube-egress-gateway-cni:${{ github.sha }}'
@@ -88,7 +88,7 @@ jobs:
           timeout: '5m0s'
 
       - name: Run Trivy scanner for cni-ipam
-        uses: aquasecurity/trivy-action@062f2592684a31eb3aa050cc61e7ca1451cecd3d # master
+        uses: aquasecurity/trivy-action@d710430a6722f083d3b36b8339ff66b32f22ee55 # master
         if: success() || failure()
         with:
           image-ref: 'local/kube-egress-gateway-cni-ipam:${{ github.sha }}'
@@ -100,7 +100,7 @@ jobs:
           timeout: '5m0s'
 
       - name: Run Trivy vulnerability scanner in repo mode
-        uses: aquasecurity/trivy-action@062f2592684a31eb3aa050cc61e7ca1451cecd3d # master
+        uses: aquasecurity/trivy-action@d710430a6722f083d3b36b8339ff66b32f22ee55 # master
         if: success() || failure()
         with:
           scan-type: 'fs'
