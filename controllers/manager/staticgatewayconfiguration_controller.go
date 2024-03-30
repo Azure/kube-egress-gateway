@@ -6,6 +6,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
@@ -27,6 +28,7 @@ import (
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
+	"github.com/Azure/kube-egress-gateway/pkg/metrics"
 )
 
 var _ reconcile.Reconciler = &StaticGatewayConfigurationReconciler{}
@@ -126,6 +128,16 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 	log := log.FromContext(ctx)
 	log.Info(fmt.Sprintf("Reconciling staticGatewayConfiguration %s/%s", gwConfig.Namespace, gwConfig.Name))
 
+	mc := metrics.NewMetricsContext(
+		os.Getenv(consts.PodNamespaceEnvKey),
+		"reconcile_static_gateway_configuration",
+		"n/a",
+		"n/a",
+		strings.ToLower(fmt.Sprintf("%s/%s", gwConfig.Namespace, gwConfig.Name)),
+	) // no subscription_id/resource_group for SGC reconciler
+	succeeded := false
+	defer func() { mc.ObserveControllerReconcileMetrics(succeeded) }()
+
 	if err := validate(gwConfig); err != nil {
 		return err
 	}
@@ -164,6 +176,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 	}
 	r.Recorder.Eventf(gwConfig, corev1.EventTypeNormal, reconcileStatus, "StaticGatewayConfiguration provisioned with egress prefix %s", prefix)
 	log.Info("staticGatewayConfiguration reconciled")
+	succeeded = true
 	return err
 }
 
@@ -178,6 +191,16 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 		log.Info("gwConfig does not have finalizer, no additional cleanup needed")
 		return nil
 	}
+
+	mc := metrics.NewMetricsContext(
+		os.Getenv(consts.PodNamespaceEnvKey),
+		"delete_static_gateway_configuration",
+		"n/a",
+		"n/a",
+		strings.ToLower(fmt.Sprintf("%s/%s", gwConfig.Namespace, gwConfig.Name)),
+	) // no subscription_id/resource_group for SGC reconciler
+	succeeded := false
+	defer func() { mc.ObserveControllerReconcileMetrics(succeeded) }()
 
 	secretDeleted := false
 	log.Info("Deleting wireguard key")
@@ -223,6 +246,7 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 	}
 
 	log.Info("staticGatewayConfiguration deletion reconciled")
+	succeeded = true
 	return nil
 }
 
