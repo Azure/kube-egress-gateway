@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -32,6 +33,7 @@ import (
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
+	"github.com/Azure/kube-egress-gateway/pkg/metrics"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 )
 
@@ -201,6 +203,16 @@ func (r *GatewayVMConfigurationReconciler) reconcile(
 	log := log.FromContext(ctx)
 	log.Info(fmt.Sprintf("Reconciling GatewayVMConfiguration %s/%s", vmConfig.Namespace, vmConfig.Name))
 
+	mc := metrics.NewMetricsContext(
+		os.Getenv(consts.PodNamespaceEnvKey),
+		"reconcile_gateway_vm_configuration",
+		r.SubscriptionID(),
+		r.ResourceGroup,
+		strings.ToLower(fmt.Sprintf("%s/%s", vmConfig.Namespace, vmConfig.Name)),
+	)
+	succeeded := false
+	defer func() { mc.ObserveControllerReconcileMetrics(succeeded) }()
+
 	if !controllerutil.ContainsFinalizer(vmConfig, consts.VMConfigFinalizerName) {
 		log.Info("Adding finalizer")
 		controllerutil.AddFinalizer(vmConfig, consts.VMConfigFinalizerName)
@@ -256,6 +268,7 @@ func (r *GatewayVMConfigurationReconciler) reconcile(
 	}
 
 	log.Info("GatewayVMConfiguration reconciled")
+	succeeded = true
 	return ctrl.Result{}, nil
 }
 
@@ -270,6 +283,16 @@ func (r *GatewayVMConfigurationReconciler) ensureDeleted(
 		log.Info("vmConfig does not have finalizer, no additional cleanup needed")
 		return ctrl.Result{}, nil
 	}
+
+	mc := metrics.NewMetricsContext(
+		os.Getenv(consts.PodNamespaceEnvKey),
+		"delete_gateway_vm_configuration",
+		r.SubscriptionID(),
+		r.ResourceGroup,
+		strings.ToLower(fmt.Sprintf("%s/%s", vmConfig.Namespace, vmConfig.Name)),
+	)
+	succeeded := false
+	defer func() { mc.ObserveControllerReconcileMetrics(succeeded) }()
 
 	vmss, _, err := r.getGatewayVMSS(ctx, vmConfig)
 	if err != nil {
@@ -295,6 +318,7 @@ func (r *GatewayVMConfigurationReconciler) ensureDeleted(
 	}
 
 	log.Info("GatewayVMConfiguration deletion reconciled")
+	succeeded = true
 	return ctrl.Result{}, nil
 }
 

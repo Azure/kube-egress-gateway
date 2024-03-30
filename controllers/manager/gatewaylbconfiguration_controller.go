@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -26,6 +27,7 @@ import (
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
+	"github.com/Azure/kube-egress-gateway/pkg/metrics"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 )
 
@@ -113,6 +115,16 @@ func (r *GatewayLBConfigurationReconciler) reconcile(
 	log := log.FromContext(ctx)
 	log.Info(fmt.Sprintf("Reconciling GatewayLBConfiguration %s/%s", lbConfig.Namespace, lbConfig.Name))
 
+	mc := metrics.NewMetricsContext(
+		os.Getenv(consts.PodNamespaceEnvKey),
+		"reconcile_gateway_lb_configuration",
+		r.SubscriptionID(),
+		r.LoadBalancerResourceGroup,
+		strings.ToLower(fmt.Sprintf("%s/%s", lbConfig.Namespace, lbConfig.Name)),
+	)
+	succeeded := false
+	defer func() { mc.ObserveControllerReconcileMetrics(succeeded) }()
+
 	if !controllerutil.ContainsFinalizer(lbConfig, consts.LBConfigFinalizerName) {
 		log.Info("Adding finalizer")
 		controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
@@ -153,6 +165,7 @@ func (r *GatewayLBConfigurationReconciler) reconcile(
 	}
 
 	log.Info("GatewayLBConfiguration reconciled")
+	succeeded = true
 	return ctrl.Result{}, nil
 }
 
@@ -168,6 +181,16 @@ func (r *GatewayLBConfigurationReconciler) ensureDeleted(
 		return ctrl.Result{}, nil
 	}
 
+	mc := metrics.NewMetricsContext(
+		os.Getenv(consts.PodNamespaceEnvKey),
+		"delete_gateway_lb_configuration",
+		r.SubscriptionID(),
+		r.LoadBalancerResourceGroup,
+		strings.ToLower(fmt.Sprintf("%s/%s", lbConfig.Namespace, lbConfig.Name)),
+	)
+	succeeded := false
+	defer func() { mc.ObserveControllerReconcileMetrics(succeeded) }()
+
 	log.Info("Deleting VMConfig")
 	vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
@@ -178,6 +201,7 @@ func (r *GatewayLBConfigurationReconciler) ensureDeleted(
 	if err := r.Delete(ctx, vmConfig); err == nil {
 		// deleting vmConfig, skip reconciling lb
 		log.Info("Waiting gateway vmss to be cleaned first")
+		succeeded = true
 		return ctrl.Result{}, nil
 	} else if !apierrors.IsNotFound(err) {
 		log.Error(err, "failed to delete existing gateway VM configuration")
@@ -199,6 +223,7 @@ func (r *GatewayLBConfigurationReconciler) ensureDeleted(
 	}
 
 	log.Info("GatewayLBConfiguration deletion reconciled")
+	succeeded = true
 	return ctrl.Result{}, nil
 }
 
@@ -293,7 +318,7 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 	}
 
 	// get gateway VMSS
-	// we need this because each gateway vmss needs one fronendConfig and one backendpool
+	// we need this because each gateway vmss needs one frontendConfig and one backendpool
 	vmss, err := r.getGatewayVMSS(ctx, lbConfig)
 	if err != nil {
 		log.Error(err, "failed to get vmss")
