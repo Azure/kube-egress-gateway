@@ -5,7 +5,7 @@ go 1.21.1
 toolchain go1.22.1
 
 require (
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.10.0
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.11.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 v5.6.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4 v4.3.0
 	github.com/containernetworking/cni v1.1.2
@@ -39,7 +39,7 @@ require (
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.5
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.2
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.0.5
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.0.6
 	sigs.k8s.io/controller-runtime v0.17.2
 )
 
@@ -111,7 +111,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.24.0 // indirect
 	golang.org/x/crypto v0.21.0 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
-	golang.org/x/net v0.21.0 // indirect
+	golang.org/x/net v0.22.0 // indirect
 	golang.org/x/oauth2 v0.16.0 // indirect
 	golang.org/x/term v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
