@@ -69,9 +69,6 @@ func TestObserveControllerReconcileMetrics(t *testing.T) {
 
 			assert.Nil(t, testutil.CollectAndCompare(ControllerReconcileFailCount, strings.NewReader(failCountMeta+test.expectedCounter)))
 
-			mc.ObserveControllerReconcileMetrics(true) // test the FailCount metric is deleted
-			assert.Equal(t, 0, testutil.CollectAndCount(ControllerReconcileFailCount))
-
 			ControllerReconcileFailCount.Reset()
 			ControllerReconcileLatency.Reset()
 		})

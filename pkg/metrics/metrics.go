@@ -42,10 +42,6 @@ func NewMetricsContext(namespace, operation, subscriptionID, resourceGroup, reso
 func (mc *MetricsContext) ObserveControllerReconcileMetrics(succeeded bool) {
 	if !succeeded {
 		ControllerReconcileFailCount.WithLabelValues(mc.labels...).Inc()
-	} else {
-		// reset FailCount metrics if reconcile is successful
-		// DeleteLabelValues does not return error is label values are not found
-		_ = ControllerReconcileFailCount.DeleteLabelValues(mc.labels...)
 	}
 	latency := time.Since(mc.start).Seconds()
 	mc.observe(latency)
