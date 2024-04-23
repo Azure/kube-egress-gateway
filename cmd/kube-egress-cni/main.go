@@ -33,7 +33,7 @@ import (
 )
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString(consts.KubeEgressCNIName))
+	skel.PluginMainFuncs(skel.CNIFuncs{Add: cmdAdd, Check: cmdCheck, Del: cmdDel}, version.All, bv.BuildString(consts.KubeEgressCNIName))
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
@@ -234,11 +234,6 @@ func cmdDel(args *skel.CmdArgs) error {
 			return err
 		}
 
-		err = ipam.New(config.IPAM.Type, args.StdinData).DeleteIP()
-		if err != nil {
-			return err
-		}
-
 		ifHandle, err := netlink.LinkByName(consts.WireguardLinkName)
 		if err != nil {
 			//ignore error because cni delete may be invoked more than once.
@@ -249,6 +244,12 @@ func cmdDel(args *skel.CmdArgs) error {
 	if err != nil {
 		return err
 	}
+
+	err = ipam.New(config.IPAM.Type, args.StdinData).DeleteIP()
+	if err != nil {
+		return err
+	}
+
 	return types.PrintResult(&type100.Result{}, config.CNIVersion)
 }
 

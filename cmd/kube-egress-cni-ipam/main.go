@@ -22,7 +22,7 @@ import (
 )
 
 func main() {
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel, version.All, bv.BuildString(consts.KubeEgressIPAMCNIName))
+	skel.PluginMainFuncs(skel.CNIFuncs{Add: cmdAdd, Check: cmdCheck, Del: cmdDel}, version.All, bv.BuildString(consts.KubeEgressIPAMCNIName))
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
