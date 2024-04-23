@@ -37,9 +37,9 @@ require (
 	k8s.io/client-go v0.29.3
 	k8s.io/kubernetes v1.29.3
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.14
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.15
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.4
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.0.15
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.0.16
 	sigs.k8s.io/controller-runtime v0.17.3
 )
 
