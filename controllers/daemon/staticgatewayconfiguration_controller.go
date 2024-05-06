@@ -147,7 +147,7 @@ func (r *StaticGatewayConfigurationReconciler) SetupWithManager(mgr ctrl.Manager
 	if err != nil {
 		return err
 	}
-	return controller.Watch(&source.Channel{Source: r.TickerEvents}, &handler.EnqueueRequestForObject{})
+	return controller.Watch(source.Channel(r.TickerEvents, &handler.EnqueueRequestForObject{}))
 }
 
 func (r *StaticGatewayConfigurationReconciler) reconcile(
