@@ -107,7 +107,7 @@ func (r *PodEndpointReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err != nil {
 		return err
 	}
-	return controller.Watch(&source.Channel{Source: r.TickerEvents}, &handler.EnqueueRequestForObject{})
+	return controller.Watch(source.Channel(r.TickerEvents, &handler.EnqueueRequestForObject{}))
 }
 
 func (r *PodEndpointReconciler) reconcile(
