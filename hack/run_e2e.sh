@@ -4,8 +4,6 @@ set -euo pipefail
 # Check if required variables are present
 : "${AZURE_SUBSCRIPTION_ID:?Environment variable empty or not defined.}"
 : "${AZURE_TENANT_ID:?Environment variable empty or not defined.}"
-: "${AZURE_CLIENT_ID:?Environment variable empty or not defined.}"
-: "${AZURE_CLIENT_SECRET:?Environment variable empty or not defined.}"
 
 # Check if collecting log is needed
 if [[ "${COLLECT_LOG}" == "true" ]]; then
