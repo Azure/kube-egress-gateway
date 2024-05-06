@@ -20,21 +20,20 @@ variables:
 - name: service_cidr
   value: 10.245.0.0/16
 
-pool:
-  vmImage: ubuntu-latest
+pool: kube-egress-gateway-e2e-pool
 
 jobs:
 - job: Run_KubeEgressGateway_E2E
   steps:
   - task: GoTool@0
     inputs:
-      version: '1.21.4'
+      version: '1.22.2'
   - bash: |
       echo $(registry.password) | docker login $(registry.url) -u $(registry.username) --password-stdin
     displayName: docker login
   - bash: |
       az extension add -n aks-preview
-      az login --service-principal -u $(AZURE_CLIENT_ID) -p $(AZURE_CLIENT_SECRET) --tenant $(AZURE_TENANT_ID)
+      az login --identity --username $(AZURE_MANAGED_IDENTITY_CLIENT_ID)
       az account set -s $(AZURE_SUBSCRIPTION_ID)
     displayName: az login
   - bash: |
@@ -51,8 +50,6 @@ jobs:
     displayName: create aks cluster
     env:
       AZURE_SUBSCRIPTION_ID: $(AZURE_SUBSCRIPTION_ID)
-      AZURE_CLIENT_ID: $(AZURE_CLIENT_ID)
-      AZURE_CLIENT_SECRET: $(AZURE_CLIENT_SECRET)
       AZURE_TENANT_ID: $(AZURE_TENANT_ID)
   - bash: |
       set -euo pipefail
@@ -73,9 +70,8 @@ jobs:
     env:
       KUBECONFIG: $(kubeconfig)
       AZURE_SUBSCRIPTION_ID: $(AZURE_SUBSCRIPTION_ID)
-      AZURE_CLIENT_ID: $(AZURE_CLIENT_ID)
-      AZURE_CLIENT_SECRET: $(AZURE_CLIENT_SECRET)
       AZURE_TENANT_ID: $(AZURE_TENANT_ID)
+      AZURE_MANAGED_IDENTITY_CLIENT_ID: $(AZURE_MANAGED_IDENTITY_CLIENT_ID)
       COLLECT_LOG: true
       ARTIFACT_DIR: $(Build.ArtifactStagingDirectory)
   - bash: |
