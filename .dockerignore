@@ -5,3 +5,4 @@ testbin/
 hack/
 tests/
 config/
+cmd/kube-egress-cni/testdata/
