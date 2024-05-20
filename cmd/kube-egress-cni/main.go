@@ -57,8 +57,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	// exchange public key with daemon
-	conn, err := grpc.DialContext(context.Background(),
-		config.SocketPath,
+	conn, err := grpc.NewClient(config.SocketPath,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithStreamInterceptor(grpc_retry.StreamClientInterceptor()),
 		grpc.WithUnaryInterceptor(grpc_retry.UnaryClientInterceptor()),
@@ -202,8 +201,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	if err != nil {
 		return err
 	}
-	conn, err := grpc.DialContext(context.Background(),
-		config.SocketPath,
+	conn, err := grpc.NewClient(config.SocketPath,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithStreamInterceptor(grpc_retry.StreamClientInterceptor()),
 		grpc.WithUnaryInterceptor(grpc_retry.UnaryClientInterceptor()),
