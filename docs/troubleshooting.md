@@ -29,8 +29,6 @@ status:
 The controller creates a secret storing the gateway side wireguard private key with the same namespace and name as your `StaticGatewayConfiguration`. This information is displayed in `.status.gatewayServerProfile.PrivateKeySecretRef` field. `PublicKey` is base64 encoded wireguard public key used by the gateway. `Ip` is the gateway ILB frontend IP. This IP comes from the subnet provided in Azure cloud config. `Port` is LoadBalancing rule frontend and backend port. All `StaticGatewayConfiguration`s deployed to the same gateway VMSS share the same ILB frontend and backend but have separate LoadBalancing rules with different ports. And most importantly, `egressIpPrefix` is the egress source IPNet of the pods using this gateway. If you see any of these not showing in status, you can describe the CR objects and see if there are error events:
 ```bash
 $ kubectl describe staticcgatewayconfiguration -n <your namespace> <your sgw name>
-$ kubectl describe gatewaylbconfiguration -n <your namespace> <your sgw name> # gatewaylbconfiguration and gatewayvmconfiguration are two internal CRDs to reconcile gateway ilb and vmss status.
-$ kubectl describe gatewayvmconfiguration -n <your namespace> <your sgw name>
 ```
 
 Furthermore, you can check `kube-egress-gateway-controller-manager` log and see if there's any error:
@@ -58,7 +56,7 @@ metadata:
   ownerReferences: <node object>
 spec:
   readyGatewayNamespaces:
-  - netnsName: gw-<StaticGatewayConfiguration obj GUID>-<ServerIP>
+  - interfaceName: wg-6000
     staticGatewayConfiguration: <sgw namespace>/<sgw name>
   - ...
 ```
@@ -70,57 +68,71 @@ $ kubectl logs -f -n kube-egress-gateway-system kube-egress-gateway-daemon-manag
 ### Login to the node
 After checking the CR objects, you can login to the gateway node and check network settings directly:
 
-* Check network namespace, namespace name in format `gw-<SGC .metadata.uid>-<SGC .status.gatewayServerProfile.Ip>`:
+* Check network namespace named as `ns-static-egress-gateway`:
   ```bash
   $ ip netns
-  gw-17f83d68-4cab-422d-a3af-ed320a761cee-10_243_0_6 (id: 0)
+  ns-static-egress-gateway (id: 0)
   ```
-* Check network interfaces, routes, iptables rules within the network namespace:
+* Check network interfaces, routes, iptables rules within the network namespace:  
+  The network namespace has one `lo` interface and one `host0` interface to communicate with host network namespace.  
+  There is one `wg-*` interface for each `StaticGatewayConfiguration`. The number after the `wg-` prefix corresponds to the `status.gatewayServerProfile.port` of the CR object.
   ```bash
-  $ ip netns exec gw-17f83d68-4cab-422d-a3af-ed320a761cee-10_243_0_6 ip addr
+  $ ip netns exec ns-static-egress-gateway ip addr
   1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
     link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
     inet 127.0.0.1/8 scope host lo
        valid_lft forever preferred_lft forever
     inet6 ::1/128 scope host
        valid_lft forever preferred_lft forever
-  4: wg0: <POINTOPOINT,NOARP,UP,LOWER_UP> mtu 1420 qdisc noqueue state UNKNOWN group default qlen 1000 # wireguard interface
+  4: wg-6000: <POINTOPOINT,NOARP,UP,LOWER_UP> mtu 1420 qdisc noqueue state UNKNOWN group default qlen 1000 # expect to see this wg-* interface for your StaticGatewayConfiguration.
     link/none
     inet6 fe80::1/64 scope link
        valid_lft forever preferred_lft forever
-  5: host0@if6: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000 # veth pair with host network namespace
-    link/ether 8a:4c:4c:a9:ae:ea brd ff:ff:ff:ff:ff:ff link-netnsid 0
+  5: host0@if6: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000
+    link/ether 7e:22:0f:8b:4c:da brd ff:ff:ff:ff:ff:ff link-netnsid 0
     inet 10.243.0.7/32 scope global host0
        valid_lft forever preferred_lft forever
-    inet6 fe80::884c:4cff:fea9:aeea/64 scope link
-       valid_lft forever preferred_lft forever
-  $ ip netns exec gw-17f83d68-4cab-422d-a3af-ed320a761cee-10_243_0_6 ip route
-  default via 10.243.0.4 dev host0
-  10.243.0.4 dev host0 scope link
-  $ ip netns exec gw-17f83d68-4cab-422d-a3af-ed320a761cee-10_243_0_6 iptables-save # traffic is masqueraded
+  ```
+  For routes, you should see the IP of your pod using the gateway is added in the routing table.
+  ```bash
+  $ ip netns exec ns-static-egress-gateway ip route
+  default via 10.243.0.5 dev host0
+  10.243.0.5 dev host0 scope link
+  10.244.0.14 dev wg-6000 scope link # expect to see pod's IP routed via the wg-* interface.
+  ```
+  For iptables-rules, there are several rules added to masquarade packets. The target IP is the private IP of the `StaticGatewayConfiguration` private IP.  
+  The rule names should have suffix of the `status.gatewayServerProfile.port`, same as the wireguard interface.
+  ```bash
+  $ ip netns exec ns-static-egress-gateway iptables-save # traffic is masqueraded
   *nat
   :PREROUTING ACCEPT [0:0]
   :INPUT ACCEPT [0:0]
   :OUTPUT ACCEPT [0:0]
   :POSTROUTING ACCEPT [0:0]
-  -A POSTROUTING -o host0 -j MASQUERADE
+  :EGRESS-GATEWAY-MARK-6000 - [0:0]
+  :EGRESS-GATEWAY-SNAT-6000 - [0:0]
+  -A PREROUTING -m comment --comment "kube-egress-gateway mark packets from gateway link wg-6000" -j EGRESS-GATEWAY-MARK-6000
+  -A POSTROUTING -m comment --comment "kube-egress-gateway sNAT packets from gateway link wg-6000" -j EGRESS-GATEWAY-SNAT-6000
+  -A EGRESS-GATEWAY-MARK-6000 -i wg-6000 -j CONNMARK --set-xmark 0x1770/0xffffffff
+  -A EGRESS-GATEWAY-SNAT-6000 -o host0 -m connmark --mark 0x1770 -j SNAT --to-source 10.243.0.7
   COMMIT
   ```
 * Check wireguard setup, public key and listening port should match SGW `.status.gatewayServerProfile.PublicKey` and `.status.gatewayServerProfile.Port` respectively:
   ```bash
-  $ ip netns exec gw-17f83d68-4cab-422d-a3af-ed320a761cee-10_243_0_6 wg
-  interface: wg0
+  $ ip netns exec ns-static-egress-gateway wg
+  interface: wg-6000
     public key: ******
     private key: (hidden)
     listening port: 6000
+
+  peer: ***** # peer public key
+    endpoint: 10.243.4.4:35678
+    allowed ips: 10.244.0.14/32
+    latest handshake: 10 minutes, 38 seconds ago
+    transfer: 11.43 KiB received, 11.57 KiB sent
   ```
   *Note: if `wg` command does not exist, run `apt isntall wireguard-tools` to install*
 
-**Lastly, run `curl ifconfig.me` inside the network namespace to check traffic egress IP**, if connectivity is fine and you get expected egress IP, then `StaticGatewayConfiguration` provision is successful!
-```bash
-$ ip netns exec gw-17f83d68-4cab-422d-a3af-ed320a761cee-10_243_0_6 curl ifconfig.me
-XXX.XXX.XXX.XXX
-```
 ## Pod Validation
 
 ### Check pod state
@@ -206,7 +218,7 @@ In particular, the handshake and transfer statistics from `wg` command verifies 
 
 You can run `wg` command on the gateway node to see the peer is added:
 ```bash
-$ ip netns exec gw-17f83d68-4cab-422d-a3af-ed320a761cee-10_243_0_6 wg
+$ ip netns exec ns-static-egress-gateway wg
 interface: wg0
   public key: **********
   private key: (hidden)
@@ -229,7 +241,7 @@ spec:
   readyGatewayNamespaces:
     ...
   readyPeerConfigurations:
-  - netnsName: gw-17f83d68-4cab-422d-a3af-ed320a761cee-10_243_0_6
+  - interfaceName: wg-6000
     podEndpoint: <pod namespace>/<pod name>
     publicKey: ****** <pod's wireguard public key>
 ```
