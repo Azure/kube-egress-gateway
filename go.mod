@@ -37,9 +37,9 @@ require (
 	k8s.io/client-go v0.30.1
 	k8s.io/kubernetes v1.30.1
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.21
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.22
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.11
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.0.23
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.0.25
 	sigs.k8s.io/controller-runtime v0.18.2
 )
 
@@ -107,9 +107,9 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/vishvananda/netns v0.0.4 // indirect
-	go.opentelemetry.io/otel v1.26.0 // indirect
-	go.opentelemetry.io/otel/metric v1.26.0 // indirect
-	go.opentelemetry.io/otel/trace v1.26.0 // indirect
+	go.opentelemetry.io/otel v1.27.0 // indirect
+	go.opentelemetry.io/otel/metric v1.27.0 // indirect
+	go.opentelemetry.io/otel/trace v1.27.0 // indirect
 	golang.org/x/crypto v0.23.0 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
 	golang.org/x/net v0.25.0 // indirect
