@@ -143,7 +143,12 @@ func (r *StaticGatewayConfigurationReconciler) SetupWithManager(mgr ctrl.Manager
 	r.NetNS = netnswrapper.NewNetNS()
 	r.IPTables = utiliptables.New(utilexec.New(), utiliptables.ProtocolIPv4)
 	r.WgCtrl = wgctrlwrapper.NewWgCtrl()
-	controller, err := ctrl.NewControllerManagedBy(mgr).For(&egressgatewayv1alpha1.StaticGatewayConfiguration{}).Build(r)
+	controller, err := ctrl.NewControllerManagedBy(mgr).
+		For(&egressgatewayv1alpha1.StaticGatewayConfiguration{}).
+		// We need to watch GatewayVMConfiguration also, because vmSecondaryIP may change, e.g. duing upgrade
+		// we can use EnqueueRequestForObject because GatewayVMConfiguration has the same namespace/name as StaticGatewayConfiguration
+		Watches(&egressgatewayv1alpha1.GatewayVMConfiguration{}, &handler.EnqueueRequestForObject{}).
+		Build(r)
 	if err != nil {
 		return err
 	}
