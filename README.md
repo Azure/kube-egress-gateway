@@ -19,6 +19,10 @@ Compared with existing methods, for example, creating dedicated kubernetes nodes
 
 ## Usage
 
+### Operating system requirements
+
+* Only Linux (Ubuntu or Azure Linux) based nodes are supported. Other Linux distributions have not been tested but may work. Windows node or pod support is not available at this time.
+
 ### Deploy a Static Egress Gateway
 
 To deploy a static egress gateway, you need to create a StaticGatewayConfiguration CR:
