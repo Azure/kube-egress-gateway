@@ -37,14 +37,14 @@ require (
 	k8s.io/client-go v0.30.1
 	k8s.io/kubernetes v1.30.1
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.25
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.26
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.15
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.0.29
 	sigs.k8s.io/controller-runtime v0.18.4
 )
 
 require (
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.5.2 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.6.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.9.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets v0.12.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/keyvault/internal v0.7.1 // indirect
