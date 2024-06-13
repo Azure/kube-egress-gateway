@@ -166,6 +166,9 @@ func startControllers(cmd *cobra.Command, args []string) {
 	} else {
 		cred = authProvider.ClientSecretCredential
 	}
+	if cloudConfig.UserAgent == "" {
+		cloudConfig.UserAgent = consts.DefaultUserAgent
+	}
 	var factory azclient.ClientFactory
 	factory, err = azclient.NewClientFactory(&azclient.ClientFactoryConfig{SubscriptionID: cloudConfig.SubscriptionID}, &azclient.ARMClientConfig{Cloud: cloudConfig.Cloud, UserAgent: cloudConfig.UserAgent}, cred)
 	if err != nil {
