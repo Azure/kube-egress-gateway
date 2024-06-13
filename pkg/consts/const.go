@@ -56,6 +56,9 @@ const (
 
 	// Owning StaticGatewayConfiguration name key on secret label
 	OwningSGCNameLabel = "egressgateway.kubernetes.azure.com/owning-gateway-config-name"
+
+	// Default user agent for Azure SDK
+	DefaultUserAgent = "kube-egress-gateway-controller"
 )
 
 const (

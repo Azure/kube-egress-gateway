@@ -23,8 +23,6 @@ import (
 )
 
 const (
-	DefaultUserAgent = "kube-egress-gateway-controller"
-
 	// LB frontendIPConfiguration ID template
 	LBFrontendIPConfigTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/frontendIPConfigurations/%s"
 	// LB backendAddressPool ID template
@@ -47,10 +45,6 @@ type AzureManager struct {
 func CreateAzureManager(cloud *config.CloudConfig, factory azclient.ClientFactory) (*AzureManager, error) {
 	az := AzureManager{
 		CloudConfig: cloud,
-	}
-
-	if az.UserAgent == "" {
-		az.UserAgent = DefaultUserAgent
 	}
 
 	if az.LoadBalancerResourceGroup == "" {
