@@ -88,7 +88,7 @@ jobs:
         run: |
           echo "TARGET_PLATFORMS=linux/amd64,linux/arm64,linux/arm" >> $GITHUB_ENV
       - name: Build and push
-        uses: docker/bake-action@v4
+        uses: docker/bake-action@v5
         env:
           PLATFORMS: ${{env.TARGET_PLATFORMS}}
         with:
