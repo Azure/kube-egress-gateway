@@ -37,14 +37,14 @@ require (
 	k8s.io/client-go v0.30.2
 	k8s.io/kubernetes v1.30.2
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.26
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.28
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.16
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.0.31
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.0.33
 	sigs.k8s.io/controller-runtime v0.18.4
 )
 
 require (
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.6.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.7.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.9.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets v0.12.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/keyvault/internal v0.7.1 // indirect
@@ -127,7 +127,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.30.1 // indirect
-	k8s.io/klog/v2 v2.130.0 // indirect
+	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
