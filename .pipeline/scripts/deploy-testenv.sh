@@ -17,7 +17,7 @@ LB_NAME=${LB_NAME:-"kubeegressgateway-ilb"}
 # Get random location
 # should have quota for Standard_DS2_v2 vCPUs in AKS_UPSTREAM_E2E or custom sub
 if [[ -z "${LOCATION}" ]]; then
-    REGIONS=("eastus" "eastus2" "northeurope" "westus2")
+    REGIONS=("eastus2" "northeurope" "westus2")
     LOCATION="${REGIONS[${RANDOM} % ${#REGIONS[@]}]}"
 fi
 echo "Deploying resources in region: ${LOCATION}"
