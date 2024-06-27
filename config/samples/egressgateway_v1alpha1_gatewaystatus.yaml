@@ -5,8 +5,14 @@ metadata:
     app.kubernetes.io/name: gatewaystatus
     app.kubernetes.io/instance: gatewaystatus-sample
     app.kubernetes.io/part-of: kube-egress-gateway
-    app.kuberentes.io/managed-by: kustomize
+    app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: kube-egress-gateway
   name: gatewaystatus-sample
 spec:
-  # TODO(user): Add fields here
+  readyGatewayConfigurations:
+  - interfaceName: wg-6000
+    staticGatewayConfiguration: default/staticgatewayconfiguration-sample
+  readyPeerConfigurations:
+  - interfaceName: wg-6000
+    podEndpoint: default/podendpoint-sample
+    publicKey: **********

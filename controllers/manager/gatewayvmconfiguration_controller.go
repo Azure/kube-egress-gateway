@@ -180,8 +180,8 @@ func ifLabelMatch(obj client.Object, m map[string]string) bool {
 			return true
 		}
 
-		lables := obj.GetLabels()
-		if v, ok := lables[labelKey]; ok {
+		labels := obj.GetLabels()
+		if v, ok := labels[labelKey]; ok {
 			// Return early if no labelValue was set.
 			if labelValue == "" {
 				return true

@@ -139,6 +139,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 	defer func() { mc.ObserveControllerReconcileMetrics(succeeded) }()
 
 	if err := validate(gwConfig); err != nil {
+		r.Recorder.Event(gwConfig, corev1.EventTypeWarning, "InvalidSpec", err.Error())
 		return err
 	}
 

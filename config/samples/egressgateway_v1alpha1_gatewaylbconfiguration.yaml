@@ -5,8 +5,10 @@ metadata:
     app.kubernetes.io/name: gatewaylbconfiguration
     app.kubernetes.io/instance: gatewaylbconfiguration-sample
     app.kubernetes.io/part-of: kube-egress-gateway
-    app.kuberentes.io/managed-by: kustomize
+    app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: kube-egress-gateway
   name: gatewaylbconfiguration-sample
 spec:
-  # TODO(user): Add fields here
+  gatewayNodepoolName: gwnodepool
+  gatewayVmssProfile: {}
+  provisionPublicIps: true

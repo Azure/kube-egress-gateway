@@ -38,7 +38,7 @@ func (wrapper *IPWrapper) WithIP(configFunc func(ipamResult *current.Result) err
 		if err != nil {
 			recoverErr := wrapper.DeleteIP()
 			if recoverErr != nil {
-				err = fmt.Errorf("error occured %w and failed to delete ip: %s", err, recoverErr.Error())
+				err = fmt.Errorf("error occurred %w and failed to delete ip: %s", err, recoverErr.Error())
 			}
 		}
 	}()
