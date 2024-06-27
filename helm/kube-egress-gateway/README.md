@@ -46,7 +46,7 @@ Azure cloud configuration provides information including resource metadata and c
 | `config.azureCloudConfig.userAgent`                   | The userAgent provided to Azure when accessing Azure resources. |                                                                                      |
 | `config.azureCloudConfig.location`                    | The azure region where resource group and its resources is deployed. |                                                                                      |
 | `config.azureCloudConfig.gatewayLoadBalancerName`     | The name of the load balancer in front of gateway VMSS for high availability. | Required, helm chart defaults to `kubeegressgateway-ilb`.                            |
-| `config.azureCloudConfig.loadBalancerResourceGroup`   | The resouce group where the load balancer to be deployed. | Optional. If not provided, it's the same as `config.azureCloudConfig.resourceGroup`. |
+| `config.azureCloudConfig.loadBalancerResourceGroup`   | The resource group where the load balancer to be deployed. | Optional. If not provided, it's the same as `config.azureCloudConfig.resourceGroup`. |
 | `config.azureCloudConfig.vnetName`                    | The name of the virtual network where load balancer frontend ip comes from. |                                                                                      |
 | `config.azureCloudConfig.vnetResourceGroup`           | The resource group where the virtual network is deployed. | Optional. If not set, it's the same as `config.azureCloudConfig.resourceGroup`.      |
 | `config.azureCloudConfig.subnetName`                  | The name of the subnet inside the virtual network where the load balancer frontend ip comes from. |                                                                                      |
@@ -75,7 +75,7 @@ config:
 
 ## common configurations
 
-The Helm chart installs 5 components with different images: gateway-controller-manager, gateway-daemon-manager, gateway-CNI-manager, gateway-CNI, and gateway-CNI-Ipam. For easy deployment, we provide `common.imageRepository` and `common.imageTag`. If all images can be downloaded from the same reposity (use `common.imageRepository`) and come from the same build/release (use `common.imageTag`), you can set just these two values instead of each individual value as shown in the following sections. If for any particular components, you want to apply a different repository/tag, you can specify in their own configurations, overriding these two values.
+The Helm chart installs 5 components with different images: gateway-controller-manager, gateway-daemon-manager, gateway-CNI-manager, gateway-CNI, and gateway-CNI-Ipam. For easy deployment, we provide `common.imageRepository` and `common.imageTag`. If all images can be downloaded from the same repository (use `common.imageRepository`) and come from the same build/release (use `common.imageTag`), you can set just these two values instead of each individual value as shown in the following sections. If for any particular components, you want to apply a different repository/tag, you can specify in their own configurations, overriding these two values.
 
 Additionally, `common.gatewayLbProbePort` defines the gateway LoadBalancer probe port which is consumed by both gateway-controller-manager (LB probe creator) and gateway-daemon-manager (probe server). The default value is `8082`.
 

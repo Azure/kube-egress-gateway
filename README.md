@@ -73,7 +73,7 @@ If `provisionPublicIps` is false, `egressIpPrefix` will be a list of private IPs
 
 ### Deploy a Pod using Static Egress Gateway
 
-Contructing a pod to use a static egress gateway is simple: just add pod annotation `kubernetes.azure.com/static-gateway-configuration: <StaticGatewayConfiguration name>`. Only name is required here because kube-egress-gateway CNI plugin always assume the gateway is in the same namespace as the pod. Note that existing pods must be recreated to enable egress gateway because CNI plugin can only take effect when pod is being created. See sample pod [here](docs/samples/sample_pod.yaml).
+Constructing a pod to use a static egress gateway is simple: just add pod annotation `kubernetes.azure.com/static-gateway-configuration: <StaticGatewayConfiguration name>`. Only name is required here because kube-egress-gateway CNI plugin always assume the gateway is in the same namespace as the pod. Note that existing pods must be recreated to enable egress gateway because CNI plugin can only take effect when pod is being created. See sample pod [here](docs/samples/sample_pod.yaml).
 
 ## Troubleshooting
 

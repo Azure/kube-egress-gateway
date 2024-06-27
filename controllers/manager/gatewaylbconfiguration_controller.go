@@ -471,7 +471,7 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 	}
 
 	if !needLB && deleteFrontend {
-		log.Info(fmt.Sprintf("no more gateway profile refering vmss(%s), deleting frontend and backend", names.frontendName))
+		log.Info(fmt.Sprintf("no more gateway profile referring vmss(%s), deleting frontend and backend", names.frontendName))
 		frontends := lb.Properties.FrontendIPConfigurations
 		for i, frontendConfig := range frontends {
 			if strings.EqualFold(to.Val(frontendConfig.ID), to.Val(frontendID)) {

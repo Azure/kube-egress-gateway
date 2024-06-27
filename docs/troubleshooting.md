@@ -2,7 +2,7 @@
 
 This document provides steps to troubleshoot pod outbound connectivity issue when kube-egress-gateway is in use. Troubleshooting contains two steps:
 1. Validate static egress gateway is successfully provisioned and egress traffic has right source IP.
-2. Validate pod provisoning and pod-gateway connectivity.
+2. Validate pod provisioning and pod-gateway connectivity.
 
 ## StaticGatewayConfiguration Validation
 
@@ -100,7 +100,7 @@ After checking the CR objects, you can login to the gateway node and check netwo
   10.243.0.5 dev host0 scope link
   10.244.0.14 dev wg-6000 scope link # expect to see pod's IP routed via the wg-* interface.
   ```
-  For iptables-rules, there are several rules added to masquarade packets. The target IP is the private IP of the `StaticGatewayConfiguration` private IP.  
+  For iptables-rules, there are several rules added to masquerade packets. The target IP is the private IP of the `StaticGatewayConfiguration` private IP.  
   The rule names should have suffix of the `status.gatewayServerProfile.port`, same as the wireguard interface.
   ```bash
   $ ip netns exec ns-static-egress-gateway iptables-save # traffic is masqueraded
@@ -131,7 +131,7 @@ After checking the CR objects, you can login to the gateway node and check netwo
     latest handshake: 10 minutes, 38 seconds ago
     transfer: 11.43 KiB received, 11.57 KiB sent
   ```
-  *Note: if `wg` command does not exist, run `apt isntall wireguard-tools` to install*
+  *Note: if `wg` command does not exist, run `apt install wireguard-tools` to install*
 
 ## Pod Validation
 
