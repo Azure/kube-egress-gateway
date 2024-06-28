@@ -155,7 +155,7 @@ func (r *GatewayVMConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) er
 func resourceHasFilterLabel(m map[string]string) predicate.Funcs {
 	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			return ifLabelMatch(e.ObjectNew, m)
+			return false
 		},
 		CreateFunc: func(e event.CreateEvent) bool {
 			return ifLabelMatch(e.Object, m)
@@ -164,7 +164,7 @@ func resourceHasFilterLabel(m map[string]string) predicate.Funcs {
 			return ifLabelMatch(e.Object, m)
 		},
 		GenericFunc: func(e event.GenericEvent) bool {
-			return ifLabelMatch(e.Object, m)
+			return false
 		},
 	}
 }
