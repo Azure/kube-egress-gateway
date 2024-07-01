@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+
+	"github.com/Azure/kube-egress-gateway/pkg/consts"
 )
 
 type CloudConfig struct {
@@ -30,24 +32,9 @@ type CloudConfig struct {
 	SubnetName string `json:"subnetName,omitempty" mapstructure:"subnetName,omitempty"`
 }
 
-func (cfg *CloudConfig) TrimSpace() {
-	cfg.Cloud = strings.TrimSpace(cfg.Cloud)
-	cfg.Location = strings.TrimSpace(cfg.Location)
-	cfg.SubscriptionID = strings.TrimSpace(cfg.SubscriptionID)
-	cfg.TenantID = strings.TrimSpace(cfg.TenantID)
-	cfg.UserAssignedIdentityID = strings.TrimSpace(cfg.UserAssignedIdentityID)
-	cfg.AADClientID = strings.TrimSpace(cfg.AADClientID)
-	cfg.AADClientSecret = strings.TrimSpace(cfg.AADClientSecret)
-	cfg.UserAgent = strings.TrimSpace(cfg.UserAgent)
-	cfg.ResourceGroup = strings.TrimSpace(cfg.ResourceGroup)
-	cfg.LoadBalancerName = strings.TrimSpace(cfg.LoadBalancerName)
-	cfg.LoadBalancerResourceGroup = strings.TrimSpace(cfg.LoadBalancerResourceGroup)
-	cfg.VnetName = strings.TrimSpace(cfg.VnetName)
-	cfg.VnetResourceGroup = strings.TrimSpace(cfg.VnetResourceGroup)
-	cfg.SubnetName = strings.TrimSpace(cfg.SubnetName)
-}
+func (cfg *CloudConfig) DefaultAndValidate() error {
+	cfg.trimSpace()
 
-func (cfg *CloudConfig) Validate() error {
 	if cfg.Cloud == "" {
 		return fmt.Errorf("cloud is empty")
 	}
@@ -81,5 +68,34 @@ func (cfg *CloudConfig) Validate() error {
 		return fmt.Errorf("virtual network subnet name is empty")
 	}
 
+	// default values
+	if cfg.UserAgent == "" {
+		cfg.UserAgent = consts.DefaultUserAgent
+	}
+
+	if cfg.LoadBalancerResourceGroup == "" {
+		cfg.LoadBalancerResourceGroup = cfg.ResourceGroup
+	}
+
+	if cfg.VnetResourceGroup == "" {
+		cfg.VnetResourceGroup = cfg.ResourceGroup
+	}
 	return nil
+}
+
+func (cfg *CloudConfig) trimSpace() {
+	cfg.Cloud = strings.TrimSpace(cfg.Cloud)
+	cfg.Location = strings.TrimSpace(cfg.Location)
+	cfg.SubscriptionID = strings.TrimSpace(cfg.SubscriptionID)
+	cfg.TenantID = strings.TrimSpace(cfg.TenantID)
+	cfg.UserAssignedIdentityID = strings.TrimSpace(cfg.UserAssignedIdentityID)
+	cfg.AADClientID = strings.TrimSpace(cfg.AADClientID)
+	cfg.AADClientSecret = strings.TrimSpace(cfg.AADClientSecret)
+	cfg.UserAgent = strings.TrimSpace(cfg.UserAgent)
+	cfg.ResourceGroup = strings.TrimSpace(cfg.ResourceGroup)
+	cfg.LoadBalancerName = strings.TrimSpace(cfg.LoadBalancerName)
+	cfg.LoadBalancerResourceGroup = strings.TrimSpace(cfg.LoadBalancerResourceGroup)
+	cfg.VnetName = strings.TrimSpace(cfg.VnetName)
+	cfg.VnetResourceGroup = strings.TrimSpace(cfg.VnetResourceGroup)
+	cfg.SubnetName = strings.TrimSpace(cfg.SubnetName)
 }
