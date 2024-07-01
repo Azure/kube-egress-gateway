@@ -53,14 +53,14 @@ func TestTrimSpace(t *testing.T) {
 			VnetResourceGroup: "test",
 			SubnetName:        "test",
 		}
-		config.TrimSpace()
+		config.trimSpace()
 		if config != expected {
 			t.Fatalf("failed to test TrimSpace: expect config fields are trimmed, got: %v", config)
 		}
 	})
 }
 
-func TestValidate(t *testing.T) {
+func TestDefaultAndValidate(t *testing.T) {
 	tests := map[string]struct {
 		Cloud                       string
 		Location                    string
@@ -72,7 +72,15 @@ func TestValidate(t *testing.T) {
 		UserAssignedIdentityID      string
 		AADClientID                 string
 		AADClientSecret             string
+		UserAgent                   string
+		LBResourceGroup             string
+		VnetResourceGroup           string
+		RatelimitConfig             *RateLimitConfig
 		expectPass                  bool
+		expectedUserAgent           string
+		expectedLBResourceGroup     string
+		expectedVnetResourceGroup   string
+		expectedRatelimitConfig     RateLimitConfig
 	}{
 		"Cloud empty": {
 			Cloud:                       "",
@@ -173,18 +181,28 @@ func TestValidate(t *testing.T) {
 			AADClientSecret: "",
 			expectPass:      false,
 		},
-		"has all required properties with secret": {
-			Cloud:           "c",
-			Location:        "l",
-			SubscriptionID:  "s",
-			ResourceGroup:   "v",
-			VnetName:        "v",
-			SubnetName:      "s",
-			AADClientID:     "1",
-			AADClientSecret: "2",
-			expectPass:      true,
+		"has all required properties with secret and default values": {
+			Cloud:                     "c",
+			Location:                  "l",
+			SubscriptionID:            "s",
+			ResourceGroup:             "v",
+			VnetName:                  "v",
+			SubnetName:                "s",
+			AADClientID:               "1",
+			AADClientSecret:           "2",
+			expectPass:                true,
+			expectedUserAgent:         "kube-egress-gateway-controller",
+			expectedLBResourceGroup:   "v",
+			expectedVnetResourceGroup: "v",
+			expectedRatelimitConfig: RateLimitConfig{
+				CloudProviderRateLimit:            true,
+				CloudProviderRateLimitQPS:         1.0,
+				CloudProviderRateLimitBucket:      5,
+				CloudProviderRateLimitQPSWrite:    1.0,
+				CloudProviderRateLimitBucketWrite: 5,
+			},
 		},
-		"has all required properties with msi": {
+		"has all required properties with msi and specified values": {
 			Cloud:                       "c",
 			Location:                    "l",
 			SubscriptionID:              "s",
@@ -193,7 +211,50 @@ func TestValidate(t *testing.T) {
 			SubnetName:                  "s",
 			UseManagedIdentityExtension: true,
 			UserAssignedIdentityID:      "u",
-			expectPass:                  true,
+			UserAgent:                   "ua",
+			LBResourceGroup:             "lbrg",
+			VnetResourceGroup:           "vrg",
+			RatelimitConfig: &RateLimitConfig{
+				CloudProviderRateLimit:            true,
+				CloudProviderRateLimitQPS:         2.0,
+				CloudProviderRateLimitBucket:      10,
+				CloudProviderRateLimitQPSWrite:    2.0,
+				CloudProviderRateLimitBucketWrite: 10,
+			},
+			expectPass:                true,
+			expectedUserAgent:         "ua",
+			expectedLBResourceGroup:   "lbrg",
+			expectedVnetResourceGroup: "vrg",
+			expectedRatelimitConfig: RateLimitConfig{
+				CloudProviderRateLimit:            true,
+				CloudProviderRateLimitQPS:         2.0,
+				CloudProviderRateLimitBucket:      10,
+				CloudProviderRateLimitQPSWrite:    2.0,
+				CloudProviderRateLimitBucketWrite: 10,
+			},
+		},
+		"has all required properties with msi and disabled ratelimiter": {
+			Cloud:                       "c",
+			Location:                    "l",
+			SubscriptionID:              "s",
+			ResourceGroup:               "v",
+			VnetName:                    "v",
+			SubnetName:                  "s",
+			UseManagedIdentityExtension: true,
+			UserAssignedIdentityID:      "u",
+			UserAgent:                   "ua",
+			LBResourceGroup:             "lbrg",
+			VnetResourceGroup:           "vrg",
+			RatelimitConfig: &RateLimitConfig{
+				CloudProviderRateLimit: false,
+			},
+			expectPass:                true,
+			expectedUserAgent:         "ua",
+			expectedLBResourceGroup:   "lbrg",
+			expectedVnetResourceGroup: "vrg",
+			expectedRatelimitConfig: RateLimitConfig{
+				CloudProviderRateLimit: false,
+			},
 		},
 	}
 
@@ -201,7 +262,8 @@ func TestValidate(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			config := CloudConfig{
 				ARMClientConfig: azclient.ARMClientConfig{
-					Cloud: test.Cloud,
+					Cloud:     test.Cloud,
+					UserAgent: test.UserAgent,
 				},
 				AzureAuthConfig: azclient.AzureAuthConfig{
 					UseManagedIdentityExtension: test.UseManagedIdentityExtension,
@@ -209,21 +271,38 @@ func TestValidate(t *testing.T) {
 					AADClientID:                 test.AADClientID,
 					AADClientSecret:             test.AADClientSecret,
 				},
-				Location:       test.Location,
-				SubscriptionID: test.SubscriptionID,
-				ResourceGroup:  test.ResourceGroup,
-				VnetName:       test.VnetName,
-				SubnetName:     test.SubnetName,
+				Location:                  test.Location,
+				SubscriptionID:            test.SubscriptionID,
+				ResourceGroup:             test.ResourceGroup,
+				VnetName:                  test.VnetName,
+				SubnetName:                test.SubnetName,
+				LoadBalancerResourceGroup: test.LBResourceGroup,
+				VnetResourceGroup:         test.VnetResourceGroup,
+				RateLimitConfig:           test.RatelimitConfig,
 			}
 
-			err := config.Validate()
+			err := config.DefaultAndValidate()
 
-			if test.expectPass && err != nil {
-				t.Fatalf("failed to test Validate: expected pass: actual fail with err(%s)", err)
+			if test.expectPass {
+				if err != nil {
+					t.Fatalf("failed to test DefaultAndValidate: expected pass: actual fail with err(%s)", err)
+				}
+				if config.UserAgent != test.expectedUserAgent {
+					t.Fatalf("failed to test DefaultAndValidate: expected UserAgent(%s), got UserAgent(%s)", test.expectedUserAgent, config.UserAgent)
+				}
+				if config.LoadBalancerResourceGroup != test.expectedLBResourceGroup {
+					t.Fatalf("failed to test DefaultAndValidate: expected LoadBalancerResourceGroup(%s), got LoadBalancerResourceGroup(%s)", test.expectedLBResourceGroup, config.LoadBalancerResourceGroup)
+				}
+				if config.VnetResourceGroup != test.expectedVnetResourceGroup {
+					t.Fatalf("failed to test DefaultAndValidate: expected VnetResourceGroup(%s), got VnetResourceGroup(%s)", test.expectedVnetResourceGroup, config.VnetResourceGroup)
+				}
+				if *config.RateLimitConfig != test.expectedRatelimitConfig {
+					t.Fatalf("failed to test DefaultAndValidate: expected RateLimitConfig(%v), got RateLimitConfig(%v)", test.expectedRatelimitConfig, *config.RateLimitConfig)
+				}
 			}
 
 			if !test.expectPass && err == nil {
-				t.Fatal("failed to test Validate: expected fail: actual pass")
+				t.Fatal("failed to test DefaultAndValidate: expected fail: actual pass")
 			}
 		})
 	}

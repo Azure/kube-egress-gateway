@@ -26,45 +26,20 @@ import (
 )
 
 func TestCreateAzureManager(t *testing.T) {
-	tests := []struct {
-		desc                      string
-		lbResourceGroup           string
-		expectedLBResourceGroup   string
-		vnetResourceGroup         string
-		expectedVnetResourceGroup string
-	}{
-		{
-			desc:                      "test default lbResourceGroup and vnetResourceGroup",
-			expectedLBResourceGroup:   "testRG",
-			expectedVnetResourceGroup: "testRG",
-		},
-		{
-			desc:                      "test custom lbResourceGroup and vnetResourceGroup",
-			lbResourceGroup:           "testLBRG",
-			expectedLBResourceGroup:   "testLBRG",
-			vnetResourceGroup:         "testVnetRG",
-			expectedVnetResourceGroup: "testVnetRG",
-		},
-	}
-
-	for i, test := range tests {
-		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
-		config := getTestCloudConfig(test.lbResourceGroup, test.vnetResourceGroup)
-		factory := getMockFactory(ctrl)
-		az, err := CreateAzureManager(config, factory)
-		assert.Nil(t, err, "TestCase[%d]: %s", i, test.desc)
-		assert.Equal(t, az.LoadBalancerResourceGroup, test.expectedLBResourceGroup, "TestCase[%d]: %s", i, test.desc)
-		assert.Equal(t, az.VnetResourceGroup, test.expectedVnetResourceGroup, "TestCase[%d]: %s", i, test.desc)
-		assert.Equal(t, az.SubscriptionID(), config.SubscriptionID, "TestCase[%d]: %s", i, test.desc)
-		assert.Equal(t, az.Location(), config.Location, "TestCase[%d]: %s", i, test.desc)
-	}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	config := getTestCloudConfig()
+	factory := getMockFactory(ctrl)
+	az, err := CreateAzureManager(config, factory)
+	assert.Nil(t, err)
+	assert.Equal(t, az.SubscriptionID(), config.SubscriptionID)
+	assert.Equal(t, az.Location(), config.Location)
 }
 
 func TestGets(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	config := getTestCloudConfig("testLBRG", "")
+	config := getTestCloudConfig()
 	factory := getMockFactory(ctrl)
 	az, err := CreateAzureManager(config, factory)
 	assert.Nil(t, err, "CreateAzureManager() should not return error")
@@ -101,7 +76,7 @@ func TestGetLB(t *testing.T) {
 	for i, test := range tests {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		config := getTestCloudConfig("", "")
+		config := getTestCloudConfig()
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
@@ -131,7 +106,7 @@ func TestCreateOrUpdateLB(t *testing.T) {
 	for i, test := range tests {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		config := getTestCloudConfig("", "")
+		config := getTestCloudConfig()
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
@@ -160,7 +135,7 @@ func TestDeleteLB(t *testing.T) {
 	for i, test := range tests {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		config := getTestCloudConfig("", "")
+		config := getTestCloudConfig()
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
@@ -188,7 +163,7 @@ func TestListVMSS(t *testing.T) {
 	for i, test := range tests {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		config := getTestCloudConfig("", "")
+		config := getTestCloudConfig()
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
@@ -243,7 +218,7 @@ func TestGetVMSS(t *testing.T) {
 	for i, test := range tests {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		config := getTestCloudConfig("", "")
+		config := getTestCloudConfig()
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		if test.expectedCall {
@@ -297,7 +272,7 @@ func TestCreateOrUpdateVMSS(t *testing.T) {
 	for i, test := range tests {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		config := getTestCloudConfig("", "")
+		config := getTestCloudConfig()
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		if test.expectedCall {
@@ -351,7 +326,7 @@ func TestListVMSSInstances(t *testing.T) {
 	for i, test := range tests {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		config := getTestCloudConfig("", "")
+		config := getTestCloudConfig()
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		if test.expectedCall {
@@ -418,7 +393,7 @@ func TestGetVMSSInstance(t *testing.T) {
 	for i, test := range tests {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		config := getTestCloudConfig("", "")
+		config := getTestCloudConfig()
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		if test.expectedCall {
@@ -482,7 +457,7 @@ func TestUpdateVMSSInstance(t *testing.T) {
 	for i, test := range tests {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		config := getTestCloudConfig("", "")
+		config := getTestCloudConfig()
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		if test.expectedCall {
@@ -536,7 +511,7 @@ func TestGetPublicIPPrefix(t *testing.T) {
 	for i, test := range tests {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		config := getTestCloudConfig("", "")
+		config := getTestCloudConfig()
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		if test.expectedCall {
@@ -590,7 +565,7 @@ func TestCreateOrUpdatePublicIPPrefix(t *testing.T) {
 	for i, test := range tests {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		config := getTestCloudConfig("", "")
+		config := getTestCloudConfig()
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		if test.expectedCall {
@@ -641,7 +616,7 @@ func TestDeletePublicIPPrefix(t *testing.T) {
 	for i, test := range tests {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		config := getTestCloudConfig("", "")
+		config := getTestCloudConfig()
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		if test.expectedCall {
@@ -715,7 +690,7 @@ func TestGetVMSSInterface(t *testing.T) {
 	for i, test := range tests {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		config := getTestCloudConfig("", "")
+		config := getTestCloudConfig()
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		if test.expectedCall {
@@ -751,7 +726,7 @@ func TestGetSubnet(t *testing.T) {
 	for i, test := range tests {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		config := getTestCloudConfig("", "")
+		config := getTestCloudConfig()
 		factory := getMockFactory(ctrl)
 		az, _ := CreateAzureManager(config, factory)
 		mockSubnetClient := az.SubnetClient.(*mock_subnetclient.MockInterface)
@@ -773,7 +748,7 @@ func getMockFactory(ctrl *gomock.Controller) azclient.ClientFactory {
 	return factory
 }
 
-func getTestCloudConfig(lbRG, vnetRG string) *config.CloudConfig {
+func getTestCloudConfig() *config.CloudConfig {
 	return &config.CloudConfig{
 		ARMClientConfig: azclient.ARMClientConfig{
 			Cloud: "AzureTest",
@@ -782,9 +757,9 @@ func getTestCloudConfig(lbRG, vnetRG string) *config.CloudConfig {
 		SubscriptionID:            "testSub",
 		ResourceGroup:             "testRG",
 		LoadBalancerName:          "testLB",
-		LoadBalancerResourceGroup: lbRG,
+		LoadBalancerResourceGroup: "testRG",
 		VnetName:                  "testVnet",
 		SubnetName:                "testSubnet",
-		VnetResourceGroup:         vnetRG,
+		VnetResourceGroup:         "testRG",
 	}
 }

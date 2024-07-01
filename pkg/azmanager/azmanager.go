@@ -5,6 +5,7 @@ package azmanager
 import (
 	"context"
 	"fmt"
+	"time"
 
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4"
@@ -47,14 +48,6 @@ func CreateAzureManager(cloud *config.CloudConfig, factory azclient.ClientFactor
 		CloudConfig: cloud,
 	}
 
-	if az.LoadBalancerResourceGroup == "" {
-		az.LoadBalancerResourceGroup = az.ResourceGroup
-	}
-
-	if az.VnetResourceGroup == "" {
-		az.VnetResourceGroup = az.ResourceGroup
-	}
-
 	az.LoadBalancerClient = factory.GetLoadBalancerClient()
 	az.VmssClient = factory.GetVirtualMachineScaleSetClient()
 	az.PublicIPPrefixClient = factory.GetPublicIPPrefixClient()
@@ -93,6 +86,8 @@ func (az *AzureManager) GetLBProbeID(name string) *string {
 }
 
 func (az *AzureManager) GetLB(ctx context.Context) (*network.LoadBalancer, error) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 	lb, err := az.LoadBalancerClient.Get(ctx, az.LoadBalancerResourceGroup, az.LoadBalancerName(), nil)
 	if err != nil {
 		return nil, err
@@ -101,6 +96,8 @@ func (az *AzureManager) GetLB(ctx context.Context) (*network.LoadBalancer, error
 }
 
 func (az *AzureManager) CreateOrUpdateLB(ctx context.Context, lb network.LoadBalancer) (*network.LoadBalancer, error) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 	ret, err := az.LoadBalancerClient.CreateOrUpdate(ctx, az.LoadBalancerResourceGroup, to.Val(lb.Name), lb)
 	if err != nil {
 		return nil, err
@@ -109,6 +106,8 @@ func (az *AzureManager) CreateOrUpdateLB(ctx context.Context, lb network.LoadBal
 }
 
 func (az *AzureManager) DeleteLB(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 	if err := az.LoadBalancerClient.Delete(ctx, az.LoadBalancerResourceGroup, az.LoadBalancerName()); err != nil {
 		return err
 	}
@@ -116,6 +115,8 @@ func (az *AzureManager) DeleteLB(ctx context.Context) error {
 }
 
 func (az *AzureManager) ListVMSS(ctx context.Context) ([]*compute.VirtualMachineScaleSet, error) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 	vmssList, err := az.VmssClient.List(ctx, az.ResourceGroup)
 	if err != nil {
 		return nil, err
@@ -124,6 +125,8 @@ func (az *AzureManager) ListVMSS(ctx context.Context) ([]*compute.VirtualMachine
 }
 
 func (az *AzureManager) GetVMSS(ctx context.Context, resourceGroup, vmssName string) (*compute.VirtualMachineScaleSet, error) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
@@ -138,6 +141,8 @@ func (az *AzureManager) GetVMSS(ctx context.Context, resourceGroup, vmssName str
 }
 
 func (az *AzureManager) CreateOrUpdateVMSS(ctx context.Context, resourceGroup, vmssName string, vmss compute.VirtualMachineScaleSet) (*compute.VirtualMachineScaleSet, error) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
@@ -152,6 +157,8 @@ func (az *AzureManager) CreateOrUpdateVMSS(ctx context.Context, resourceGroup, v
 }
 
 func (az *AzureManager) ListVMSSInstances(ctx context.Context, resourceGroup, vmssName string) ([]*compute.VirtualMachineScaleSetVM, error) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
@@ -166,6 +173,8 @@ func (az *AzureManager) ListVMSSInstances(ctx context.Context, resourceGroup, vm
 }
 
 func (az *AzureManager) GetVMSSInstance(ctx context.Context, resourceGroup, vmssName, instanceID string) (*compute.VirtualMachineScaleSetVM, error) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
@@ -183,6 +192,8 @@ func (az *AzureManager) GetVMSSInstance(ctx context.Context, resourceGroup, vmss
 }
 
 func (az *AzureManager) UpdateVMSSInstance(ctx context.Context, resourceGroup, vmssName, instanceID string, vm compute.VirtualMachineScaleSetVM) (*compute.VirtualMachineScaleSetVM, error) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
@@ -200,6 +211,8 @@ func (az *AzureManager) UpdateVMSSInstance(ctx context.Context, resourceGroup, v
 }
 
 func (az *AzureManager) GetPublicIPPrefix(ctx context.Context, resourceGroup, prefixName string) (*network.PublicIPPrefix, error) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
@@ -214,6 +227,8 @@ func (az *AzureManager) GetPublicIPPrefix(ctx context.Context, resourceGroup, pr
 }
 
 func (az *AzureManager) CreateOrUpdatePublicIPPrefix(ctx context.Context, resourceGroup, prefixName string, ipPrefix network.PublicIPPrefix) (*network.PublicIPPrefix, error) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
@@ -228,6 +243,8 @@ func (az *AzureManager) CreateOrUpdatePublicIPPrefix(ctx context.Context, resour
 }
 
 func (az *AzureManager) DeletePublicIPPrefix(ctx context.Context, resourceGroup, prefixName string) error {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
@@ -238,6 +255,8 @@ func (az *AzureManager) DeletePublicIPPrefix(ctx context.Context, resourceGroup,
 }
 
 func (az *AzureManager) GetVMSSInterface(ctx context.Context, resourceGroup, vmssName, instanceID, interfaceName string) (*network.Interface, error) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
@@ -258,6 +277,8 @@ func (az *AzureManager) GetVMSSInterface(ctx context.Context, resourceGroup, vms
 }
 
 func (az *AzureManager) GetSubnet(ctx context.Context) (*network.Subnet, error) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 	subnet, err := az.SubnetClient.Get(ctx, az.VnetResourceGroup, az.VnetName, az.SubnetName, nil)
 	if err != nil {
 		return nil, err
