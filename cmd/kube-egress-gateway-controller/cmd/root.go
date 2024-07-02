@@ -147,30 +147,11 @@ func startControllers(cmd *cobra.Command, args []string) {
 		setupLog.Error(err, "unable to parse config file")
 		os.Exit(1)
 	}
-	cloudConfig.TrimSpace()
-	if err := cloudConfig.Validate(); err != nil {
+	if err := cloudConfig.DefaultAndValidate(); err != nil {
 		setupLog.Error(err, "cloud configuration is invalid")
 		os.Exit(1)
 	}
-	var authProvider *azclient.AuthProvider
-	authProvider, err = azclient.NewAuthProvider(
-		&cloudConfig.ARMClientConfig,
-		&cloudConfig.AzureAuthConfig)
-	if err != nil {
-		setupLog.Error(err, "unable to create auth provider")
-		os.Exit(1)
-	}
-	var cred azcore.TokenCredential
-	if cloudConfig.UseManagedIdentityExtension {
-		cred = authProvider.ManagedIdentityCredential
-	} else {
-		cred = authProvider.ClientSecretCredential
-	}
-	if cloudConfig.UserAgent == "" {
-		cloudConfig.UserAgent = consts.DefaultUserAgent
-	}
-	var factory azclient.ClientFactory
-	factory, err = azclient.NewClientFactory(&azclient.ClientFactoryConfig{SubscriptionID: cloudConfig.SubscriptionID}, &azclient.ARMClientConfig{Cloud: cloudConfig.Cloud, UserAgent: cloudConfig.UserAgent}, cred)
+	factory, err := getClientFactoryFromConfig(cloudConfig)
 	if err != nil {
 		setupLog.Error(err, "unable to create client factory")
 		os.Exit(1)
@@ -222,4 +203,26 @@ func startControllers(cmd *cobra.Command, args []string) {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+func getClientFactoryFromConfig(cloud *config.CloudConfig) (azclient.ClientFactory, error) {
+	var factory azclient.ClientFactory
+	authProvider, err := azclient.NewAuthProvider(&cloud.ARMClientConfig, &cloud.AzureAuthConfig)
+	if err != nil {
+		return factory, err
+	}
+	var cred azcore.TokenCredential
+	if cloud.UseManagedIdentityExtension {
+		cred = authProvider.ManagedIdentityCredential
+	} else {
+		cred = authProvider.ClientSecretCredential
+	}
+	factory, err = azclient.NewClientFactory(
+		&azclient.ClientFactoryConfig{SubscriptionID: cloud.SubscriptionID},
+		&azclient.ARMClientConfig{Cloud: cloud.Cloud, UserAgent: cloud.UserAgent},
+		cred)
+	if err != nil {
+		return factory, err
+	}
+	return factory, nil
 }
