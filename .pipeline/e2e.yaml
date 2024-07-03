@@ -55,7 +55,7 @@ jobs:
       set -euo pipefail
       mv $(pwd)/azure.json $(pwd)/config/azureconfig/azure.json
       echo EXCEPTION_CIDRS=${POD_CIDR}","${SERVICE_CIDR} > $(pwd)/config/environment_variables/environment.env
-      IMAGE_REGISTRY=$(registry.url) make install
+      IMAGE_REGISTRY=$(registry.url) E2E_PIPELINE=true make install
       kubectl wait --for=condition=ready pod -A -l app=kube-egress-gateway --timeout=300s
       kubectl get all -n kube-egress-gateway-system
     displayName: build and install kube-egress-gateway components
