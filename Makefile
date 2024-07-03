@@ -105,11 +105,13 @@ docker-build: docker-builder-setup ## Build docker image with the manager.
 
 .PHONY: docker-build-multi-arch
 docker-build-multi-arch: docker-builder-setup ## Build docker image with the manager.
-	TAG=$(IMAGE_TAG) IMAGE_REGISTRY=$(IMAGE_REGISTRY) PLATFORMS=$(PLATFORMS_MULTI_ARCH) docker buildx bake -f docker/docker-bake.hcl -f  docker/docker-localtag-bake.hcl --progress auto --set=*.output=type=$(OUTPUT_TYPE)
+	TAG=$(IMAGE_TAG) IMAGE_REGISTRY=$(IMAGE_REGISTRY) PLATFORMS=$(PLATFORMS_MULTI_ARCH) docker buildx bake -f docker/docker-bake.hcl -f docker/docker-localtag-bake.hcl --progress auto --set=*.output=type=$(OUTPUT_TYPE)
 
 .PHONY: docker-builder-setup
 docker-builder-setup:
+ifndef E2E_PIPELINE
 	docker run --privileged --rm tonistiigi/binfmt --install all
+endif
 
 ##@ Deployment
 
