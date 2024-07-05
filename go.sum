@@ -402,8 +402,8 @@ sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.29 h1:qiifAaaBqV3d/EcN9dKJaJI
 sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.29/go.mod h1:ZFAt0qF1kR+w8nBVJK56s6CFvLrlosN1i2c+Sxb7LBk=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.16 h1:Fm/Yjv4nXjUtJ90uXKSKwPwaTWYuDFMhDNNOd77PlOg=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.16/go.mod h1:+kl90flu4+WCP6HBGVYbKVQR+5ztDzUNrWJz8rsnvRU=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.0.34 h1:x7maO5uw35JaLC4f9Bmbom2EuPAAV/ZtWkFLfurmdms=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.0.34/go.mod h1:B5XcfygISBQoSoFZT2CRzRidn3EfrPDGc51YFDpDyvQ=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.0.35 h1:TmmlR1YCVfvN546Pj22JtVAEwWnQhu5UXuxbTVA34H4=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.0.35/go.mod h1:sJTBxXq+bWzAOl59O4sMdO3eWrUn2LrrxypbhX6C9qM=
 sigs.k8s.io/controller-runtime v0.18.4 h1:87+guW1zhvuPLh1PHybKdYFLU0YJp4FhJRmiHvm5BZw=
 sigs.k8s.io/controller-runtime v0.18.4/go.mod h1:TVoGrfdpbA9VRFaRnKgk9P5/atA0pMwq+f+msb9M8Sg=
 sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd h1:EDPBXCAspyGV4jQlpZSudPeMmr1bNJefnuqLsRAsHZo=
