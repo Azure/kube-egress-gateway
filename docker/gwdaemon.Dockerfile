@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM registry.k8s.io/build-image/distroless-iptables:v0.5.5
+FROM registry.k8s.io/build-image/distroless-iptables:v0.5.6
 USER 0:0
 ARG MAIN_ENTRY
 COPY --from=baseimg /${MAIN_ENTRY} /${MAIN_ENTRY}
