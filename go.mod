@@ -1,9 +1,6 @@
 module github.com/Azure/kube-egress-gateway
 
 go 1.22.0
-
-toolchain go1.22.2
-
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.13.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 v5.7.0
@@ -37,7 +34,7 @@ require (
 	k8s.io/client-go v0.30.3
 	k8s.io/kubernetes v1.30.3
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.32
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.33
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.18
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.0.39
 	sigs.k8s.io/controller-runtime v0.18.4
