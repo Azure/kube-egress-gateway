@@ -472,6 +472,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSS(
 ) ([]string, error) {
 	log := log.FromContext(ctx)
 	ipConfigName := managedSubresourceName(vmConfig)
+	vmssRG := getVMSSResourceGroup(vmConfig)
 	needUpdate := false
 
 	if vmss.Properties == nil || vmss.Properties.VirtualMachineProfile == nil ||
@@ -496,14 +497,14 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSS(
 				},
 			},
 		}
-		if _, err := r.CreateOrUpdateVMSS(ctx, "", to.Val(vmss.Name), newVmss); err != nil {
+		if _, err := r.CreateOrUpdateVMSS(ctx, vmssRG, to.Val(vmss.Name), newVmss); err != nil {
 			return nil, fmt.Errorf("failed to update vmss(%s): %w", to.Val(vmss.Name), err)
 		}
 	}
 
 	// check and update VMSS instances
 	var privateIPs []string
-	instances, err := r.ListVMSSInstances(ctx, "", to.Val(vmss.Name))
+	instances, err := r.ListVMSSInstances(ctx, vmssRG, to.Val(vmss.Name))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get vm instances from vmss(%s): %w", to.Val(vmss.Name), err)
 	}
@@ -550,6 +551,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 ) (string, error) {
 	log := log.FromContext(ctx)
 	ipConfigName := managedSubresourceName(vmConfig)
+	vmssRG := getVMSSResourceGroup(vmConfig)
 
 	if vm.Properties == nil || vm.Properties.NetworkProfileConfiguration == nil {
 		return "", fmt.Errorf("vmss vm(%s) has empty network profile", to.Val(vm.InstanceID))
@@ -572,7 +574,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 				},
 			},
 		}
-		if _, err := r.UpdateVMSSInstance(ctx, "", vmssName, to.Val(vm.InstanceID), newVM); err != nil {
+		if _, err := r.UpdateVMSSInstance(ctx, vmssRG, vmssName, to.Val(vm.InstanceID), newVM); err != nil {
 			return "", fmt.Errorf("failed to update vmss instance(%s): %w", to.Val(vm.InstanceID), err)
 		}
 	}
@@ -585,7 +587,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 	var primaryIP, secondaryIP string
 	for _, nic := range interfaces {
 		if nic.Properties != nil && to.Val(nic.Properties.Primary) {
-			vmNic, err := r.GetVMSSInterface(ctx, "", vmssName, to.Val(vm.InstanceID), to.Val(nic.Name))
+			vmNic, err := r.GetVMSSInterface(ctx, vmssRG, vmssName, to.Val(vm.InstanceID), to.Val(nic.Name))
 			if err != nil {
 				return "", fmt.Errorf("failed to get vmss(%s) instance(%s) nic(%s): %w", vmssName, to.Val(vm.InstanceID), to.Val(nic.Name), err)
 			}
@@ -806,4 +808,12 @@ func different(ipConfig1, ipConfig2 *compute.VirtualMachineScaleSetIPConfigurati
 		}
 	}
 	return false
+}
+
+func getVMSSResourceGroup(vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration) string {
+	if vmConfig.Spec.VmssResourceGroup != "" {
+		return vmConfig.Spec.VmssResourceGroup
+	}
+	// return an empty string so that azmanager will use the default resource group in the config
+	return ""
 }
