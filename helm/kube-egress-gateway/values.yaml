@@ -51,11 +51,11 @@ gatewayCNIIpam:
 config:
   azureCloudConfig:
     cloud: "AzurePublicCloud"
-    tenantId: "00000000-0000-0000-0000-000000000000"
-    subscriptionId: "00000000-0000-0000-0000-000000000000"
+    tenantId: ""
+    subscriptionId: ""
     useManagedIdentityExtension: false
-    userAssignedIdentityID: "00000000-0000-0000-0000-000000000000"
-    aadClientId: "00000000-0000-0000-0000-000000000000"
+    userAssignedIdentityID: ""
+    aadClientId: ""
     aadClientSecret: ""
     userAgent: "kube-egress-gateway-controller"
     resourceGroup: ""

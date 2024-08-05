@@ -6,20 +6,16 @@ This Helm chart enables installation and maintenance of Azure kube-egress-gatewa
 
 ## Installation
 
-Clone this repository, kube-egress-gateway chart is maintained in `helm/kube-egress-gateway` directory:
-```
-git clone https://github.com/Azure/kube-egress-gateway.git
-```
-
 To install `kube-egress-gateway`, you may run below `helm` command:
 
 ```bash
 $ helm install \
-  kube-egress-gateway ./helm/kube-egress-gateway \
+  --repo https://raw.githubusercontent.com/Azure/kube-egress-gateway/main/helm/repo \
+  kube-egress-gateway --generate-name \
   --namespace kube-egress-gateway-system \
   --create-namespace \
   --set common.imageRepository=mcr.microsoft.com/aks \
-  --set common.imageTag=v0.0.11 \ 
+  --set common.imageTag=v0.0.14 \ 
   -f azure_config.yaml
 ```
 
@@ -60,7 +56,7 @@ config:
     tenantId: "00000000-0000-0000-0000-000000000000"
     subscriptionId: "00000000-0000-0000-0000-000000000000"
     useManagedIdentityExtension: false
-    userAssignedIdentityID: "00000000-0000-0000-0000-000000000000"
+    userAssignedIdentityID: "00000000-0000-0000-0000-000000000000" # no need if useManagedIdentityExtension == false
     aadClientId: "00000000-0000-0000-0000-000000000000"
     aadClientSecret: "<your secret>"
     userAgent: "kube-egress-gateway-controller"
