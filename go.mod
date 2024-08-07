@@ -35,7 +35,7 @@ require (
 	k8s.io/client-go v0.30.3
 	k8s.io/kubernetes v1.30.3
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.37
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.39
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.21
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.0.44
 	sigs.k8s.io/controller-runtime v0.18.4
@@ -108,12 +108,12 @@ require (
 	go.opentelemetry.io/otel v1.28.0 // indirect
 	go.opentelemetry.io/otel/metric v1.28.0 // indirect
 	go.opentelemetry.io/otel/trace v1.28.0 // indirect
-	golang.org/x/crypto v0.25.0 // indirect
+	golang.org/x/crypto v0.26.0 // indirect
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
 	golang.org/x/net v0.27.0 // indirect
 	golang.org/x/oauth2 v0.20.0 // indirect
-	golang.org/x/term v0.22.0 // indirect
-	golang.org/x/text v0.16.0 // indirect
+	golang.org/x/term v0.23.0 // indirect
+	golang.org/x/text v0.17.0 // indirect
 	golang.org/x/time v0.6.0 // indirect
 	golang.org/x/tools v0.23.0 // indirect
 	golang.zx2c4.com/wireguard v0.0.0-20220407013110-ef5c587f782d // indirect
