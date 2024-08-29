@@ -50,6 +50,7 @@ rules:
   resources:
   - gatewaylbconfigurations/finalizers
   - gatewayvmconfigurations/finalizers
+  - staticgatewayconfigurations/finalizers
   verbs:
   - update
 - apiGroups:
