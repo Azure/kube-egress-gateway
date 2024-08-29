@@ -61,6 +61,19 @@ func NewCNIConfManager(cniConfDir, cniConfFile, exceptionCidrs, cniUninstallConf
 	}, nil
 }
 
+func (mgr *Manager) IsReady() bool {
+	log := logger.GetLogger()
+	file := filepath.Join(mgr.cniConfDir, mgr.cniConfFile)
+	if _, err := os.Stat(file); err != nil {
+		if os.IsNotExist(err) {
+			log.Info("cni configuration file not found, skip removing taint")
+		}
+		log.Error(err, "failed to stat cni configuration file in node event handler", "file name", file)
+		return false
+	}
+	return true
+}
+
 func (mgr *Manager) Start(ctx context.Context) error {
 	log := logger.GetLogger()
 	defer func() {

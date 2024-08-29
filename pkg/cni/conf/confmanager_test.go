@@ -97,6 +97,32 @@ func TestNewCNIConfManager(t *testing.T) {
 	}
 }
 
+func TestIsReady(t *testing.T) {
+	tests := map[string]struct {
+		fileName    string
+		expectReady bool
+	}{
+		"IsReady() should return true when cni configuration file is found": {
+			fileName:    "10-test.conflist",
+			expectReady: true,
+		},
+		"IsReady should return false when cni configuration file is not found": {
+			fileName:    "01-test.conflist",
+			expectReady: false,
+		},
+	}
+	for name, test := range tests {
+		mgr, err := NewCNIConfManager(testDir, test.fileName, "", "", nil, testGrpcPort)
+		if err != nil {
+			t.Fatalf("failed to create cni conf manager: %v", err)
+		}
+		ready := mgr.IsReady()
+		if ready != test.expectReady {
+			t.Fatalf("IsReady returns unexpected result for test %s: got: %v, expected: %v", name, ready, test.expectReady)
+		}
+	}
+}
+
 func TestStart(t *testing.T) {
 	os.Setenv(consts.PodNamespaceEnvKey, "default")
 	defer os.Unsetenv(consts.PodNamespaceEnvKey)

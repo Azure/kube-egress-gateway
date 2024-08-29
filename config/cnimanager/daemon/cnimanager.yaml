@@ -12,7 +12,7 @@ spec:
   template:
     metadata:
       annotations:
-        kubectl.kubernetes.io/default-container: cni-manager
+        kubectl.kubernetes.io/default-container: cnimanager
       labels:
         kube-egress-gateway-control-plane: cni-manager
     spec:
@@ -54,6 +54,10 @@ spec:
               drop:
               - ALL
           env:
+          - name: MY_NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
           - name: MY_POD_NAMESPACE
             valueFrom:
               fieldRef:

@@ -112,6 +112,9 @@ const (
 	CNIConfDir = "/etc/cni/net.d"
 
 	CNIGatewayAnnotationKey = "kubernetes.azure.com/static-gateway-configuration"
+
+	// this taint is applied to AKS nodes when cniManager is not ready
+	CNIManagerNotReadyTaintKey = "egressgateway.kubernetes.azure.com/cni-not-ready"
 )
 
 const (

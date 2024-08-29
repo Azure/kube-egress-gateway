@@ -28,6 +28,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	toolscache "k8s.io/client-go/tools/cache"
+	clientretry "k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -85,13 +87,24 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 	logger.SetDefaultLogger(zapr.NewLogger(zapLog))
 	logger := logger.GetLogger()
 
-	k8sClient := startKubeClient(ctx, logger)
+	k8sCluster := getKubeCluster(ctx, logger)
+	k8sClient := k8sCluster.GetClient()
 
 	cniConfMgr, err := cniconf.NewCNIConfManager(consts.CNIConfDir, confFileName, exceptionCidrs, cniUninstallConfigMapName, k8sClient, grpcPort)
 	if err != nil {
 		logger.Error(err, "failed to create cni config manager")
 		os.Exit(1)
 	}
+
+	nodeTaintHandler := toolscache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			removeNodeTaintIfNeeded(obj, func() bool { return cniConfMgr.IsReady() }, k8sClient, logger)
+		},
+		UpdateFunc: func(_, newObj interface{}) {
+			removeNodeTaintIfNeeded(newObj, func() bool { return cniConfMgr.IsReady() }, k8sClient, logger)
+		},
+	}
+	startKubeCluster(ctx, k8sCluster, nodeTaintHandler, logger)
 
 	g.Go(func() error {
 		if err := cniConfMgr.Start(ctx); err != nil {
@@ -112,7 +125,11 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 		)),
 		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
 			grpc_ctxtags.UnaryServerInterceptor(),
-			grpc_zap.UnaryServerInterceptor(zapLog),
+			grpc_zap.UnaryServerInterceptor(
+				zapLog,
+				grpc_zap.WithDecider(func(fullMethodName string, err error) bool {
+					return fullMethodName != "/grpc.health.v1.Health/Check"
+				})),
 			grpc_prometheus.UnaryServerInterceptor,
 			grpc_recovery.UnaryServerInterceptor(),
 		)),
@@ -148,7 +165,7 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 	logger.Info("server shutdown")
 }
 
-func startKubeClient(ctx context.Context, logger logr.Logger) client.Client {
+func getKubeCluster(ctx context.Context, logger logr.Logger) cluster.Cluster {
 	apischeme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(apischeme))
 	utilruntime.Must(current.AddToScheme(apischeme))
@@ -157,12 +174,16 @@ func startKubeClient(ctx context.Context, logger logr.Logger) client.Client {
 		options.Logger = logger
 		options.Cache = cache.Options{
 			ByObject: map[client.Object]cache.ByObject{
-				&corev1.ConfigMap{}: cache.ByObject{
+				&corev1.ConfigMap{}: {
 					// we only watch this specific one cm object
 					Field: fields.SelectorFromSet(fields.Set{
 						"metadata.name":      cniUninstallConfigMapName,
 						"metadata.namespace": os.Getenv(consts.PodNamespaceEnvKey),
 					}),
+				},
+				&corev1.Node{}: {
+					// we only watch the node where cniManager pod is running
+					Field: fields.OneTermEqualSelector("metadata.name", os.Getenv(consts.NodeNameEnvKey)),
 				},
 			},
 		}
@@ -171,6 +192,21 @@ func startKubeClient(ctx context.Context, logger logr.Logger) client.Client {
 		logger.Error(err, "failed to create k8s cluster object")
 		os.Exit(1)
 	}
+	return k8sCluster
+}
+
+func startKubeCluster(ctx context.Context, k8sCluster cluster.Cluster, handler toolscache.ResourceEventHandler, logger logr.Logger) {
+	nodeInformer, err := k8sCluster.GetCache().GetInformer(ctx, &corev1.Node{})
+	if err != nil {
+		logger.Error(err, "failed to get node informer")
+		os.Exit(1)
+	}
+	_, err = nodeInformer.AddEventHandler(handler)
+	if err != nil {
+		logger.Error(err, "failed to add node event handler")
+		os.Exit(1)
+	}
+
 	go func() {
 		if err := k8sCluster.Start(ctx); err != nil {
 			logger.Error(err, "failed to start k8s client cache")
@@ -186,5 +222,27 @@ func startKubeClient(ctx context.Context, logger logr.Logger) client.Client {
 		// only get the configMap to trigger informer start, ignore the error
 		logger.Error(err, "failed to get cni uninstall configMap, error ignored", "configMap name", cniUninstallConfigMapName)
 	}
-	return k8sClient
+}
+
+func removeNodeTaintIfNeeded(obj interface{}, isReady func() bool, k8sClient client.Client, logger logr.Logger) {
+	node := obj.(*corev1.Node)
+	logger.Info("checking node taint", "node", node.Name)
+	for i, taint := range node.Spec.Taints {
+		if taint.Key == consts.CNIManagerNotReadyTaintKey {
+			if isReady() {
+				logger.Info("cni configuration file is ready, removing node taint", "node", node.Name)
+				// make a deep copy of the node since we should not modify the obj inside ResourceEventHandler
+				newNode := node.DeepCopy()
+				newNode.Spec.Taints = append(newNode.Spec.Taints[:i], newNode.Spec.Taints[i+1:]...)
+				if err := clientretry.RetryOnConflict(clientretry.DefaultRetry, func() error {
+					return k8sClient.Update(context.Background(), newNode)
+				}); err != nil {
+					logger.Error(err, "failed to remove node taint", "node", newNode.Name)
+				}
+			} else {
+				logger.Info("cni configuration file is not ready yet, keeping node taint", "node", node.Name)
+			}
+			return
+		}
+	}
 }

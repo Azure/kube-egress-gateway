@@ -32,23 +32,9 @@ rules:
 - apiGroups:
   - egressgateway.kubernetes.azure.com
   resources:
-  - podendpoints
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - egressgateway.kubernetes.azure.com
-  resources:
-  - podendpoints/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - egressgateway.kubernetes.azure.com
-  resources:
   - gatewayvmconfigurations
+  - podendpoints
+  - staticgatewayconfigurations
   verbs:
   - get
   - list
@@ -62,14 +48,7 @@ rules:
 - apiGroups:
   - egressgateway.kubernetes.azure.com
   resources:
-  - staticgatewayconfigurations
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - egressgateway.kubernetes.azure.com
-  resources:
+  - podendpoints/status
   - staticgatewayconfigurations/status
   verbs:
   - get
