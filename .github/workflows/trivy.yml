@@ -15,7 +15,7 @@ permissions:
 jobs:
   build:
     permissions:
-      contents: read # for actions/checkout to fetch code
+      contents: write 
       security-events: write # for github/codeql-action/upload-sarif to upload SARIF results
     name: Build
     runs-on: ubuntu-latest
@@ -44,61 +44,81 @@ jobs:
         if: success() || failure()
         with:
           image-ref: 'local/kube-egress-gateway-controller:${{ github.sha }}'
-          format: 'table'
-          exit-code: '1'
+          format: 'sarif'
           ignore-unfixed: true
+          output: 'trivy-kube-egress-gateway-controller-results.sarif'
           vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
           timeout: '5m0s'
-
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@4dd16135b69a43b6c8efb853346f8437d92d3c93 # v3.26.6
+        with:
+          sarif_file: 'trivy-kube-egress-gateway-controller-results.sarif'
+          category: kube-egress-gateway-controller-image
       - name: Run Trivy scanner for daemon
         uses: aquasecurity/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8 # master
         if: success() || failure()
         with:
           image-ref: 'local/kube-egress-gateway-daemon:${{ github.sha }}'
-          format: 'table'
-          exit-code: '1'
+          format: 'sarif'
           ignore-unfixed: true
+          output: 'trivy-kube-egress-gateway-daemon-results.sarif'
           vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
           timeout: '5m0s'
-
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@4dd16135b69a43b6c8efb853346f8437d92d3c93 # v3.26.6
+        with:
+          sarif_file: 'trivy-kube-egress-gateway-daemon-results.sarif'
+          category: kube-egress-gateway-daemon-image
       - name: Run Trivy scanner for cnimanager
         uses: aquasecurity/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8 # master
         if: success() || failure()
         with:
           image-ref: 'local/kube-egress-gateway-cnimanager:${{ github.sha }}'
-          format: 'table'
-          exit-code: '1'
+          format: 'sarif'
           ignore-unfixed: true
           vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
+          output: 'trivy-kube-egress-gateway-cnimanager-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
           timeout: '5m0s'
-
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@4dd16135b69a43b6c8efb853346f8437d92d3c93 # v3.26.6
+        with:
+          sarif_file: 'trivy-kube-egress-gateway-cnimanager-results.sarif'
+          category: kube-egress-gateway-cnimanager-image
       - name: Run Trivy scanner for cni
         uses: aquasecurity/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8 # master
         if: success() || failure()
         with:
           image-ref: 'local/kube-egress-gateway-cni:${{ github.sha }}'
-          format: 'table'
-          exit-code: '1'
+          format: 'sarif'
           ignore-unfixed: true
           vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
+          output: 'trivy-kube-egress-gateway-cni-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
           timeout: '5m0s'
-
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@4dd16135b69a43b6c8efb853346f8437d92d3c93 # v3.26.6
+        with:
+          sarif_file: 'trivy-kube-egress-gateway-cni-results.sarif'
+          category: kube-egress-gateway-cni
       - name: Run Trivy scanner for cni-ipam
         uses: aquasecurity/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8 # master
         if: success() || failure()
         with:
           image-ref: 'local/kube-egress-gateway-cni-ipam:${{ github.sha }}'
-          format: 'table'
-          exit-code: '1'
+          format: 'sarif'
           ignore-unfixed: true
           vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
+          output: 'trivy-kube-egress-gateway-cni-ipam-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
           timeout: '5m0s'
-
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@4dd16135b69a43b6c8efb853346f8437d92d3c93 # v3.26.6
+        with:
+          sarif_file: 'trivy-kube-egress-gateway-cni-ipam-results.sarif'
+          category: kube-egress-gateway-cni-ipam
       - name: Run Trivy vulnerability scanner in repo mode
         uses: aquasecurity/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8 # master
         if: success() || failure()
@@ -107,6 +127,6 @@ jobs:
           ignore-unfixed: true
           format: 'github'
           output: 'dependency-results.sbom.json'
-          image-ref: '.'
+          scan-ref: '.'
           github-pat: ${{ secrets.GITHUB_TOKEN }}
           timeout: '5m0s'
