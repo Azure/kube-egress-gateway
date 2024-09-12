@@ -54,7 +54,7 @@ func SetPodRoutes(ifName string, exceptionCidrs []string, defaultToGateway bool,
 	var defaultRoute *netlink.Route
 	for _, route := range routes {
 		route := route
-		if route.Dst == nil && route.Family == nl.FAMILY_V4 {
+		if route.Family == nl.FAMILY_V4 && (route.Dst == nil || route.Dst.String() == "0.0.0.0/0") {
 			defaultRoute = &route
 		}
 	}
@@ -160,7 +160,7 @@ func addRoutingForIngress(eth0Link netlink.Link, defaultRoute netlink.Route, sys
 
 	// add ip rule: lookup separate routing table if packet is marked
 	rule := netlink.NewRule()
-	rule.Mark = consts.Eth0Mark
+	rule.Mark = uint32(consts.Eth0Mark)
 	rule.Table = consts.Eth0Mark
 	if err := routesRunner.netlink.RuleAdd(rule); err != nil {
 		return fmt.Errorf("failed to add routing rule: %w", err)
