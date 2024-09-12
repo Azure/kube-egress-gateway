@@ -35,57 +35,7 @@ rules:
   - egressgateway.kubernetes.azure.com
   resources:
   - gatewaylbconfigurations
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - egressgateway.kubernetes.azure.com
-  resources:
-  - gatewaylbconfigurations/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - egressgateway.kubernetes.azure.com
-  resources:
-  - gatewaylbconfigurations/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - egressgateway.kubernetes.azure.com
-  resources:
   - gatewayvmconfigurations
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - egressgateway.kubernetes.azure.com
-  resources:
-  - gatewayvmconfigurations/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - egressgateway.kubernetes.azure.com
-  resources:
-  - gatewayvmconfigurations/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - egressgateway.kubernetes.azure.com
-  resources:
   - staticgatewayconfigurations
   verbs:
   - create
@@ -98,6 +48,15 @@ rules:
 - apiGroups:
   - egressgateway.kubernetes.azure.com
   resources:
+  - gatewaylbconfigurations/finalizers
+  - gatewayvmconfigurations/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - gatewaylbconfigurations/status
+  - gatewayvmconfigurations/status
   - staticgatewayconfigurations/status
   verbs:
   - get

@@ -47,6 +47,7 @@ func TestSetPodRoutes(t *testing.T) {
 			Family:    nl.FAMILY_V4,
 			Gw:        defaultGw,
 			LinkIndex: 1,
+			Dst:       &net.IPNet{IP: net.IPv4zero, Mask: net.CIDRMask(0, 32)},
 		},
 		{
 			Dst:       &net.IPNet{IP: net.IPv4(10, 244, 0, 0), Mask: net.CIDRMask(24, 32)},
@@ -62,6 +63,7 @@ func TestSetPodRoutes(t *testing.T) {
 	defaultRoute := netlink.Route{
 		Family:    nl.FAMILY_V4,
 		Gw:        defaultGw,
+		Dst:       &net.IPNet{IP: net.IPv4zero, Mask: net.CIDRMask(0, 32)},
 		LinkIndex: 1,
 		Table:     8738,
 	}
