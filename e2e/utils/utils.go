@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	corev1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -62,7 +61,6 @@ func CreateK8sClient() (k8sClient client.Client, podLogClient clientset.Interfac
 
 func CreateAzureClients() (azclient.ClientFactory, error) {
 	var subscriptionID, tenantID, clientID, clientSecret, managedIdentityClientID string
-	var cred azcore.TokenCredential
 	if subscriptionID = os.Getenv(SubscriptionIDEnv); subscriptionID == "" {
 		return nil, fmt.Errorf(SubscriptionIDEnv + " is not set")
 	}
@@ -91,12 +89,7 @@ func CreateAzureClients() (azclient.ClientFactory, error) {
 	if err != nil {
 		return nil, err
 	}
-	if authConfig.UseManagedIdentityExtension {
-		cred = authProvider.ManagedIdentityCredential
-	} else {
-		cred = authProvider.ClientSecretCredential
-	}
-	return azclient.NewClientFactory(&azclient.ClientFactoryConfig{SubscriptionID: subscriptionID}, armConfig, cred)
+	return azclient.NewClientFactory(&azclient.ClientFactoryConfig{SubscriptionID: subscriptionID}, armConfig, authProvider.GetAzIdentity())
 }
 
 func CreateNamespace(namespaceName string, c client.Client) error {
