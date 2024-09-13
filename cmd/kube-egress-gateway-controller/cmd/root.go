@@ -23,8 +23,6 @@ import (
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
-
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	controllers "github.com/Azure/kube-egress-gateway/controllers/manager"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
@@ -212,12 +210,6 @@ func getClientFactoryFromConfig(cloud *config.CloudConfig) (azclient.ClientFacto
 	if err != nil {
 		return factory, err
 	}
-	var cred azcore.TokenCredential
-	if cloud.UseManagedIdentityExtension {
-		cred = authProvider.ManagedIdentityCredential
-	} else {
-		cred = authProvider.ClientSecretCredential
-	}
 	var rateLimitConf ratelimit.CloudProviderRateLimitConfig
 	// rateLimitConfig cannot be nil if cloud is initialized correctly
 	if cloud.RateLimitConfig != nil {
@@ -230,7 +222,7 @@ func getClientFactoryFromConfig(cloud *config.CloudConfig) (azclient.ClientFacto
 			SubscriptionID:               cloud.SubscriptionID,
 		},
 		&azclient.ARMClientConfig{Cloud: cloud.Cloud, UserAgent: cloud.UserAgent},
-		cred)
+		authProvider.GetAzIdentity())
 	if err != nil {
 		return factory, err
 	}
