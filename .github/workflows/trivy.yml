@@ -3,6 +3,9 @@ name: Trivy scanner
 on:
   workflow_dispatch:
   push:
+    branches:
+      - master
+      - main
     tags:
       - 'v*.*.*'
   pull_request:
