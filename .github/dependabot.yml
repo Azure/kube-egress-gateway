@@ -16,6 +16,8 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/cleanup"
+    ignore:
+      - dependency-name: "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/*"
     groups:
       k8s:
         applies-to: version-updates
