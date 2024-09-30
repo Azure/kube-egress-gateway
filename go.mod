@@ -37,7 +37,7 @@ require (
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.59
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.29
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.0.65
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.0.66
 	sigs.k8s.io/controller-runtime v0.19.0
 )
 
