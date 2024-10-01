@@ -88,6 +88,8 @@ Additionally, `common.gatewayLbProbePort` defines the gateway LoadBalancer probe
 | `gatewayControllerManager.leaderElect` | `true` | If multiple relicas are enabled for gatewayControllerManager, enable or disable leader Election among the relicas. Default to `true`. |
 | `gatewayControllerManager.metricsBindPort` | `8080` | Port that gatewayControllerManager listens on for `/metrics` requests. |
 | `gatewayControllerManager.healthProbeBindPort` | `8081` | Port that gatewayControllerManager listens on for health probe requests. |
+| `gatewayControllerManager.nodeSelector` | | Define tolerations to allow the pods to be scheduled on nodes with specific taints. |
+| `gatewayControllerManager.tolerations` | | Specify which nodes the pods should run on by providing matching labels. |
 
 ## gateway-daemon-manager configurations
 
@@ -114,6 +116,8 @@ Additionally, `common.gatewayLbProbePort` defines the gateway LoadBalancer probe
 | `gatewayCNIManager.cniConfigFileName` | `01-egressgateway.conflist` | Name of the newly generated cni configuration list file. |
 | `gatewayCNIManager.cniUninstallConfigMapName` | `cni-uninstall` | Name of the configMap indicating whether cni plugin needs to be uninstalled upon gatewayCNIManager pod shutdown. |
 | `gatewayCNIManager.cniUninstall` | `false` | Boolean indicating whether to uninstall kube-egress-gateway CNI plugin upon gatewayCNIManager pod shutdown. |
+| `gatewayCNIManager.nodeSelector` | `kubernetes.io/os: linux` | Define tolerations to allow the pods to be scheduled on nodes with specific taints. |
+| `gatewayCNIManager.tolerations` | | Specify which nodes the pods should run on by providing matching labels. |
 
 ## gateway-CNI and gateway-CNI-Ipam configurations
 
