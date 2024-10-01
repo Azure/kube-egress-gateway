@@ -13,6 +13,8 @@ gatewayControllerManager:
   leaderElect: "true"
   metricsBindPort: 8080
   healthProbeBindPort: 8081
+  nodeSelector: {}
+  tolerations: []
 
 gatewayCNIManager:
   enabled: true
@@ -26,6 +28,9 @@ gatewayCNIManager:
   cniConfigFileName: "01-egressgateway.conflist"
   cniUninstallConfigMapName: "cni-uninstall"
   cniUninstall: false
+  nodeSelector:
+    kubernetes.io/os: linux
+  tolerations: []
 
 gatewayDaemonManager:
   enabled: true

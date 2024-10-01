@@ -159,8 +159,14 @@ spec:
         - mountPath: /opt/cni/bin
           name: cni-bin
       hostNetwork: true
-      nodeSelector:
-        kubernetes.io/os: linux
+      {{- with .Values.gatewayCNIManager.nodeSelector }}
+      nodeSelector: 
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.gatewayCNIManager.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       serviceAccountName: kube-egress-gateway-cni-manager
       terminationGracePeriodSeconds: 60 # update to 60 seconds for cni uninstall retry on error
       volumes:
