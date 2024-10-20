@@ -22,7 +22,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/vishvananda/netlink v1.3.0
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.56.0
-	go.uber.org/mock v0.4.0
+	go.uber.org/mock v0.5.0
 	go.uber.org/multierr v1.11.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/sync v0.8.0
@@ -35,7 +35,7 @@ require (
 	k8s.io/client-go v0.31.1
 	k8s.io/kubernetes v1.31.1
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.0.68
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.1.0
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.0.30
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.0.75
 	sigs.k8s.io/controller-runtime v0.19.0
