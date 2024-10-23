@@ -85,7 +85,7 @@ jobs:
         make install-dependencies unit-test build
 
     - name: Coveralls
-      uses: coverallsapp/github-action@v2
+      uses: coverallsapp/github-action@4cdef0b2dbe0c9aa26bed48edb868db738625e79 # v2.3.3
       with:
         file: profile.cov
         format: golang
