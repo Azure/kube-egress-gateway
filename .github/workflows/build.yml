@@ -6,6 +6,9 @@ on:
     branches:
       - 'main'
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -16,18 +19,23 @@ jobs:
       id-token: write
     steps:
       # Get the repository's code
+      - name: Harden Runner
+        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+        with:
+          egress-policy: audit
+
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4.2.1
       # https://github.com/docker/setup-qemu-action
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf # v3.2.0
       # https://github.com/docker/setup-buildx-action
       - name: Set up Docker Buildx
         id: buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@c47758b77c9736f4b2ef4073d4d51994fabfe349 # v3.7.1
       - name: Docker meta
         id: daemon # you'll use this in the next step
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81 # v5.5.1
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -37,7 +45,7 @@ jobs:
           bake-target: daemon-tags
       - name: Docker meta
         id: controller # you'll use this in the next step
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81 # v5.5.1
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -47,7 +55,7 @@ jobs:
           bake-target: controller-tags
       - name: Docker meta
         id: cnimanager # you'll use this in the next step
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81 # v5.5.1
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -57,7 +65,7 @@ jobs:
           bake-target: cnimanager-tags
       - name: Docker meta
         id: cniplugin # you'll use this in the next step
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81 # v5.5.1
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -67,7 +75,7 @@ jobs:
           bake-target: cni-tags
       - name: Docker meta
         id: cniipamplugin # you'll use this in the next step
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81 # v5.5.1
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -79,7 +87,7 @@ jobs:
         run: |
           echo "TARGET_PLATFORMS=linux/amd64" >> $GITHUB_ENV
       - name: Build and push
-        uses: docker/bake-action@v5
+        uses: docker/bake-action@2e3d19baedb14545e5d41222653874f25d5b4dfb # v5.10.0
         env:
           PLATFORMS: ${{env.TARGET_PLATFORMS}}
         with:
