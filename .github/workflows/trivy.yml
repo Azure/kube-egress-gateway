@@ -53,6 +53,9 @@ jobs:
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
           timeout: '5m0s'
+        env:
+          TRIVY_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-db 
+          TRIVY_JAVA_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-java-db
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@662472033e021d55d94146f66f6058822b0b39fd # v3.27.0
         with:
@@ -69,6 +72,7 @@ jobs:
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
           timeout: '5m0s'
+          skip-setup-trivy: true
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@662472033e021d55d94146f66f6058822b0b39fd # v3.27.0
         with:
@@ -85,6 +89,7 @@ jobs:
           output: 'trivy-kube-egress-gateway-cnimanager-results.sarif'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
           timeout: '5m0s'
+          skip-setup-trivy: true
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@662472033e021d55d94146f66f6058822b0b39fd # v3.27.0
         with:
@@ -101,6 +106,7 @@ jobs:
           output: 'trivy-kube-egress-gateway-cni-results.sarif'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
           timeout: '5m0s'
+          skip-setup-trivy: true
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@662472033e021d55d94146f66f6058822b0b39fd # v3.27.0
         with:
@@ -133,3 +139,4 @@ jobs:
           scan-ref: '.'
           github-pat: ${{ secrets.GITHUB_TOKEN }}
           timeout: '5m0s'
+          skip-setup-trivy: true
