@@ -35,7 +35,7 @@ require (
 	k8s.io/client-go v0.31.2
 	k8s.io/kubernetes v1.31.2
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.1.17
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.1.18
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.1.4
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.1.12
 	sigs.k8s.io/controller-runtime v0.19.1
@@ -119,7 +119,7 @@ require (
 	golang.org/x/oauth2 v0.23.0 // indirect
 	golang.org/x/term v0.26.0 // indirect
 	golang.org/x/text v0.20.0 // indirect
-	golang.org/x/time v0.7.0 // indirect
+	golang.org/x/time v0.8.0 // indirect
 	golang.org/x/tools v0.26.0 // indirect
 	golang.zx2c4.com/wireguard v0.0.0-20230325221338-052af4a8072b // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
