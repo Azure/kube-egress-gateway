@@ -44,7 +44,7 @@ jobs:
           az acr login -n ${{ secrets.AZURE_REGISTRY }}
       - name: Docker meta
         id: daemon # you'll use this in the next step
-        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81 # v5.5.1
+        uses: docker/metadata-action@359e915ab3220d88514ed693793a5cc795192aa6 # v5.6.0
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -54,7 +54,7 @@ jobs:
           bake-target: daemon-tags
       - name: Docker meta
         id: controller # you'll use this in the next step
-        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81 # v5.5.1
+        uses: docker/metadata-action@359e915ab3220d88514ed693793a5cc795192aa6 # v5.6.0
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -64,7 +64,7 @@ jobs:
           bake-target: controller-tags
       - name: Docker meta
         id: cnimanager # you'll use this in the next step
-        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81 # v5.5.1
+        uses: docker/metadata-action@359e915ab3220d88514ed693793a5cc795192aa6 # v5.6.0
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -74,7 +74,7 @@ jobs:
           bake-target: cnimanager-tags
       - name: Docker meta
         id: cniplugin # you'll use this in the next step
-        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81 # v5.5.1
+        uses: docker/metadata-action@359e915ab3220d88514ed693793a5cc795192aa6 # v5.6.0
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -84,7 +84,7 @@ jobs:
           bake-target: cni-tags
       - name: Docker meta
         id: cniipamplugin # you'll use this in the next step
-        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81 # v5.5.1
+        uses: docker/metadata-action@359e915ab3220d88514ed693793a5cc795192aa6 # v5.6.0
         with:
           # list of Docker images to use as base name for tags
           images: |
