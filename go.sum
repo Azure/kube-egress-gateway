@@ -183,8 +183,8 @@ github.com/modern-go/reflect2 v1.0.2 h1:xBagoLtFs94CBntxluKeaWgTMpvLxC4ur3nMaC9G
 github.com/modern-go/reflect2 v1.0.2/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
-github.com/onsi/ginkgo/v2 v2.21.0 h1:7rg/4f3rB88pb5obDgNZrNHrQ4e6WpjonchcpuBRnZM=
-github.com/onsi/ginkgo/v2 v2.21.0/go.mod h1:7Du3c42kxCUegi0IImZ1wUQzMBVecgIHjR1C+NkhLQo=
+github.com/onsi/ginkgo/v2 v2.22.0 h1:Yed107/8DjTr0lKCNt7Dn8yQ6ybuDRQoMGrNFKzMfHg=
+github.com/onsi/ginkgo/v2 v2.22.0/go.mod h1:7Du3c42kxCUegi0IImZ1wUQzMBVecgIHjR1C+NkhLQo=
 github.com/onsi/gomega v1.35.1 h1:Cwbd75ZBPxFSuZ6T+rN/WCb/gOc6YgFBXLlZLhC7Ds4=
 github.com/onsi/gomega v1.35.1/go.mod h1:PvZbdDc8J6XJEpDK4HCuRBm8a6Fzp9/DmhC9C7yFlog=
 github.com/opentracing/opentracing-go v1.1.0/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
@@ -407,8 +407,8 @@ k8s.io/utils v0.0.0-20240711033017-18e509b52bc8 h1:pUdcCO1Lk/tbT5ztQWOBi5HBgbBP1
 k8s.io/utils v0.0.0-20240711033017-18e509b52bc8/go.mod h1:OLgZIPagt7ERELqWJFomSt595RzquPNLL48iOWgYOg0=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.1.19 h1:ZOZEUZcBukrASRz36OdxzX38201cp58dLP3Eo4UzbYs=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.1.19/go.mod h1:tlk+gcCHdogzEKsTvb7r0+WBySkQXrmE+BaGXywW9Hc=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.1.5 h1:FrkM6pIC6b3dmrd3RgPqrOK44z9gFsR4NI5ZFlUtiQo=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.1.5/go.mod h1:qpPLf/GsTSQV8pGzInA07hYT7OgwN5AqLoYf0i5qI2I=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.1.6 h1:Imxhux2vgnNxxXG1aqHQeC7y77SRaLzv3LyAtgDkKkM=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.1.6/go.mod h1:Sd2CUnWOBGQ8/oHWClys6lbw5Xmg4pIJRX4knFBgS2Y=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.1.13 h1:Mt8L3CEtG8ynDDYoovyK8wnSyC87LGbe5dqgQWSYkiA=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.1.13/go.mod h1:lfNVmnmPc9UpmXq5QeUdqfcWqMsI958vpvQN3wxCt3Y=
 sigs.k8s.io/controller-runtime v0.19.1 h1:Son+Q40+Be3QWb+niBXAg2vFiYWolDjjRfO8hn/cxOk=
