@@ -19,10 +19,10 @@ updates:
     ignore:
       - dependency-name: "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/*"
     groups:
-      k8s:
+      all:
         applies-to: version-updates
         patterns:
-        - "k8s.io*"
+        - "*"
         update-types:
         - "patch"
         - "minor"
