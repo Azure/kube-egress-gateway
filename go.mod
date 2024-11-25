@@ -14,7 +14,7 @@ require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
-	github.com/onsi/ginkgo/v2 v2.21.0
+	github.com/onsi/ginkgo/v2 v2.22.0
 	github.com/onsi/gomega v1.35.1
 	github.com/prometheus/client_golang v1.20.5
 	github.com/spf13/cobra v1.8.1
@@ -35,7 +35,7 @@ require (
 	k8s.io/client-go v0.31.3
 	k8s.io/kubernetes v1.31.3
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.1.19
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.1.20
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.1.5
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.1.13
 	sigs.k8s.io/controller-runtime v0.19.1
