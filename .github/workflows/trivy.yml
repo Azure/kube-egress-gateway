@@ -57,7 +57,7 @@ jobs:
           TRIVY_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-db 
           TRIVY_JAVA_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-java-db
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@babb554ede22fd5605947329c4d04d8e7a0b8155 # v3.27.7
+        uses: github/codeql-action/upload-sarif@df409f7d9260372bd5f19e5b04e83cb3c43714ae # v3.27.9
         with:
           sarif_file: 'trivy-kube-egress-gateway-controller-results.sarif'
           category: kube-egress-gateway-controller-image
@@ -76,7 +76,7 @@ jobs:
           TRIVY_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-db 
           TRIVY_JAVA_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-java-db
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@babb554ede22fd5605947329c4d04d8e7a0b8155 # v3.27.7
+        uses: github/codeql-action/upload-sarif@df409f7d9260372bd5f19e5b04e83cb3c43714ae # v3.27.9
         with:
           sarif_file: 'trivy-kube-egress-gateway-daemon-results.sarif'
           category: kube-egress-gateway-daemon-image
@@ -95,7 +95,7 @@ jobs:
           TRIVY_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-db 
           TRIVY_JAVA_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-java-db
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@babb554ede22fd5605947329c4d04d8e7a0b8155 # v3.27.7
+        uses: github/codeql-action/upload-sarif@df409f7d9260372bd5f19e5b04e83cb3c43714ae # v3.27.9
         with:
           sarif_file: 'trivy-kube-egress-gateway-cnimanager-results.sarif'
           category: kube-egress-gateway-cnimanager-image
@@ -114,7 +114,7 @@ jobs:
           TRIVY_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-db 
           TRIVY_JAVA_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-java-db
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@babb554ede22fd5605947329c4d04d8e7a0b8155 # v3.27.7
+        uses: github/codeql-action/upload-sarif@df409f7d9260372bd5f19e5b04e83cb3c43714ae # v3.27.9
         with:
           sarif_file: 'trivy-kube-egress-gateway-cni-results.sarif'
           category: kube-egress-gateway-cni
@@ -133,7 +133,7 @@ jobs:
           TRIVY_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-db 
           TRIVY_JAVA_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-java-db
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@babb554ede22fd5605947329c4d04d8e7a0b8155 # v3.27.7
+        uses: github/codeql-action/upload-sarif@df409f7d9260372bd5f19e5b04e83cb3c43714ae # v3.27.9
         with:
           sarif_file: 'trivy-kube-egress-gateway-cni-ipam-results.sarif'
           category: kube-egress-gateway-cni-ipam
