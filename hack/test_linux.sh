@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Run kube-egress-gateway unit tests.
-# 
+#
 set -e
 
 # switch into the repo root directory
@@ -18,13 +18,16 @@ declare -a pkg_need_root=("github.com/Azure/kube-egress-gateway/cmd/kube-egress-
 
 PKG=${PKG:-$(go list ./... | xargs echo)}
 
+# Enable unprivileged user namespace
+sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0
+
 for t in ${PKG}; do
     if [[ "${pkg_need_root[*]}"  == *"${t}"* ]];
-    then 
+    then
         bash -c "export XDG_RUNTIME_DIR=/tmp/cni-rootless; unshare -rmn bash -c 'ip link set lo up; go test -cover ${t} -args -test.gocoverdir=${PWD}/testcoverage'"
     elif [[ "${t}" != *"e2e"* ]];
     then
-        go test -cover ${t} -args -test.gocoverdir="${PWD}/testcoverage"
+        go test -v -cover ${t} -args -test.gocoverdir="${PWD}/testcoverage"
     fi
 done
 
