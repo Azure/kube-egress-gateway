@@ -40,6 +40,7 @@ var _ = Describe("Server", func() {
 				Namespace: "default",
 			},
 			Status: current.StaticGatewayConfigurationStatus{
+				EgressIpPrefix: "13.66.156.240/30",
 				GatewayServerProfile: current.GatewayServerProfile{
 					Ip:        "192.168.1.1/32",
 					PublicKey: "somerandompublickey",

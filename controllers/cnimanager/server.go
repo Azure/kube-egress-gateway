@@ -40,7 +40,7 @@ func (s *NicService) NicAdd(ctx context.Context, in *cniprotocol.NicAddRequest) 
 	if err := s.k8sClient.Get(ctx, client.ObjectKey{Name: in.GetGatewayName(), Namespace: in.GetPodConfig().GetPodNamespace()}, gwConfig); err != nil {
 		return nil, status.Errorf(codes.Unknown, "failed to retrieve StaticGatewayConfiguration %s/%s: %s", in.GetPodConfig().GetPodNamespace(), in.GetGatewayName(), err)
 	}
-	if len(gwConfig.Status.Ip) == 0 {
+	if len(gwConfig.Status.EgressIpPrefix) == 0 {
 		return nil, status.Errorf(codes.FailedPrecondition, "the gateway is not ready yet.")
 	}
 	pod := &corev1.Pod{}
