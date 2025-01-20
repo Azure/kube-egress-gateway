@@ -355,3 +355,5 @@ MigrationBackup/
 .idea/
 
 # config/daemon/manager/azure.json
+
+vendor/
