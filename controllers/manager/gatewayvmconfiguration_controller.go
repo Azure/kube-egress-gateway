@@ -568,7 +568,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 	}
 
 	// check ProvisioningState
-	if vm.Properties.ProvisioningState != nil && !strings.EqualFold(to.Val(vm.Properties.ProvisioningState), "Succeeded") {
+	if !forceUpdate && vm.Properties.ProvisioningState != nil && !strings.EqualFold(to.Val(vm.Properties.ProvisioningState), "Succeeded") {
 		log.Info(fmt.Sprintf("VMSS instance ProvisioningState %q", to.Val(vm.Properties.ProvisioningState)))
 		if strings.EqualFold(to.Val(vm.Properties.ProvisioningState), "Failed") {
 			forceUpdate = true
@@ -578,7 +578,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 
 	// check primary IP & secondary IP
 	var primaryIP, secondaryIP string
-	if wantIPConfig {
+	if !forceUpdate && wantIPConfig {
 		for _, nic := range vm.Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations {
 			if nic.Properties != nil && to.Val(nic.Properties.Primary) {
 				vmNic, err := r.GetVMSSInterface(ctx, vmssRG, vmssName, to.Val(vm.InstanceID), to.Val(nic.Name))
