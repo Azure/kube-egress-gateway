@@ -583,7 +583,11 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 			if nic.Properties != nil && to.Val(nic.Properties.Primary) {
 				vmNic, err := r.GetVMSSInterface(ctx, vmssRG, vmssName, to.Val(vm.InstanceID), to.Val(nic.Name))
 				if err != nil || vmNic.Properties == nil || vmNic.Properties.IPConfigurations == nil {
-					log.Info("Skip IP check for forceUpdate")
+					if err != nil {
+						log.Info("Skip IP check for forceUpdate", "error", err.Error())
+					} else {
+						log.Info("Skip IP check for forceUpdate")
+					}
 					break
 				}
 				for _, ipConfig := range vmNic.Properties.IPConfigurations {
