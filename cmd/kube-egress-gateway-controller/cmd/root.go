@@ -215,14 +215,19 @@ func getClientFactoryFromConfig(cloud *config.CloudConfig) (azclient.ClientFacto
 	if cloud.RateLimitConfig != nil {
 		rateLimitConf.Config = *(*ratelimit.Config)(cloud.RateLimitConfig)
 	}
+	clientOps, _, err := azclient.GetAzCoreClientOption(&cloud.ARMClientConfig)
+	if err != nil {
+		return factory, err
+	}
 	factory, err = azclient.NewClientFactory(
 		&azclient.ClientFactoryConfig{
 			CloudProviderRateLimitConfig: rateLimitConf,
-			CloudProviderBackoff:         cloud.CloudProviderBackoff,
 			SubscriptionID:               cloud.SubscriptionID,
 		},
 		&azclient.ARMClientConfig{Cloud: cloud.Cloud, UserAgent: cloud.UserAgent},
-		authProvider.GetAzIdentity())
+		clientOps.Cloud,
+		authProvider.GetAzIdentity(),
+	)
 	if err != nil {
 		return factory, err
 	}
