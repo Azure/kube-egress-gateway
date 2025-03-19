@@ -89,7 +89,11 @@ func CreateAzureClients() (azclient.ClientFactory, error) {
 	if err != nil {
 		return nil, err
 	}
-	return azclient.NewClientFactory(&azclient.ClientFactoryConfig{SubscriptionID: subscriptionID}, armConfig, authProvider.GetAzIdentity())
+	clientOps, _, err := azclient.GetAzCoreClientOption(armConfig)
+	if err != nil {
+		return nil, err
+	}
+	return azclient.NewClientFactory(&azclient.ClientFactoryConfig{SubscriptionID: subscriptionID}, armConfig, clientOps.Cloud, authProvider.GetAzIdentity())
 }
 
 func CreateNamespace(namespaceName string, c client.Client) error {
