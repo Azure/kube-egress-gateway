@@ -14,7 +14,7 @@ require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
-	github.com/onsi/ginkgo/v2 v2.23.0
+	github.com/onsi/ginkgo/v2 v2.23.1
 	github.com/onsi/gomega v1.36.2
 	github.com/prometheus/client_golang v1.21.1
 	github.com/spf13/cobra v1.9.1
@@ -30,14 +30,14 @@ require (
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20230429144221-925a1e7659e6
 	google.golang.org/grpc v1.71.0
 	google.golang.org/protobuf v1.36.5
-	k8s.io/api v0.32.2
-	k8s.io/apimachinery v0.32.2
-	k8s.io/client-go v0.32.2
-	k8s.io/kubernetes v1.32.2
+	k8s.io/api v0.32.3
+	k8s.io/apimachinery v0.32.3
+	k8s.io/client-go v0.32.3
+	k8s.io/kubernetes v1.32.3
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.14
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.4.3
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.5.11
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.4.4
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.5.12
 	sigs.k8s.io/controller-runtime v0.20.3
 )
 
