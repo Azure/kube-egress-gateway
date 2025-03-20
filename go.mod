@@ -1,6 +1,6 @@
 module github.com/Azure/kube-egress-gateway
 
-go 1.23.1
+go 1.23.7
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.0
