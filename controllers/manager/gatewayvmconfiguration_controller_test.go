@@ -837,6 +837,22 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "", false)
 				Expect(err).To(BeNil())
 			})
+
+			It("should update vmss instance when instance's ProvisioningState is false", func() {
+				existingVMSS := getConfiguredVMSSWithNameAndUID()
+				existingVM := getConfiguredVMSSVM()
+				existingVM.InstanceID = to.Ptr("0")
+				existingVM.Properties.ProvisioningState = to.Ptr("Failed")
+				vms := []*compute.VirtualMachineScaleSetVM{existingVM}
+				mockVMSSVMClient := az.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
+				mockVMSSVMClient.EXPECT().List(gomock.Any(), vmssRG, vmssName).Return(vms, nil)
+				mockVMSSVMClient.EXPECT().Update(gomock.Any(), vmssRG, vmssName, "0", gomock.Any())
+				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
+				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "nic").Return(
+					getConfiguredVMSSVMInterface(), nil)
+				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				Expect(err).To(BeNil())
+			})
 		})
 
 		When("reconciling vmConfig", func() {

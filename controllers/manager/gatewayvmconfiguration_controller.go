@@ -549,7 +549,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 	lbBackendpoolID string,
 	wantIPConfig bool,
 ) (string, error) {
-	log := log.FromContext(ctx)
+	log := log.FromContext(ctx).WithValues("vmssInstance", to.Val(vm.ID), "wantIPConfig", wantIPConfig, "ipPrefixID", ipPrefixID)
 	ipConfigName := managedSubresourceName(vmConfig)
 	vmssRG := getVMSSResourceGroup(vmConfig)
 
@@ -561,18 +561,12 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 	}
 
 	forceUpdate := false
-	// check LatestModelApplied
-	if vm.Properties.LatestModelApplied != nil && !to.Val(vm.Properties.LatestModelApplied) {
-		forceUpdate = true
-		log.Info("Force update for unexpected VMSS instance LatestModelApplied:false", "vmssInstance", to.Val(vm.ID))
-	}
-
 	// check ProvisioningState
-	if !forceUpdate && vm.Properties.ProvisioningState != nil && !strings.EqualFold(to.Val(vm.Properties.ProvisioningState), "Succeeded") {
+	if vm.Properties.ProvisioningState != nil && !strings.EqualFold(to.Val(vm.Properties.ProvisioningState), "Succeeded") {
 		log.Info(fmt.Sprintf("VMSS instance ProvisioningState %q", to.Val(vm.Properties.ProvisioningState)))
 		if strings.EqualFold(to.Val(vm.Properties.ProvisioningState), "Failed") {
 			forceUpdate = true
-			log.Info(fmt.Sprintf("Force update for unexpected VMSS instance ProvisioningState:%q", to.Val(vm.Properties.ProvisioningState)), "vmssInstance", to.Val(vm.ID))
+			log.Info(fmt.Sprintf("Force update for unexpected VMSS instance ProvisioningState:%q", to.Val(vm.Properties.ProvisioningState)))
 		}
 	}
 
@@ -612,7 +606,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 	}
 	vmUpdated := false
 	if needUpdate || forceUpdate {
-		log.Info("Updating vmss instance", "vmInstanceID", to.Val(vm.InstanceID))
+		log.Info("Updating vmss instance")
 		if !needUpdate && forceUpdate {
 			log.Info("Updating vmss instance triggered by forceUpdate")
 		}
