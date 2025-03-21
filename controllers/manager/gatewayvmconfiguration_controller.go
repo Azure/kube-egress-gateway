@@ -549,7 +549,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 	lbBackendpoolID string,
 	wantIPConfig bool,
 ) (string, error) {
-	log := log.FromContext(ctx)
+	log := log.FromContext(ctx).WithValues("vmssInstance", to.Val(vm.ID), "wantIPConfig", wantIPConfig, "ipPrefixID", ipPrefixID)
 	ipConfigName := managedSubresourceName(vmConfig)
 	vmssRG := getVMSSResourceGroup(vmConfig)
 
@@ -560,13 +560,56 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 		return "", fmt.Errorf("vmss vm(%s) has empty os profile", to.Val(vm.InstanceID))
 	}
 
+	forceUpdate := false
+	// check ProvisioningState
+	if vm.Properties.ProvisioningState != nil && !strings.EqualFold(to.Val(vm.Properties.ProvisioningState), "Succeeded") {
+		log.Info(fmt.Sprintf("VMSS instance ProvisioningState %q", to.Val(vm.Properties.ProvisioningState)))
+		if strings.EqualFold(to.Val(vm.Properties.ProvisioningState), "Failed") {
+			forceUpdate = true
+			log.Info(fmt.Sprintf("Force update for unexpected VMSS instance ProvisioningState:%q", to.Val(vm.Properties.ProvisioningState)))
+		}
+	}
+
+	// check primary IP & secondary IP
+	var primaryIP, secondaryIP string
+	if !forceUpdate && wantIPConfig {
+		for _, nic := range vm.Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations {
+			if nic.Properties != nil && to.Val(nic.Properties.Primary) {
+				vmNic, err := r.GetVMSSInterface(ctx, vmssRG, vmssName, to.Val(vm.InstanceID), to.Val(nic.Name))
+				if err != nil || vmNic.Properties == nil || vmNic.Properties.IPConfigurations == nil {
+					if err != nil {
+						log.Info("Skip IP check for forceUpdate", "error", err.Error())
+					} else {
+						log.Info("Skip IP check for forceUpdate")
+					}
+					break
+				}
+				for _, ipConfig := range vmNic.Properties.IPConfigurations {
+					if ipConfig != nil && ipConfig.Properties != nil && strings.EqualFold(to.Val(ipConfig.Name), ipConfigName) {
+						secondaryIP = to.Val(ipConfig.Properties.PrivateIPAddress)
+					} else if ipConfig != nil && ipConfig.Properties != nil && to.Val(ipConfig.Properties.Primary) {
+						primaryIP = to.Val(ipConfig.Properties.PrivateIPAddress)
+					}
+				}
+			}
+		}
+		if primaryIP == "" || secondaryIP == "" {
+			forceUpdate = true
+			log.Info("Force update for missing primary IP and/or secondary IP", "primaryIP", primaryIP, "secondaryIP", secondaryIP)
+		}
+	}
+
 	interfaces := vm.Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations
 	needUpdate, err := r.reconcileVMSSNetworkInterface(ctx, ipConfigName, ipPrefixID, lbBackendpoolID, wantIPConfig, interfaces)
 	if err != nil {
 		return "", fmt.Errorf("failed to reconcile vm interface(%s): %w", to.Val(vm.InstanceID), err)
 	}
-	if needUpdate {
-		log.Info("Updating vmss instance", "vmInstanceID", to.Val(vm.InstanceID))
+	vmUpdated := false
+	if needUpdate || forceUpdate {
+		log.Info("Updating vmss instance")
+		if !needUpdate && forceUpdate {
+			log.Info("Updating vmss instance triggered by forceUpdate")
+		}
 		newVM := compute.VirtualMachineScaleSetVM{
 			Properties: &compute.VirtualMachineScaleSetVMProperties{
 				NetworkProfileConfiguration: &compute.VirtualMachineScaleSetVMNetworkProfileConfiguration{
@@ -577,6 +620,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 		if _, err := r.UpdateVMSSInstance(ctx, vmssRG, vmssName, to.Val(vm.InstanceID), newVM); err != nil {
 			return "", fmt.Errorf("failed to update vmss instance(%s): %w", to.Val(vm.InstanceID), err)
 		}
+		vmUpdated = true
 	}
 
 	// return earlier if it's deleting event
@@ -584,21 +628,23 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 		return "", nil
 	}
 
-	var primaryIP, secondaryIP string
-	for _, nic := range interfaces {
-		if nic.Properties != nil && to.Val(nic.Properties.Primary) {
-			vmNic, err := r.GetVMSSInterface(ctx, vmssRG, vmssName, to.Val(vm.InstanceID), to.Val(nic.Name))
-			if err != nil {
-				return "", fmt.Errorf("failed to get vmss(%s) instance(%s) nic(%s): %w", vmssName, to.Val(vm.InstanceID), to.Val(nic.Name), err)
-			}
-			if vmNic.Properties == nil || vmNic.Properties.IPConfigurations == nil {
-				return "", fmt.Errorf("vmss(%s) instance(%s) nic(%s) has empty ip configurations", vmssName, to.Val(vm.InstanceID), to.Val(nic.Name))
-			}
-			for _, ipConfig := range vmNic.Properties.IPConfigurations {
-				if ipConfig != nil && ipConfig.Properties != nil && strings.EqualFold(to.Val(ipConfig.Name), ipConfigName) {
-					secondaryIP = to.Val(ipConfig.Properties.PrivateIPAddress)
-				} else if ipConfig != nil && ipConfig.Properties != nil && to.Val(ipConfig.Properties.Primary) {
-					primaryIP = to.Val(ipConfig.Properties.PrivateIPAddress)
+	if vmUpdated || primaryIP == "" || secondaryIP == "" {
+		primaryIP, secondaryIP = "", ""
+		for _, nic := range interfaces {
+			if nic.Properties != nil && to.Val(nic.Properties.Primary) {
+				vmNic, err := r.GetVMSSInterface(ctx, vmssRG, vmssName, to.Val(vm.InstanceID), to.Val(nic.Name))
+				if err != nil {
+					return "", fmt.Errorf("failed to get vmss(%s) instance(%s) nic(%s): %w", vmssName, to.Val(vm.InstanceID), to.Val(nic.Name), err)
+				}
+				if vmNic.Properties == nil || vmNic.Properties.IPConfigurations == nil {
+					return "", fmt.Errorf("vmss(%s) instance(%s) nic(%s) has empty ip configurations", vmssName, to.Val(vm.InstanceID), to.Val(nic.Name))
+				}
+				for _, ipConfig := range vmNic.Properties.IPConfigurations {
+					if ipConfig != nil && ipConfig.Properties != nil && strings.EqualFold(to.Val(ipConfig.Name), ipConfigName) {
+						secondaryIP = to.Val(ipConfig.Properties.PrivateIPAddress)
+					} else if ipConfig != nil && ipConfig.Properties != nil && to.Val(ipConfig.Properties.Primary) {
+						primaryIP = to.Val(ipConfig.Properties.PrivateIPAddress)
+					}
 				}
 			}
 		}
