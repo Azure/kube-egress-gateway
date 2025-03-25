@@ -187,7 +187,7 @@ GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
 .PHONY: golangci-lint 
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
-	test -s $(LOCALBIN)/golangci-lint || curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(LOCALBIN) latest
+	test -s $(LOCALBIN)/golangci-lint || curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(LOCALBIN) v6.5.2
 
 PROTOC_GEN_GO ?= $(LOCALBIN)/protoc-gen-go
 .PHONY: protoc-gen-go
