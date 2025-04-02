@@ -1,6 +1,7 @@
 module github.com/Azure/kube-egress-gateway
 
 go 1.23.7
+toolchain go1.24.1
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.1
@@ -15,10 +16,10 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/onsi/ginkgo/v2 v2.23.3
-	github.com/onsi/gomega v1.36.3
+	github.com/onsi/gomega v1.37.0
 	github.com/prometheus/client_golang v1.21.1
 	github.com/spf13/cobra v1.9.1
-	github.com/spf13/viper v1.20.0
+	github.com/spf13/viper v1.20.1
 	github.com/stretchr/testify v1.10.0
 	github.com/vishvananda/netlink v1.3.1-0.20250206174618-62fb240731fa
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.60.0
@@ -28,7 +29,7 @@ require (
 	golang.org/x/sync v0.12.0
 	golang.org/x/sys v0.31.0
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20230429144221-925a1e7659e6
-	google.golang.org/grpc v1.71.0
+	google.golang.org/grpc v1.71.1
 	google.golang.org/protobuf v1.36.6
 	k8s.io/api v0.32.3
 	k8s.io/apimachinery v0.32.3
@@ -36,8 +37,8 @@ require (
 	k8s.io/kubernetes v1.32.3
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.5.20
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.4.7
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.5.14
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.5.0
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.6.0
 	sigs.k8s.io/controller-runtime v0.20.4
 )
 
