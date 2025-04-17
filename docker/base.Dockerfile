@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Build the manager binary
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/oss/go/microsoft/golang:1.23.7@sha256:9d1e6e1665111c96cf579c6a68c9a119c72467fe7218e69bdb1d50e7d66f9be5 AS builder 
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/oss/go/microsoft/golang:1.23.8@sha256:d080d8acfa6bbe4fb1713576f83782a04f2783336a89e032679fee7c5e4f1d7c AS builder 
 WORKDIR /workspace
 # Copy the Go Modules manifests
 COPY go.mod go.mod
