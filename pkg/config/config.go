@@ -86,27 +86,12 @@ func (cfg *CloudConfig) DefaultAndValidate() error {
 		cfg.VnetResourceGroup = cfg.ResourceGroup
 	}
 
-	// if not specified, apply default rate limit config
 	if cfg.RateLimitConfig == nil {
-		cfg.RateLimitConfig = &RateLimitConfig{CloudProviderRateLimit: true}
+		cfg.RateLimitConfig = &RateLimitConfig{
+			CloudProviderRateLimit: false,
+		}
 	}
 
-	if cfg.CloudProviderRateLimit {
-		// Assign read rate limit defaults if no configuration was passed in.
-		if cfg.CloudProviderRateLimitQPS == 0 {
-			cfg.CloudProviderRateLimitQPS = consts.RateLimitQPSDefault
-		}
-		if cfg.CloudProviderRateLimitBucket == 0 {
-			cfg.CloudProviderRateLimitBucket = consts.RateLimitBucketDefault
-		}
-		// Assign write rate limit defaults if no configuration was passed in.
-		if cfg.CloudProviderRateLimitQPSWrite == 0 {
-			cfg.CloudProviderRateLimitQPSWrite = cfg.CloudProviderRateLimitQPS
-		}
-		if cfg.CloudProviderRateLimitBucketWrite == 0 {
-			cfg.CloudProviderRateLimitBucketWrite = cfg.CloudProviderRateLimitBucket
-		}
-	}
 	return nil
 }
 

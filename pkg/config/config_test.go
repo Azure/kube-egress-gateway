@@ -194,13 +194,6 @@ func TestDefaultAndValidate(t *testing.T) {
 			expectedUserAgent:         "kube-egress-gateway-controller",
 			expectedLBResourceGroup:   "v",
 			expectedVnetResourceGroup: "v",
-			expectedRatelimitConfig: RateLimitConfig{
-				CloudProviderRateLimit:            true,
-				CloudProviderRateLimitQPS:         1.0,
-				CloudProviderRateLimitBucket:      5,
-				CloudProviderRateLimitQPSWrite:    1.0,
-				CloudProviderRateLimitBucketWrite: 5,
-			},
 		},
 		"has all required properties with msi and specified values": {
 			Cloud:                       "c",
