@@ -121,10 +121,3 @@ const (
 	KubeEgressCNIName     = "kube-egress-cni"
 	KubeEgressIPAMCNIName = "kube-egress-cni-ipam"
 )
-
-const (
-	// RateLimitQPSDefault is the default value of the rate limit qps
-	RateLimitQPSDefault = 1.0
-	// RateLimitBucketDefault is the default value of rate limit bucket
-	RateLimitBucketDefault = 5
-)
