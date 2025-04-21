@@ -243,7 +243,7 @@ func (az *AzureManager) CreateOrUpdatePublicIPPrefix(ctx context.Context, resour
 }
 
 func (az *AzureManager) DeletePublicIPPrefix(ctx context.Context, resourceGroup, prefixName string) error {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 300*time.Second)
 	defer cancel()
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
