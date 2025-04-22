@@ -29,7 +29,7 @@ var (
 )
 
 var _ = Describe("Test staticGatewayConfiguration deployment", func() {
-	ginkgo.SetDefaultTimeout(115 * time.Minute)
+	SetDefaultTimeout(115 * time.Minute)
 
 	// use controller-runtime client to manage cr
 	var k8sClient client.Client
