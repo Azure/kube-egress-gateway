@@ -29,8 +29,6 @@ var (
 )
 
 var _ = Describe("Test staticGatewayConfiguration deployment", func() {
-	SetDefaultTimeout(115 * time.Minute)
-
 	// use controller-runtime client to manage cr
 	var k8sClient client.Client
 	// there is no easy way to get pod log with controller-runtime client, use client-go client instead
