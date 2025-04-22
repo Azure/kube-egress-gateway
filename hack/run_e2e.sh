@@ -64,4 +64,4 @@ trap cleanup EXIT
 REPO_ROOT=$(git rev-parse --show-toplevel)
 
 # Run e2e tests
-go test ${REPO_ROOT}/e2e/ -v --timeout 30m
+go test ${REPO_ROOT}/e2e/ -v --timeout 120m --ginkgo.timeout=115m

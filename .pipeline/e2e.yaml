@@ -24,6 +24,7 @@ pool: kube-egress-gateway-e2e-pool
 
 jobs:
 - job: Run_KubeEgressGateway_E2E
+  timeoutInMinutes: 150
   steps:
   - task: GoTool@0
     inputs:
