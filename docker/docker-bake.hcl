@@ -1,6 +1,6 @@
 
 group "default" {
-  targets = ["daemon", "controller", "cnimanager", "cni", "cni-ipam"]
+  targets = ["daemon", "controller", "cnimanager", "cni", "cni-ipam", "daemoninit"]
 }
 
 variable "PLATFORMS" {
@@ -30,6 +30,13 @@ target "daemon" {
     MAIN_ENTRY = "kube-egress-gateway-daemon",
   }
 }
+
+target "daemoninit" {
+  inherits = ["daemoninit-tags"]
+  dockerfile = "docker/gwdaemon-init.Dockerfile"
+  platforms = [PLATFORMS]
+}
+
 
 target "controller" {
   inherits = ["base","controller-tags"]

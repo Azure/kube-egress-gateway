@@ -41,6 +41,12 @@ gatewayDaemonManager:
   metricsBindPort: 8080
   healthProbeBindPort: 8081
 
+gatewayDaemonManagerInit:
+  # imageRepository: "local"
+  imageName: "kube-egress-gateway-daemon-init"
+  # imageTag: ""
+  imagePullPolicy: "IfNotPresent"
+
 gatewayCNI:
   # imageRepository: "local"
   imageName: "kube-egress-gateway-cni"
