@@ -21,6 +21,17 @@ Determine gateway-daemon-manager image
 {{- end -}}
 
 {{/*
+Determine gateway-daemon-manager image
+*/}}
+{{- define "image.gatewayDaemonManagerInit" -}}
+    {{- if hasKey .Values.gatewayDaemonManagerInit "imageTag" -}}
+        {{- printf "%s/%s:%s" .Values.gatewayDaemonManagerInit.imageRepository .Values.gatewayDaemonManagerInit.imageName .Values.gatewayDaemonManagerInit.imageTag -}}
+    {{- else -}}
+        {{- printf "%s/%s:%s" .Values.common.imageRepository .Values.gatewayDaemonManagerInit.imageName .Values.common.imageTag -}}
+    {{- end -}}
+{{- end -}}
+
+{{/*
 Determine gateway-CNI-manager image
 */}}
 {{- define "image.gatewayCNIManager" -}}

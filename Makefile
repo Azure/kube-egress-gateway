@@ -2,6 +2,7 @@
 # Image URL to use all building/pushing image targets
 CONTROLLER_IMG ?= kube-egress-gateway-controller
 DAEMON_IMG ?= kube-egress-gateway-daemon
+DAEMON_INIT_IMG ?= kube-egress-gateway-daemon-init
 CNIMANAGER_IMG ?= kube-egress-gateway-cnimanager
 CNI_IMG ?= kube-egress-gateway-cni
 CNI_IPAM_IMG ?= kube-egress-gateway-cni-ipam
@@ -125,6 +126,7 @@ install: manifests kustomize docker-build ## Install CRDs into the K8s cluster s
 	cd config/default && \
 	$(KUSTOMIZE) edit set image controller=$(IMAGE_REGISTRY)/$(CONTROLLER_IMG):$(IMAGE_TAG) && \
 	$(KUSTOMIZE) edit set image daemon=$(IMAGE_REGISTRY)/${DAEMON_IMG}:$(IMAGE_TAG) && \
+	$(KUSTOMIZE) edit set image daemoninit=$(IMAGE_REGISTRY)/${DAEMON_INIT_IMG}:$(IMAGE_TAG) && \
 	$(KUSTOMIZE) edit set image cnimanager=$(IMAGE_REGISTRY)/${CNIMANAGER_IMG}:$(IMAGE_TAG) && \
 	$(KUSTOMIZE) edit set image cni=$(IMAGE_REGISTRY)/${CNI_IMG}:$(IMAGE_TAG) && \
 	$(KUSTOMIZE) edit set image cni-ipam=$(IMAGE_REGISTRY)/${CNI_IPAM_IMG}:$(IMAGE_TAG)

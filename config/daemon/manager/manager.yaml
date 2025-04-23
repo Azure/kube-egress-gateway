@@ -25,14 +25,8 @@ spec:
         value: "true"
         effect: "NoSchedule"
       initContainers:
-      - command: ["/bin/bash", "-c"]
-        args:
-        - |
-          apt-get update
-          apt-get install iproute2 -y
-          ip netns exec ns-static-egress-gateway ip a || ip netns add ns-static-egress-gateway
-        image: debian:latest
-        name: ip-netns-add
+      - name: ip-netns-add
+        image: daemoninit:latest
         securityContext:
           privileged: true
         volumeMounts:

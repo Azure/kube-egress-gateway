@@ -53,6 +53,16 @@ jobs:
             type=semver,pattern={{raw}}
           bake-target: daemon-tags
       - name: Docker meta
+        id: daemoninit # you'll use this in the next step
+        uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.0
+        with:
+          # list of Docker images to use as base name for tags
+          images: |
+            ${{ secrets.AZURE_REGISTRY }}/${{ env.REGISTRY_REPO }}/kube-egress-gateway-daemon-init
+          tags: |
+            type=semver,pattern={{raw}}
+          bake-target: daemoninit-tags
+      - name: Docker meta
         id: controller # you'll use this in the next step
         uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.0
         with:
@@ -104,6 +114,7 @@ jobs:
           files: |
             docker/docker-bake.hcl
             ${{ steps.daemon.outputs.bake-file }}
+            ${{ steps.daemoninit.outputs.bake-file }}
             ${{ steps.controller.outputs.bake-file }}
             ${{ steps.cnimanager.outputs.bake-file }}
             ${{ steps.cniplugin.outputs.bake-file }}

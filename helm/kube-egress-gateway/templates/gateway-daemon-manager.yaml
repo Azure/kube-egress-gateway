@@ -115,13 +115,8 @@ spec:
         kube-egress-gateway-control-plane: daemon-manager
     spec:
       initContainers:
-      - command: ["/bin/bash", "-c"]
-        args:
-        - |
-          apt-get update
-          apt-get install iproute2 -y
-          ip netns exec ns-static-egress-gateway ip a || ip netns add ns-static-egress-gateway
-        image: debian:latest
+      - image: {{ template "image.gatewayDaemonManagerInit" . }}
+        imagePullPolicy: {{ .Values.gatewayDaemonManagerInit.imagePullPolicy }}
         name: ip-netns-add
         securityContext:
           privileged: true

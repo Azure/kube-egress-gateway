@@ -10,6 +10,10 @@ target "daemon-tags" {
     tags = ["${IMAGE_REGISTRY}/kube-egress-gateway-daemon:${TAG}"]
 }
 
+target "daemoninit-tags" {
+    tags = ["${IMAGE_REGISTRY}/kube-egress-gateway-daemon-init:${TAG}"]
+}
+
 target "controller-tags" {
     tags = ["${IMAGE_REGISTRY}/kube-egress-gateway-controller:${TAG}"]
 }
