@@ -9,6 +9,8 @@ maintainers:
   name: Shangxiang Fan
 - email: mali_no2@hotmail.com
   name: Li Ma
+- email: heiqipiaopiao@gmail.com
+  name: Xia Zhu
 sources:
 - https://github.com/Azure/kube-egress-gateway
-version: 0.1.4
+version: 0.1.5
