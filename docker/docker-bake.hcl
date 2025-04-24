@@ -109,7 +109,7 @@ target "cni-ipam" {
   inherits = ["cni-ipam-tags"]
   dockerfile = "docker/cni-ipam.Dockerfile"
   contexts = {
-    baseimg = "target:cni-ipam-compile"
+    baseimg = "target:cni-ipam-compile",
     tool = "target:copy-compile"
   }
   platforms = [PLATFORMS]
