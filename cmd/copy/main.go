@@ -23,7 +23,7 @@ func copyFile(sourceFile, destDir string) error {
 		return fmt.Errorf("failed to calculate file name: %w", err)
 	}
 	destFilePath := filepath.Join(destDir, fileName)
-	destFile, err := os.Create(destFilePath)
+	destFile, err := os.OpenFile(destFilePath, os.O_CREATE|os.O_WRONLY, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to open destination file: %w", err)
 	}
