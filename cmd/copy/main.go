@@ -50,8 +50,8 @@ func main() {
 
 	rootCmd.Flags().StringVarP(&src, "source", "s", "", "The path of file to copy")
 	rootCmd.Flags().StringVarP(&dst, "destination", "d", "", "Destination directory")
-	rootCmd.MarkFlagRequired("source")
-	rootCmd.MarkFlagRequired("destination")
+	rootCmd.MarkFlagRequired("source")      //nolint:errcheck
+	rootCmd.MarkFlagRequired("destination") //nolint:errcheck
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
