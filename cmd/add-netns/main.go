@@ -23,8 +23,9 @@ func ensureNS(nsKit netnswrapper.Interface, namespace string) error {
 		} else {
 			return fmt.Errorf("failed to get network namespace %q: %w", namespace, err)
 		}
+	} else {
+		fmt.Printf("Got network namespace %q, no need to create\n", namespace)
 	}
-	fmt.Printf("Got network namespace %q, no need to create\n", namespace)
 	defer targetNS.Close()
 	return nil
 }
