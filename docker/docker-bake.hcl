@@ -31,9 +31,19 @@ target "daemon" {
   }
 }
 
+target "add-netns-compile" {
+  inherits = ["base"]
+  args = {
+    MAIN_ENTRY = "add-netns",
+  }
+}
+
 target "daemoninit" {
   inherits = ["daemoninit-tags"]
   dockerfile = "docker/gwdaemon-init.Dockerfile"
+  contexts = {
+    tool = "target:add-netns-compile"
+  }
   platforms = [PLATFORMS]
 }
 
