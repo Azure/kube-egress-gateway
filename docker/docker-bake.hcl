@@ -37,7 +37,6 @@ target "daemoninit" {
   platforms = [PLATFORMS]
 }
 
-
 target "controller" {
   inherits = ["base","controller-tags"]
   platforms = [PLATFORMS]
@@ -72,11 +71,19 @@ target "cni-compile" {
   }
 }
 
+target "copy-compile" {
+  inherits = ["base"]
+  args = {
+    MAIN_ENTRY = "copy",
+  }
+}
+
 target "cni" {
   inherits = ["cni-tags"]
   dockerfile = "docker/cni.Dockerfile"
   contexts = {
-    baseimg = "target:cni-compile"
+    baseimg = "target:cni-compile",
+    tool = "target:copy-compile"
   }
   platforms = [PLATFORMS]
 }

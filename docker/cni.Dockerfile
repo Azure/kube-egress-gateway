@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
-FROM mcr.microsoft.com/mirror/docker/library/alpine:3.16@sha256:452e7292acee0ee16c332324d7de05fa2c99f9994ecc9f0779c602916a672ae4
-COPY --from=baseimg /kube* /
+FROM gcr.io/distroless/static:latest@sha256:95ea148e8e9edd11cc7f639dc11825f38af86a14e5c7361753c741ceadef2167
 USER 0:0
-SHELL ["/bin/sh", "-c"]
-ENTRYPOINT cp /kube* /opt/cni/bin/
+WORKDIR /workspace
+COPY --from=baseimg /kube-egress-cni .
+COPY --from=tool /copy .
+ENTRYPOINT ["./copy", "-s", "./kube-egress-cni", "-d", "/opt/cni/bin/"]
