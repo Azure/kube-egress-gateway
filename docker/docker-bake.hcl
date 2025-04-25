@@ -31,12 +31,21 @@ target "daemon" {
   }
 }
 
+target "add-netns-compile" {
+  inherits = ["base"]
+  args = {
+    MAIN_ENTRY = "add-netns",
+  }
+}
+
 target "daemoninit" {
   inherits = ["daemoninit-tags"]
   dockerfile = "docker/gwdaemon-init.Dockerfile"
+  contexts = {
+    tool = "target:add-netns-compile"
+  }
   platforms = [PLATFORMS]
 }
-
 
 target "controller" {
   inherits = ["base","controller-tags"]
@@ -72,11 +81,19 @@ target "cni-compile" {
   }
 }
 
+target "copy-compile" {
+  inherits = ["base"]
+  args = {
+    MAIN_ENTRY = "copy",
+  }
+}
+
 target "cni" {
   inherits = ["cni-tags"]
   dockerfile = "docker/cni.Dockerfile"
   contexts = {
-    baseimg = "target:cni-compile"
+    baseimg = "target:cni-compile",
+    tool = "target:copy-compile"
   }
   platforms = [PLATFORMS]
 }
@@ -90,9 +107,10 @@ target "cni-ipam-compile" {
 
 target "cni-ipam" {
   inherits = ["cni-ipam-tags"]
-  dockerfile = "docker/cni.Dockerfile"
+  dockerfile = "docker/cni-ipam.Dockerfile"
   contexts = {
-    baseimg = "target:cni-ipam-compile"
+    baseimg = "target:cni-ipam-compile",
+    tool = "target:copy-compile"
   }
   platforms = [PLATFORMS]
 }
