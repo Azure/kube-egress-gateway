@@ -10,6 +10,12 @@ import (
 	"net"
 	"os"
 
+	"github.com/Azure/kube-egress-gateway/pkg/cni/conf"
+	"github.com/Azure/kube-egress-gateway/pkg/cni/ipam"
+	"github.com/Azure/kube-egress-gateway/pkg/cni/routes"
+	"github.com/Azure/kube-egress-gateway/pkg/cni/wireguard"
+	v1 "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
+	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	type100 "github.com/containernetworking/cni/pkg/types/100"
@@ -23,13 +29,7 @@ import (
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-
-	"github.com/Azure/kube-egress-gateway/pkg/cni/conf"
-	"github.com/Azure/kube-egress-gateway/pkg/cni/ipam"
-	"github.com/Azure/kube-egress-gateway/pkg/cni/routes"
-	"github.com/Azure/kube-egress-gateway/pkg/cni/wireguard"
-	v1 "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
-	"github.com/Azure/kube-egress-gateway/pkg/consts"
+	"k8s.io/klog/v2"
 )
 
 func main() {
@@ -37,7 +37,6 @@ func main() {
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
-
 	// get cni config
 	config, err := conf.ParseCNIConfig(args.StdinData)
 	if err != nil {
@@ -190,16 +189,46 @@ func cmdAdd(args *skel.CmdArgs) error {
 }
 
 func cmdDel(args *skel.CmdArgs) error {
+	logger := klog.NewKlogr().WithName("kube-egress-cni").WithValues("containerID", args.ContainerID, "netns", args.Netns, "ifname", args.IfName)
 	// get cni config
 	config, err := conf.ParseCNIConfig(args.StdinData)
 	if err != nil {
-		return err
+		logger.Error(err, "failed to parse CNI config")
+		return nil
 	}
 
 	// get k8s metadata
 	k8sInfo, err := conf.LoadK8sInfo(args.Args)
 	if err != nil {
-		return err
+		logger.Error(err, "failed to load k8s metadata")
+		return nil
+	}
+	podNs, err := ns.GetNS(args.Netns)
+	if err != nil {
+		logger.Error(err, "failed to get pod namespace")
+		return nil
+	}
+	defer podNs.Close()
+	err = podNs.Do(func(nn ns.NetNS) error {
+		ifHandle, err := netlink.LinkByName(consts.WireguardLinkName)
+		if err != nil {
+			//ignore error because cni delete may be invoked more than once.
+			return nil
+		}
+		if err := netlink.LinkDel(ifHandle); err != nil {
+			logger.Error(err, "failed to delete wireguard link")
+		}
+		return nil
+	})
+	if err != nil {
+		logger.Error(err, "failed to delete wireguard link")
+		return nil
+	}
+
+	err = ipam.New(config.IPAM.Type, args.StdinData).DeleteIP()
+	if err != nil {
+		logger.Error(err, "failed to delete ip")
+		return nil
 	}
 	conn, err := grpc.NewClient(config.SocketPath,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -212,45 +241,22 @@ func cmdDel(args *skel.CmdArgs) error {
 			return d.DialContext(ctx, "tcp", addr)
 		}))
 	if err != nil {
-		return err
+		logger.Error(err, "failed to contact cni manager daemon")
+		return nil
 	}
 	defer conn.Close()
 	client := v1.NewNicServiceClient(conn)
-
-	podNs, err := ns.GetNS(args.Netns)
-	if err != nil {
-		return err
-	}
-	defer podNs.Close()
-	err = podNs.Do(func(nn ns.NetNS) error {
-
-		_, err = client.NicDel(context.Background(), &v1.NicDelRequest{
-			PodConfig: &v1.PodInfo{
-				PodName:      string(k8sInfo.K8S_POD_NAME),
-				PodNamespace: string(k8sInfo.K8S_POD_NAMESPACE),
-			},
-		})
-		if err != nil {
-			return err
-		}
-
-		ifHandle, err := netlink.LinkByName(consts.WireguardLinkName)
-		if err != nil {
-			//ignore error because cni delete may be invoked more than once.
-			return nil
-		}
-		return netlink.LinkDel(ifHandle)
+	_, err = client.NicDel(context.Background(), &v1.NicDelRequest{
+		PodConfig: &v1.PodInfo{
+			PodName:      string(k8sInfo.K8S_POD_NAME),
+			PodNamespace: string(k8sInfo.K8S_POD_NAMESPACE),
+		},
 	})
 	if err != nil {
-		return err
+		logger.Error(err, "failed to send nicDel request")
 	}
 
-	err = ipam.New(config.IPAM.Type, args.StdinData).DeleteIP()
-	if err != nil {
-		return err
-	}
-
-	return types.PrintResult(&type100.Result{}, config.CNIVersion)
+	return nil
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
