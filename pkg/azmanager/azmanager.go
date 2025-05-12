@@ -4,9 +4,11 @@ package azmanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -40,10 +42,7 @@ const (
 )
 
 func isRetriableError(err error) bool {
-	if err.Error() == ErrRateLimitReached {
-		return true
-	}
-	return false
+	return err.Error() == ErrRateLimitReached
 }
 
 type retrySettings struct {
@@ -54,7 +53,7 @@ type retrySettings struct {
 func wrapRetry(ctx context.Context, operationName string, operation func(context.Context) error, retrySettings ...retrySettings) error {
 	interval := defaultPollInterval
 	timeout := defaultPollTimeout
-	if retrySettings != nil && len(retrySettings) > 0 {
+	if len(retrySettings) > 0 {
 		if retrySettings[0].Interval != nil {
 			interval = *retrySettings[0].Interval
 		}
@@ -350,11 +349,30 @@ func (az *AzureManager) DeletePublicIPPrefix(ctx context.Context, resourceGroup,
 	if prefixName == "" {
 		return fmt.Errorf("public ip prefix name is empty")
 	}
-	logger := log.FromContext(ctx).WithValues("operation", "DeletePublicIPPrefix", "resourceGroup", resourceGroup, "resourceName", prefixName)
+	operationName := "DeletePublicIPPrefix"
+	logger := log.FromContext(ctx).WithValues("operation", operationName, "resourceGroup", resourceGroup, "resourceName", prefixName)
 	ctx = log.IntoContext(ctx, logger)
-	return wrapRetry(ctx, "DeletePublicIPPrefix", func(ctx context.Context) error {
-		return az.PublicIPPrefixClient.Delete(ctx, resourceGroup, prefixName)
-	}, retrySettings{Timeout: to.Ptr(15 * time.Minute)})
+	return wait.PollUntilContextTimeout(ctx, defaultPollInterval, 15*time.Minute, true, func(ctx context.Context) (bool, error) {
+		var err error
+		logger := log.FromContext(ctx)
+		err = az.PublicIPPrefixClient.Delete(ctx, resourceGroup, prefixName)
+		if err != nil {
+			if isRetriableError(err) {
+				logger.Info(fmt.Sprintf("%s retriable error", operationName), "error", err.Error(), "level", "warning")
+				return false, nil
+			}
+			// retry for InternalServerError due to temporary NRP issue. TODO remove this
+			var respErr *azcore.ResponseError
+			if errors.As(err, &respErr) && respErr.ErrorCode == "InternalServerError" {
+				logger.Info(fmt.Sprintf("%s retriable InternalServerError", operationName), "error", err.Error(), "level", "warning")
+				return false, nil
+			}
+			logger.Info(fmt.Sprintf("%s nonretriable error", operationName), "error", err.Error(), "level", "warning")
+			return false, err
+		}
+		logger.Info(fmt.Sprintf("%s success", operationName))
+		return true, nil
+	})
 }
 
 func (az *AzureManager) GetVMSSInterface(ctx context.Context, resourceGroup, vmssName, instanceID, interfaceName string) (*network.Interface, error) {
