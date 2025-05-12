@@ -549,7 +549,8 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 	lbBackendpoolID string,
 	wantIPConfig bool,
 ) (string, error) {
-	log := log.FromContext(ctx).WithValues("vmssInstance", to.Val(vm.ID), "wantIPConfig", wantIPConfig, "ipPrefixID", ipPrefixID)
+	logger := log.FromContext(ctx).WithValues("vmssInstance", to.Val(vm.ID), "wantIPConfig", wantIPConfig, "ipPrefixID", ipPrefixID)
+	ctx = log.IntoContext(ctx, logger)
 	ipConfigName := managedSubresourceName(vmConfig)
 	vmssRG := getVMSSResourceGroup(vmConfig)
 
@@ -563,10 +564,10 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 	forceUpdate := false
 	// check ProvisioningState
 	if vm.Properties.ProvisioningState != nil && !strings.EqualFold(to.Val(vm.Properties.ProvisioningState), "Succeeded") {
-		log.Info(fmt.Sprintf("VMSS instance ProvisioningState %q", to.Val(vm.Properties.ProvisioningState)))
+		logger.Info(fmt.Sprintf("VMSS instance ProvisioningState %q", to.Val(vm.Properties.ProvisioningState)))
 		if strings.EqualFold(to.Val(vm.Properties.ProvisioningState), "Failed") {
 			forceUpdate = true
-			log.Info(fmt.Sprintf("Force update for unexpected VMSS instance ProvisioningState:%q", to.Val(vm.Properties.ProvisioningState)))
+			logger.Info(fmt.Sprintf("Force update for unexpected VMSS instance ProvisioningState:%q", to.Val(vm.Properties.ProvisioningState)))
 		}
 	}
 
@@ -578,9 +579,9 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 				vmNic, err := r.GetVMSSInterface(ctx, vmssRG, vmssName, to.Val(vm.InstanceID), to.Val(nic.Name))
 				if err != nil || vmNic.Properties == nil || vmNic.Properties.IPConfigurations == nil {
 					if err != nil {
-						log.Info("Skip IP check for forceUpdate", "error", err.Error())
+						logger.Info("Skip IP check for forceUpdate", "error", err.Error())
 					} else {
-						log.Info("Skip IP check for forceUpdate")
+						logger.Info("Skip IP check for forceUpdate")
 					}
 					break
 				}
@@ -595,7 +596,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 		}
 		if primaryIP == "" || secondaryIP == "" {
 			forceUpdate = true
-			log.Info("Force update for missing primary IP and/or secondary IP", "primaryIP", primaryIP, "secondaryIP", secondaryIP)
+			logger.Info("Force update for missing primary IP and/or secondary IP", "primaryIP", primaryIP, "secondaryIP", secondaryIP)
 		}
 	}
 
@@ -606,9 +607,9 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 	}
 	vmUpdated := false
 	if needUpdate || forceUpdate {
-		log.Info("Updating vmss instance")
+		logger.Info("Updating vmss instance")
 		if !needUpdate && forceUpdate {
-			log.Info("Updating vmss instance triggered by forceUpdate")
+			logger.Info("Updating vmss instance triggered by forceUpdate")
 		}
 		newVM := compute.VirtualMachineScaleSetVM{
 			Properties: &compute.VirtualMachineScaleSetVMProperties{
@@ -666,15 +667,15 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 			if profile.PrimaryIP != primaryIP || profile.SecondaryIP != secondaryIP {
 				vmConfig.Status.GatewayVMProfiles[i].PrimaryIP = primaryIP
 				vmConfig.Status.GatewayVMProfiles[i].SecondaryIP = secondaryIP
-				log.Info("GatewayVMConfiguration status updated", "primaryIP", primaryIP, "secondaryIP", secondaryIP)
+				logger.Info("GatewayVMConfiguration status updated", "primaryIP", primaryIP, "secondaryIP", secondaryIP)
 				return secondaryIP, nil
 			}
-			log.Info("GatewayVMConfiguration status not changed", "primaryIP", primaryIP, "secondaryIP", secondaryIP)
+			logger.Info("GatewayVMConfiguration status not changed", "primaryIP", primaryIP, "secondaryIP", secondaryIP)
 			return secondaryIP, nil
 		}
 	}
 
-	log.Info("GatewayVMConfiguration status updated for new nodes", "nodeName", vmprofile.NodeName, "primaryIP", primaryIP, "secondaryIP", secondaryIP)
+	logger.Info("GatewayVMConfiguration status updated for new nodes", "nodeName", vmprofile.NodeName, "primaryIP", primaryIP, "secondaryIP", secondaryIP)
 	vmConfig.Status.GatewayVMProfiles = append(vmConfig.Status.GatewayVMProfiles, vmprofile)
 
 	return secondaryIP, nil

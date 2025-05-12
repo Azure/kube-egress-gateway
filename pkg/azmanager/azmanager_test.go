@@ -26,6 +26,7 @@ import (
 )
 
 func TestCreateAzureManager(t *testing.T) {
+	t.Parallel()
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	config := getTestCloudConfig()
@@ -37,6 +38,7 @@ func TestCreateAzureManager(t *testing.T) {
 }
 
 func TestGets(t *testing.T) {
+	t.Parallel()
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	config := getTestCloudConfig()
@@ -59,6 +61,7 @@ func TestGets(t *testing.T) {
 }
 
 func TestGetLB(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		desc    string
 		lb      *network.LoadBalancer
@@ -88,6 +91,7 @@ func TestGetLB(t *testing.T) {
 }
 
 func TestCreateOrUpdateLB(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		desc    string
 		lb      *network.LoadBalancer
@@ -120,6 +124,7 @@ func TestCreateOrUpdateLB(t *testing.T) {
 }
 
 func TestDeleteLB(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		desc    string
 		testErr error
@@ -146,6 +151,7 @@ func TestDeleteLB(t *testing.T) {
 }
 
 func TestListVMSS(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		desc     string
 		vmssList []*compute.VirtualMachineScaleSet
@@ -178,6 +184,8 @@ func TestListVMSS(t *testing.T) {
 }
 
 func TestGetVMSS(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		desc         string
 		rg           string
@@ -231,7 +239,25 @@ func TestGetVMSS(t *testing.T) {
 	}
 }
 
+func TestGetVMSSWithRateLimitError(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	config := getTestCloudConfig()
+	factory := getMockFactory(ctrl)
+	az, _ := CreateAzureManager(config, factory)
+	mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
+	mockVMSSClient.EXPECT().Get(gomock.Any(), "testRG", "vmss", gomock.Any()).Return(nil, fmt.Errorf("rate limit reached")).Times(1)
+	mockVMSSClient.EXPECT().Get(gomock.Any(), "testRG", "vmss", gomock.Any()).Return(&compute.VirtualMachineScaleSet{Name: to.Ptr("vmss")}, nil)
+
+	vmss, err := az.GetVMSS(context.Background(), "testRG", "vmss")
+	assert.NoError(t, err)
+	assert.Equal(t, to.Val(vmss), to.Val(&compute.VirtualMachineScaleSet{Name: to.Ptr("vmss")}))
+}
+
 func TestCreateOrUpdateVMSS(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		desc         string
 		rg           string
@@ -286,6 +312,7 @@ func TestCreateOrUpdateVMSS(t *testing.T) {
 }
 
 func TestListVMSSInstances(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		desc         string
 		rg           string
@@ -343,6 +370,7 @@ func TestListVMSSInstances(t *testing.T) {
 }
 
 func TestGetVMSSInstance(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		desc         string
 		rg           string
@@ -407,6 +435,7 @@ func TestGetVMSSInstance(t *testing.T) {
 }
 
 func TestUpdateVMSSInstance(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		desc         string
 		rg           string
@@ -471,6 +500,7 @@ func TestUpdateVMSSInstance(t *testing.T) {
 }
 
 func TestGetPublicIPPrefix(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		desc         string
 		rg           string
@@ -525,6 +555,7 @@ func TestGetPublicIPPrefix(t *testing.T) {
 }
 
 func TestCreateOrUpdatePublicIPPrefix(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		desc         string
 		rg           string
@@ -579,6 +610,7 @@ func TestCreateOrUpdatePublicIPPrefix(t *testing.T) {
 }
 
 func TestDeletePublicIPPrefix(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		desc         string
 		rg           string
@@ -629,6 +661,7 @@ func TestDeletePublicIPPrefix(t *testing.T) {
 }
 
 func TestGetVMSSInterface(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		desc         string
 		rg           string
@@ -709,6 +742,7 @@ func TestGetVMSSInterface(t *testing.T) {
 }
 
 func TestGetSubnet(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		desc    string
 		subnet  *network.Subnet
