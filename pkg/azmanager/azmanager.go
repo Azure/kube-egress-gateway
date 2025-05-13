@@ -92,7 +92,7 @@ func wrapRetry(ctx context.Context, operationName string, operation func(context
 		return true, nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), overallTimeout)
+	ctx, cancel := context.WithTimeout(ctx, overallTimeout)
 	defer cancel()
 	return wait.ExponentialBackoffWithContext(ctx, backoff, conditionFunc)
 }
