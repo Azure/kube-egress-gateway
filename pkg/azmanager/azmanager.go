@@ -35,7 +35,6 @@ const (
 	// LB probe ID template
 	LBProbeIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/probes/%s"
 
-	defaultPollFixedInterval  = 10 * time.Second
 	defaultPollOverallTimeout = 2 * time.Minute
 
 	ErrRateLimitReached = "rate limit reached"
@@ -61,21 +60,14 @@ func isInternalServerError(err error) bool {
 }
 
 type retrySettings struct {
-	FixedInterval  *time.Duration
 	OverallTimeout *time.Duration
 	Backoff        *wait.Backoff
 }
 
 func wrapRetry(ctx context.Context, operationName string, operation func(context.Context) error, isRetriableFunc func(error) bool, retrySettings ...retrySettings) error {
-	useBackoff := true
-	fixedInterval := defaultPollFixedInterval
 	overallTimeout := defaultPollOverallTimeout
 	backoff := defaultPollBackoff
 	if len(retrySettings) > 0 {
-		if retrySettings[0].FixedInterval != nil {
-			fixedInterval = *retrySettings[0].FixedInterval
-			useBackoff = false
-		}
 		if retrySettings[0].OverallTimeout != nil {
 			overallTimeout = *retrySettings[0].OverallTimeout
 		}
@@ -100,13 +92,9 @@ func wrapRetry(ctx context.Context, operationName string, operation func(context
 		return true, nil
 	}
 
-	if useBackoff {
-		ctx, cancel := context.WithTimeout(context.Background(), overallTimeout)
-		defer cancel()
-		return wait.ExponentialBackoffWithContext(ctx, backoff, conditionFunc)
-	} else {
-		return wait.PollUntilContextTimeout(ctx, fixedInterval, overallTimeout, true, conditionFunc)
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), overallTimeout)
+	defer cancel()
+	return wait.ExponentialBackoffWithContext(ctx, backoff, conditionFunc)
 }
 
 type AzureManager struct {
