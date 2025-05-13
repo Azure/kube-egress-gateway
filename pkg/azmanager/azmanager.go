@@ -35,38 +35,64 @@ const (
 	// LB probe ID template
 	LBProbeIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/probes/%s"
 
-	defaultPollInterval = 10 * time.Second
-	defaultPollTimeout  = 2 * time.Minute
+	defaultPollFixedInterval  = 10 * time.Second
+	defaultPollOverallTimeout = 2 * time.Minute
 
 	ErrRateLimitReached = "rate limit reached"
 )
 
-func isRetriableError(err error) bool {
+var (
+	defaultPollBackoff = wait.Backoff{
+		Duration: 1 * time.Second,  // initial retry interval
+		Factor:   2.0,              // backoff factor
+		Jitter:   0.1,              // random jitter
+		Steps:    10,               // max retries
+		Cap:      30 * time.Second, // max retry internal, limiting exponential growth
+	}
+)
+
+func isRateLimitError(err error) bool {
 	return err.Error() == ErrRateLimitReached
 }
 
-type retrySettings struct {
-	Interval *time.Duration
-	Timeout  *time.Duration
+func isInternalServerError(err error) bool {
+	var respErr *azcore.ResponseError
+	if errors.As(err, &respErr) && respErr.ErrorCode == "InternalServerError" {
+		return true
+	}
+	return false
 }
 
-func wrapRetry(ctx context.Context, operationName string, operation func(context.Context) error, retrySettings ...retrySettings) error {
-	interval := defaultPollInterval
-	timeout := defaultPollTimeout
+type retrySettings struct {
+	FixedInterval  *time.Duration
+	OverallTimeout *time.Duration
+	Backoff        *wait.Backoff
+}
+
+func wrapRetry(ctx context.Context, operationName string, operation func(context.Context) error, isRetriableFunc func(error) bool, retrySettings ...retrySettings) error {
+	useBackoff := true
+	fixedInterval := defaultPollFixedInterval
+	overallTimeout := defaultPollOverallTimeout
+	backoff := defaultPollBackoff
 	if len(retrySettings) > 0 {
-		if retrySettings[0].Interval != nil {
-			interval = *retrySettings[0].Interval
+		if retrySettings[0].FixedInterval != nil {
+			fixedInterval = *retrySettings[0].FixedInterval
+			useBackoff = false
 		}
-		if retrySettings[0].Timeout != nil {
-			timeout = *retrySettings[0].Timeout
+		if retrySettings[0].OverallTimeout != nil {
+			overallTimeout = *retrySettings[0].OverallTimeout
+		}
+		if retrySettings[0].Backoff != nil {
+			backoff = *retrySettings[0].Backoff
 		}
 	}
-	return wait.PollUntilContextTimeout(ctx, interval, timeout, true, func(ctx context.Context) (bool, error) {
+
+	conditionFunc := func(ctx context.Context) (bool, error) {
 		var err error
 		logger := log.FromContext(ctx)
 		err = operation(ctx)
 		if err != nil {
-			if isRetriableError(err) {
+			if isRetriableFunc(err) {
 				logger.Info(fmt.Sprintf("%s retriable error", operationName), "error", err.Error(), "level", "warning")
 				return false, nil
 			}
@@ -75,7 +101,15 @@ func wrapRetry(ctx context.Context, operationName string, operation func(context
 		}
 		logger.Info(fmt.Sprintf("%s success", operationName))
 		return true, nil
-	})
+	}
+
+	if useBackoff {
+		ctx, cancel := context.WithTimeout(context.Background(), overallTimeout)
+		defer cancel()
+		return wait.ExponentialBackoffWithContext(ctx, backoff, conditionFunc)
+	} else {
+		return wait.PollUntilContextTimeout(ctx, fixedInterval, overallTimeout, true, conditionFunc)
+	}
 }
 
 type AzureManager struct {
@@ -140,7 +174,7 @@ func (az *AzureManager) GetLB(ctx context.Context) (*network.LoadBalancer, error
 		var err error
 		ret, err = az.LoadBalancerClient.Get(ctx, az.LoadBalancerResourceGroup, az.LoadBalancerName(), nil)
 		return err
-	})
+	}, isRateLimitError)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +190,7 @@ func (az *AzureManager) CreateOrUpdateLB(ctx context.Context, lb network.LoadBal
 		var err error
 		ret, err = az.LoadBalancerClient.CreateOrUpdate(ctx, az.LoadBalancerResourceGroup, to.Val(lb.Name), lb)
 		return err
-	}, retrySettings{Timeout: to.Ptr(5 * time.Minute)})
+	}, isRateLimitError, retrySettings{OverallTimeout: to.Ptr(5 * time.Minute)})
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +202,7 @@ func (az *AzureManager) DeleteLB(ctx context.Context) error {
 	ctx = log.IntoContext(ctx, logger)
 	return wrapRetry(ctx, "DeleteLB", func(ctx context.Context) error {
 		return az.LoadBalancerClient.Delete(ctx, az.LoadBalancerResourceGroup, az.LoadBalancerName())
-	})
+	}, isRateLimitError)
 }
 
 func (az *AzureManager) ListVMSS(ctx context.Context) ([]*compute.VirtualMachineScaleSet, error) {
@@ -179,7 +213,7 @@ func (az *AzureManager) ListVMSS(ctx context.Context) ([]*compute.VirtualMachine
 		var err error
 		vmssList, err = az.VmssClient.List(ctx, az.ResourceGroup)
 		return err
-	})
+	}, isRateLimitError)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +236,7 @@ func (az *AzureManager) GetVMSS(ctx context.Context, resourceGroup, vmssName str
 		var err error
 		vmss, err = az.VmssClient.Get(ctx, resourceGroup, vmssName, nil)
 		return err
-	}, retrySettings{Timeout: to.Ptr(5 * time.Minute)})
+	}, isRateLimitError, retrySettings{OverallTimeout: to.Ptr(5 * time.Minute)})
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +258,7 @@ func (az *AzureManager) CreateOrUpdateVMSS(ctx context.Context, resourceGroup, v
 		var err error
 		retVmss, err = az.VmssClient.CreateOrUpdate(ctx, resourceGroup, vmssName, vmss)
 		return err
-	}, retrySettings{Timeout: to.Ptr(5 * time.Minute)})
+	}, isRateLimitError, retrySettings{OverallTimeout: to.Ptr(5 * time.Minute)})
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +279,7 @@ func (az *AzureManager) ListVMSSInstances(ctx context.Context, resourceGroup, vm
 		var err error
 		vms, err = az.VmssVMClient.List(ctx, resourceGroup, vmssName)
 		return err
-	})
+	}, isRateLimitError)
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +303,7 @@ func (az *AzureManager) GetVMSSInstance(ctx context.Context, resourceGroup, vmss
 		var err error
 		vm, err = az.VmssVMClient.Get(ctx, resourceGroup, vmssName, instanceID)
 		return err
-	})
+	}, isRateLimitError)
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +327,7 @@ func (az *AzureManager) UpdateVMSSInstance(ctx context.Context, resourceGroup, v
 		var err error
 		retVM, err = az.VmssVMClient.Update(ctx, resourceGroup, vmssName, instanceID, vm)
 		return err
-	})
+	}, isRateLimitError)
 	if err != nil {
 		return nil, err
 	}
@@ -314,7 +348,7 @@ func (az *AzureManager) GetPublicIPPrefix(ctx context.Context, resourceGroup, pr
 		var err error
 		prefix, err = az.PublicIPPrefixClient.Get(ctx, resourceGroup, prefixName, nil)
 		return err
-	})
+	}, isRateLimitError)
 	if err != nil {
 		return nil, err
 	}
@@ -335,7 +369,7 @@ func (az *AzureManager) CreateOrUpdatePublicIPPrefix(ctx context.Context, resour
 		var err error
 		prefix, err = az.PublicIPPrefixClient.CreateOrUpdate(ctx, resourceGroup, prefixName, ipPrefix)
 		return err
-	})
+	}, isRateLimitError)
 	if err != nil {
 		return nil, err
 	}
@@ -349,30 +383,16 @@ func (az *AzureManager) DeletePublicIPPrefix(ctx context.Context, resourceGroup,
 	if prefixName == "" {
 		return fmt.Errorf("public ip prefix name is empty")
 	}
-	operationName := "DeletePublicIPPrefix"
-	logger := log.FromContext(ctx).WithValues("operation", operationName, "resourceGroup", resourceGroup, "resourceName", prefixName)
+	logger := log.FromContext(ctx).WithValues("operation", "DeletePublicIPPrefix", "resourceGroup", resourceGroup, "resourceName", prefixName)
 	ctx = log.IntoContext(ctx, logger)
-	return wait.PollUntilContextTimeout(ctx, defaultPollInterval, 15*time.Minute, true, func(ctx context.Context) (bool, error) {
+	err := wrapRetry(ctx, "DeletePublicIPPrefix", func(ctx context.Context) error {
 		var err error
-		logger := log.FromContext(ctx)
 		err = az.PublicIPPrefixClient.Delete(ctx, resourceGroup, prefixName)
-		if err != nil {
-			if isRetriableError(err) {
-				logger.Info(fmt.Sprintf("%s retriable error", operationName), "error", err.Error(), "level", "warning")
-				return false, nil
-			}
-			// retry for InternalServerError due to temporary NRP issue. TODO remove this
-			var respErr *azcore.ResponseError
-			if errors.As(err, &respErr) && respErr.ErrorCode == "InternalServerError" {
-				logger.Info(fmt.Sprintf("%s retriable InternalServerError", operationName), "error", err.Error(), "level", "warning")
-				return false, nil
-			}
-			logger.Info(fmt.Sprintf("%s nonretriable error", operationName), "error", err.Error(), "level", "warning")
-			return false, err
-		}
-		logger.Info(fmt.Sprintf("%s success", operationName))
-		return true, nil
-	})
+		return err
+	}, func(err error) bool {
+		return isRateLimitError(err) || isInternalServerError(err)
+	}, retrySettings{OverallTimeout: to.Ptr(15 * time.Minute)})
+	return err
 }
 
 func (az *AzureManager) GetVMSSInterface(ctx context.Context, resourceGroup, vmssName, instanceID, interfaceName string) (*network.Interface, error) {
@@ -395,7 +415,7 @@ func (az *AzureManager) GetVMSSInterface(ctx context.Context, resourceGroup, vms
 		var err error
 		nicResp, err = az.InterfaceClient.GetVirtualMachineScaleSetNetworkInterface(ctx, resourceGroup, vmssName, instanceID, interfaceName)
 		return err
-	})
+	}, isRateLimitError)
 	if err != nil {
 		return nil, err
 	}
@@ -410,7 +430,7 @@ func (az *AzureManager) GetSubnet(ctx context.Context) (*network.Subnet, error) 
 		var err error
 		subnet, err = az.SubnetClient.Get(ctx, az.VnetResourceGroup, az.VnetName, az.SubnetName, nil)
 		return err
-	})
+	}, isRateLimitError)
 	if err != nil {
 		return nil, err
 	}
