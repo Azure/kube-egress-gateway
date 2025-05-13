@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/stretchr/testify/assert"
@@ -769,6 +770,14 @@ func TestGetSubnet(t *testing.T) {
 		assert.Equal(t, to.Val(subnet), to.Val(test.subnet), "TestCase[%d]: %s", i, test.desc)
 		assert.Equal(t, err, test.testErr, "TestCase[%d]: %s", i, test.desc)
 	}
+}
+
+func TestIsInternalServerError(t *testing.T) {
+	err := &azcore.ResponseError{
+		ErrorCode:  "InternalServerError",
+		StatusCode: 200,
+	}
+	assert.True(t, isInternalServerError(err))
 }
 
 func getMockFactory(ctrl *gomock.Controller) azclient.ClientFactory {

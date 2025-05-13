@@ -57,10 +57,7 @@ func isRateLimitError(err error) bool {
 
 func isInternalServerError(err error) bool {
 	var respErr *azcore.ResponseError
-	if errors.As(err, &respErr) && respErr.ErrorCode == "InternalServerError" {
-		return true
-	}
-	return false
+	return errors.As(err, &respErr) && respErr.ErrorCode == "InternalServerError"
 }
 
 type retrySettings struct {
