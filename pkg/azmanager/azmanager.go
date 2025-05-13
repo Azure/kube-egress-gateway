@@ -386,9 +386,7 @@ func (az *AzureManager) DeletePublicIPPrefix(ctx context.Context, resourceGroup,
 	logger := log.FromContext(ctx).WithValues("operation", "DeletePublicIPPrefix", "resourceGroup", resourceGroup, "resourceName", prefixName)
 	ctx = log.IntoContext(ctx, logger)
 	err := wrapRetry(ctx, "DeletePublicIPPrefix", func(ctx context.Context) error {
-		var err error
-		err = az.PublicIPPrefixClient.Delete(ctx, resourceGroup, prefixName)
-		return err
+		return az.PublicIPPrefixClient.Delete(ctx, resourceGroup, prefixName)
 	}, func(err error) bool {
 		return isRateLimitError(err) || isInternalServerError(err)
 	}, retrySettings{OverallTimeout: to.Ptr(15 * time.Minute)})
