@@ -5,10 +5,12 @@ package e2e
 
 import (
 	"context"
+	"errors"
 	"net"
 	"regexp"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -131,6 +133,14 @@ var _ = Describe("Test staticGatewayConfiguration deployment", func() {
 		Expect(err).NotTo(HaveOccurred())
 		defer func() {
 			err := utils.WaitPipPrefixDeletion(rg, prefixName, pipPrefixClient)
+			// retry for InternalServerError due to temporary NRP issue. TODO remove this
+			var respErr *azcore.ResponseError
+			if err != nil && errors.As(err, &respErr) && respErr.ErrorCode == "InternalServerError" {
+				err = utils.WaitPipPrefixDeletion(rg, prefixName, pipPrefixClient)
+				if err != nil && errors.As(err, &respErr) && respErr.ErrorCode == "InternalServerError" {
+					err = utils.WaitPipPrefixDeletion(rg, prefixName, pipPrefixClient)
+				}
+			}
 			Expect(err).NotTo(HaveOccurred())
 		}()
 		utils.Logf("Got BYO pip prefix: %s", to.Val(prefix.Properties.IPPrefix))

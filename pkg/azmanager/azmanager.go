@@ -4,11 +4,14 @@ package azmanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
@@ -17,6 +20,7 @@ import (
 	_ "sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
@@ -30,7 +34,68 @@ const (
 	LBBackendPoolIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s"
 	// LB probe ID template
 	LBProbeIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/probes/%s"
+
+	defaultPollOverallTimeout = 2 * time.Minute
+
+	ErrRateLimitReached = "rate limit reached"
 )
+
+var (
+	defaultPollBackoff = wait.Backoff{
+		Duration: 1 * time.Second,  // initial retry interval
+		Factor:   2.0,              // backoff factor
+		Jitter:   0.1,              // random jitter
+		Steps:    10,               // max retries
+		Cap:      30 * time.Second, // max retry internal, limiting exponential growth
+	}
+)
+
+func isRateLimitError(err error) bool {
+	return err.Error() == ErrRateLimitReached
+}
+
+func isInternalServerError(err error) bool {
+	var respErr *azcore.ResponseError
+	return errors.As(err, &respErr) && respErr.ErrorCode == "InternalServerError"
+}
+
+type retrySettings struct {
+	OverallTimeout *time.Duration
+	Backoff        *wait.Backoff
+}
+
+func wrapRetry(ctx context.Context, operationName string, operation func(context.Context) error, isRetriableFunc func(error) bool, retrySettings ...retrySettings) error {
+	overallTimeout := defaultPollOverallTimeout
+	backoff := defaultPollBackoff
+	if len(retrySettings) > 0 {
+		if retrySettings[0].OverallTimeout != nil {
+			overallTimeout = *retrySettings[0].OverallTimeout
+		}
+		if retrySettings[0].Backoff != nil {
+			backoff = *retrySettings[0].Backoff
+		}
+	}
+
+	conditionFunc := func(ctx context.Context) (bool, error) {
+		var err error
+		logger := log.FromContext(ctx)
+		err = operation(ctx)
+		if err != nil {
+			if isRetriableFunc(err) {
+				logger.Info(fmt.Sprintf("%s retriable error", operationName), "error", err.Error(), "level", "warning")
+				return false, nil
+			}
+			logger.Info(fmt.Sprintf("%s nonretriable error", operationName), "error", err.Error(), "level", "warning")
+			return false, err
+		}
+		logger.Info(fmt.Sprintf("%s success", operationName))
+		return true, nil
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, overallTimeout)
+	defer cancel()
+	return wait.ExponentialBackoffWithContext(ctx, backoff, conditionFunc)
+}
 
 type AzureManager struct {
 	*config.CloudConfig
@@ -86,19 +151,31 @@ func (az *AzureManager) GetLBProbeID(name string) *string {
 }
 
 func (az *AzureManager) GetLB(ctx context.Context) (*network.LoadBalancer, error) {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
-	lb, err := az.LoadBalancerClient.Get(ctx, az.LoadBalancerResourceGroup, az.LoadBalancerName(), nil)
+	logger := log.FromContext(ctx).WithValues("operation", "GetLB", "resourceGroup", az.LoadBalancerResourceGroup, "resourceName", az.LoadBalancerName())
+	ctx = log.IntoContext(ctx, logger)
+
+	var ret *network.LoadBalancer
+	err := wrapRetry(ctx, "GetLB", func(ctx context.Context) error {
+		var err error
+		ret, err = az.LoadBalancerClient.Get(ctx, az.LoadBalancerResourceGroup, az.LoadBalancerName(), nil)
+		return err
+	}, isRateLimitError)
 	if err != nil {
 		return nil, err
 	}
-	return lb, nil
+	return ret, nil
 }
 
 func (az *AzureManager) CreateOrUpdateLB(ctx context.Context, lb network.LoadBalancer) (*network.LoadBalancer, error) {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
-	ret, err := az.LoadBalancerClient.CreateOrUpdate(ctx, az.LoadBalancerResourceGroup, to.Val(lb.Name), lb)
+	logger := log.FromContext(ctx).WithValues("operation", "CreateOrUpdateLB", "resourceGroup", az.LoadBalancerResourceGroup, "resourceName", to.Val(lb.Name))
+	ctx = log.IntoContext(ctx, logger)
+
+	var ret *network.LoadBalancer
+	err := wrapRetry(ctx, "CreateOrUpdateLB", func(ctx context.Context) error {
+		var err error
+		ret, err = az.LoadBalancerClient.CreateOrUpdate(ctx, az.LoadBalancerResourceGroup, to.Val(lb.Name), lb)
+		return err
+	}, isRateLimitError, retrySettings{OverallTimeout: to.Ptr(5 * time.Minute)})
 	if err != nil {
 		return nil, err
 	}
@@ -106,18 +183,22 @@ func (az *AzureManager) CreateOrUpdateLB(ctx context.Context, lb network.LoadBal
 }
 
 func (az *AzureManager) DeleteLB(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
-	if err := az.LoadBalancerClient.Delete(ctx, az.LoadBalancerResourceGroup, az.LoadBalancerName()); err != nil {
-		return err
-	}
-	return nil
+	logger := log.FromContext(ctx).WithValues("operation", "DeleteLB", "resourceGroup", az.LoadBalancerResourceGroup, "resourceName", az.LoadBalancerName())
+	ctx = log.IntoContext(ctx, logger)
+	return wrapRetry(ctx, "DeleteLB", func(ctx context.Context) error {
+		return az.LoadBalancerClient.Delete(ctx, az.LoadBalancerResourceGroup, az.LoadBalancerName())
+	}, isRateLimitError)
 }
 
 func (az *AzureManager) ListVMSS(ctx context.Context) ([]*compute.VirtualMachineScaleSet, error) {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
-	vmssList, err := az.VmssClient.List(ctx, az.ResourceGroup)
+	logger := log.FromContext(ctx).WithValues("operation", "ListVMSS", "resourceGroup", az.LoadBalancerResourceGroup)
+	ctx = log.IntoContext(ctx, logger)
+	var vmssList []*compute.VirtualMachineScaleSet
+	err := wrapRetry(ctx, "ListVMSS", func(ctx context.Context) error {
+		var err error
+		vmssList, err = az.VmssClient.List(ctx, az.ResourceGroup)
+		return err
+	}, isRateLimitError)
 	if err != nil {
 		return nil, err
 	}
@@ -125,15 +206,22 @@ func (az *AzureManager) ListVMSS(ctx context.Context) ([]*compute.VirtualMachine
 }
 
 func (az *AzureManager) GetVMSS(ctx context.Context, resourceGroup, vmssName string) (*compute.VirtualMachineScaleSet, error) {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
 	if vmssName == "" {
 		return nil, fmt.Errorf("vmss name is empty")
 	}
-	vmss, err := az.VmssClient.Get(ctx, resourceGroup, vmssName, nil)
+
+	logger := log.FromContext(ctx).WithValues("operation", "GetVMSS", "resourceGroup", resourceGroup, "resourceName", vmssName)
+	ctx = log.IntoContext(ctx, logger)
+
+	var vmss *compute.VirtualMachineScaleSet
+	err := wrapRetry(ctx, "GetVMSS", func(ctx context.Context) error {
+		var err error
+		vmss, err = az.VmssClient.Get(ctx, resourceGroup, vmssName, nil)
+		return err
+	}, isRateLimitError, retrySettings{OverallTimeout: to.Ptr(5 * time.Minute)})
 	if err != nil {
 		return nil, err
 	}
@@ -141,15 +229,21 @@ func (az *AzureManager) GetVMSS(ctx context.Context, resourceGroup, vmssName str
 }
 
 func (az *AzureManager) CreateOrUpdateVMSS(ctx context.Context, resourceGroup, vmssName string, vmss compute.VirtualMachineScaleSet) (*compute.VirtualMachineScaleSet, error) {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
 	if vmssName == "" {
 		return nil, fmt.Errorf("vmss name is empty")
 	}
-	retVmss, err := az.VmssClient.CreateOrUpdate(ctx, resourceGroup, vmssName, vmss)
+
+	logger := log.FromContext(ctx).WithValues("operation", "CreateOrUpdateVMSS", "resourceGroup", resourceGroup, "resourceName", vmssName)
+	ctx = log.IntoContext(ctx, logger)
+	var retVmss *compute.VirtualMachineScaleSet
+	err := wrapRetry(ctx, "CreateOrUpdateVMSS", func(ctx context.Context) error {
+		var err error
+		retVmss, err = az.VmssClient.CreateOrUpdate(ctx, resourceGroup, vmssName, vmss)
+		return err
+	}, isRateLimitError, retrySettings{OverallTimeout: to.Ptr(5 * time.Minute)})
 	if err != nil {
 		return nil, err
 	}
@@ -157,15 +251,20 @@ func (az *AzureManager) CreateOrUpdateVMSS(ctx context.Context, resourceGroup, v
 }
 
 func (az *AzureManager) ListVMSSInstances(ctx context.Context, resourceGroup, vmssName string) ([]*compute.VirtualMachineScaleSetVM, error) {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
 	if vmssName == "" {
 		return nil, fmt.Errorf("vmss name is empty")
 	}
-	vms, err := az.VmssVMClient.List(ctx, resourceGroup, vmssName)
+	logger := log.FromContext(ctx).WithValues("operation", "ListVMSSInstances", "resourceGroup", resourceGroup, "resourceName", vmssName)
+	ctx = log.IntoContext(ctx, logger)
+	var vms []*compute.VirtualMachineScaleSetVM
+	err := wrapRetry(ctx, "ListVMSSInstances", func(ctx context.Context) error {
+		var err error
+		vms, err = az.VmssVMClient.List(ctx, resourceGroup, vmssName)
+		return err
+	}, isRateLimitError)
 	if err != nil {
 		return nil, err
 	}
@@ -173,8 +272,6 @@ func (az *AzureManager) ListVMSSInstances(ctx context.Context, resourceGroup, vm
 }
 
 func (az *AzureManager) GetVMSSInstance(ctx context.Context, resourceGroup, vmssName, instanceID string) (*compute.VirtualMachineScaleSetVM, error) {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
@@ -184,7 +281,14 @@ func (az *AzureManager) GetVMSSInstance(ctx context.Context, resourceGroup, vmss
 	if instanceID == "" {
 		return nil, fmt.Errorf("vmss instanceID is empty")
 	}
-	vm, err := az.VmssVMClient.Get(ctx, resourceGroup, vmssName, instanceID)
+	logger := log.FromContext(ctx).WithValues("operation", "GetVMSSInstance", "resourceGroup", resourceGroup, "resourceName", vmssName, "vmssInstanceID", instanceID)
+	ctx = log.IntoContext(ctx, logger)
+	var vm *compute.VirtualMachineScaleSetVM
+	err := wrapRetry(ctx, "GetVMSSInstance", func(ctx context.Context) error {
+		var err error
+		vm, err = az.VmssVMClient.Get(ctx, resourceGroup, vmssName, instanceID)
+		return err
+	}, isRateLimitError)
 	if err != nil {
 		return nil, err
 	}
@@ -192,8 +296,6 @@ func (az *AzureManager) GetVMSSInstance(ctx context.Context, resourceGroup, vmss
 }
 
 func (az *AzureManager) UpdateVMSSInstance(ctx context.Context, resourceGroup, vmssName, instanceID string, vm compute.VirtualMachineScaleSetVM) (*compute.VirtualMachineScaleSetVM, error) {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
@@ -203,7 +305,14 @@ func (az *AzureManager) UpdateVMSSInstance(ctx context.Context, resourceGroup, v
 	if instanceID == "" {
 		return nil, fmt.Errorf("vmss instanceID is empty")
 	}
-	retVM, err := az.VmssVMClient.Update(ctx, resourceGroup, vmssName, instanceID, vm)
+	logger := log.FromContext(ctx).WithValues("operation", "UpdateVMSSInstance", "resourceGroup", resourceGroup, "resourceName", vmssName, "vmssInstanceID", instanceID)
+	ctx = log.IntoContext(ctx, logger)
+	var retVM *compute.VirtualMachineScaleSetVM
+	err := wrapRetry(ctx, "UpdateVMSSInstance", func(ctx context.Context) error {
+		var err error
+		retVM, err = az.VmssVMClient.Update(ctx, resourceGroup, vmssName, instanceID, vm)
+		return err
+	}, isRateLimitError)
 	if err != nil {
 		return nil, err
 	}
@@ -211,15 +320,20 @@ func (az *AzureManager) UpdateVMSSInstance(ctx context.Context, resourceGroup, v
 }
 
 func (az *AzureManager) GetPublicIPPrefix(ctx context.Context, resourceGroup, prefixName string) (*network.PublicIPPrefix, error) {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
 	if prefixName == "" {
 		return nil, fmt.Errorf("public ip prefix name is empty")
 	}
-	prefix, err := az.PublicIPPrefixClient.Get(ctx, resourceGroup, prefixName, nil)
+	logger := log.FromContext(ctx).WithValues("operation", "GetPublicIPPrefix", "resourceGroup", resourceGroup, "resourceName", prefixName)
+	ctx = log.IntoContext(ctx, logger)
+	var prefix *network.PublicIPPrefix
+	err := wrapRetry(ctx, "UpdateVMSSInstance", func(ctx context.Context) error {
+		var err error
+		prefix, err = az.PublicIPPrefixClient.Get(ctx, resourceGroup, prefixName, nil)
+		return err
+	}, isRateLimitError)
 	if err != nil {
 		return nil, err
 	}
@@ -227,15 +341,20 @@ func (az *AzureManager) GetPublicIPPrefix(ctx context.Context, resourceGroup, pr
 }
 
 func (az *AzureManager) CreateOrUpdatePublicIPPrefix(ctx context.Context, resourceGroup, prefixName string, ipPrefix network.PublicIPPrefix) (*network.PublicIPPrefix, error) {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
 	if prefixName == "" {
 		return nil, fmt.Errorf("public ip prefix name is empty")
 	}
-	prefix, err := az.PublicIPPrefixClient.CreateOrUpdate(ctx, resourceGroup, prefixName, ipPrefix)
+	logger := log.FromContext(ctx).WithValues("operation", "CreateOrUpdatePublicIPPrefix", "resourceGroup", resourceGroup, "resourceName", prefixName)
+	ctx = log.IntoContext(ctx, logger)
+	var prefix *network.PublicIPPrefix
+	err := wrapRetry(ctx, "CreateOrUpdatePublicIPPrefix", func(ctx context.Context) error {
+		var err error
+		prefix, err = az.PublicIPPrefixClient.CreateOrUpdate(ctx, resourceGroup, prefixName, ipPrefix)
+		return err
+	}, isRateLimitError)
 	if err != nil {
 		return nil, err
 	}
@@ -243,20 +362,23 @@ func (az *AzureManager) CreateOrUpdatePublicIPPrefix(ctx context.Context, resour
 }
 
 func (az *AzureManager) DeletePublicIPPrefix(ctx context.Context, resourceGroup, prefixName string) error {
-	ctx, cancel := context.WithTimeout(ctx, 900*time.Second)
-	defer cancel()
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
 	if prefixName == "" {
 		return fmt.Errorf("public ip prefix name is empty")
 	}
-	return az.PublicIPPrefixClient.Delete(ctx, resourceGroup, prefixName)
+	logger := log.FromContext(ctx).WithValues("operation", "DeletePublicIPPrefix", "resourceGroup", resourceGroup, "resourceName", prefixName)
+	ctx = log.IntoContext(ctx, logger)
+	err := wrapRetry(ctx, "DeletePublicIPPrefix", func(ctx context.Context) error {
+		return az.PublicIPPrefixClient.Delete(ctx, resourceGroup, prefixName)
+	}, func(err error) bool {
+		return isRateLimitError(err) || isInternalServerError(err)
+	}, retrySettings{OverallTimeout: to.Ptr(15 * time.Minute)})
+	return err
 }
 
 func (az *AzureManager) GetVMSSInterface(ctx context.Context, resourceGroup, vmssName, instanceID, interfaceName string) (*network.Interface, error) {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
 	}
@@ -269,7 +391,14 @@ func (az *AzureManager) GetVMSSInterface(ctx context.Context, resourceGroup, vms
 	if interfaceName == "" {
 		return nil, fmt.Errorf("interface name is empty")
 	}
-	nicResp, err := az.InterfaceClient.GetVirtualMachineScaleSetNetworkInterface(ctx, resourceGroup, vmssName, instanceID, interfaceName)
+	logger := log.FromContext(ctx).WithValues("operation", "GetVMSSInterface", "resourceGroup", resourceGroup, "resourceName", vmssName, "vmssInstanceID", instanceID, "interfaceName", interfaceName)
+	ctx = log.IntoContext(ctx, logger)
+	var nicResp *network.Interface
+	err := wrapRetry(ctx, "GetVMSSInterface", func(ctx context.Context) error {
+		var err error
+		nicResp, err = az.InterfaceClient.GetVirtualMachineScaleSetNetworkInterface(ctx, resourceGroup, vmssName, instanceID, interfaceName)
+		return err
+	}, isRateLimitError)
 	if err != nil {
 		return nil, err
 	}
@@ -277,9 +406,14 @@ func (az *AzureManager) GetVMSSInterface(ctx context.Context, resourceGroup, vms
 }
 
 func (az *AzureManager) GetSubnet(ctx context.Context) (*network.Subnet, error) {
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
-	subnet, err := az.SubnetClient.Get(ctx, az.VnetResourceGroup, az.VnetName, az.SubnetName, nil)
+	logger := log.FromContext(ctx).WithValues("operation", "GetSubnet", "resourceGroup", az.VnetResourceGroup, "resourceName", az.VnetName, "subnetName", az.SubnetName)
+	ctx = log.IntoContext(ctx, logger)
+	var subnet *network.Subnet
+	err := wrapRetry(ctx, "GetSubnet", func(ctx context.Context) error {
+		var err error
+		subnet, err = az.SubnetClient.Get(ctx, az.VnetResourceGroup, az.VnetName, az.SubnetName, nil)
+		return err
+	}, isRateLimitError)
 	if err != nil {
 		return nil, err
 	}
