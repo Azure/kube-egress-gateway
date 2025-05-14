@@ -21,7 +21,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
-	utilexec "k8s.io/utils/exec"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -141,7 +140,7 @@ func (r *StaticGatewayConfigurationReconciler) Reconcile(ctx context.Context, re
 func (r *StaticGatewayConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.Netlink = netlinkwrapper.NewNetLink()
 	r.NetNS = netnswrapper.NewNetNS()
-	r.IPTables = utiliptables.New(utilexec.New(), utiliptables.ProtocolIPv4)
+	r.IPTables = utiliptables.New(utiliptables.ProtocolIPv4)
 	r.WgCtrl = wgctrlwrapper.NewWgCtrl()
 	controller, err := ctrl.NewControllerManagedBy(mgr).
 		For(&egressgatewayv1alpha1.StaticGatewayConfiguration{}).
