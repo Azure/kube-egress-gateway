@@ -28,7 +28,7 @@ jobs:
   steps:
   - task: GoTool@0
     inputs:
-      version: '1.23.7'
+      version: '1.24.3'
   - bash: |
       echo $(registry.password) | docker login $(registry.url) -u $(registry.username) --password-stdin
     displayName: docker login
