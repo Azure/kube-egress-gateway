@@ -20,7 +20,7 @@ require (
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.20.1
 	github.com/stretchr/testify v1.10.0
-	github.com/vishvananda/netlink v1.3.1-0.20250303224720-0e7078ed04c8
+	github.com/vishvananda/netlink v1.3.1
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.60.0
 	go.uber.org/mock v0.5.2
 	go.uber.org/multierr v1.11.0
