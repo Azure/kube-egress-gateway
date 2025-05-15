@@ -34,7 +34,7 @@ require (
 	k8s.io/apimachinery v0.33.0
 	k8s.io/client-go v0.33.0
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/kubernetes v1.33.0
+	k8s.io/kubernetes v1.33.1
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.8.1
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.6.1
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.9.1
