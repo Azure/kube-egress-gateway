@@ -329,7 +329,7 @@ func (az *AzureManager) GetPublicIPPrefix(ctx context.Context, resourceGroup, pr
 	logger := log.FromContext(ctx).WithValues("operation", "GetPublicIPPrefix", "resourceGroup", resourceGroup, "resourceName", prefixName)
 	ctx = log.IntoContext(ctx, logger)
 	var prefix *network.PublicIPPrefix
-	err := wrapRetry(ctx, "UpdateVMSSInstance", func(ctx context.Context) error {
+	err := wrapRetry(ctx, "GetPublicIPPrefix", func(ctx context.Context) error {
 		var err error
 		prefix, err = az.PublicIPPrefixClient.Get(ctx, resourceGroup, prefixName, nil)
 		return err
