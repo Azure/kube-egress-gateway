@@ -35,7 +35,7 @@ jobs:
   - bash: |
       az extension add -n aks-preview --version 14.0.0b1
       az extension list
-      az login --identity --username $(AZURE_MANAGED_IDENTITY_CLIENT_ID)
+      az login --identity --resource-id $(AZURE_MANAGED_IDENTITY_CLIENT_ID)
       az account set -s $(AZURE_SUBSCRIPTION_ID)
     displayName: az login
   - bash: |
@@ -85,5 +85,4 @@ jobs:
       pathToPublish: '$(Build.ArtifactStagingDirectory)'
       artifactName: Logs
     condition: succeededOrFailed()
-
 
