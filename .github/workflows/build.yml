@@ -104,10 +104,10 @@ jobs:
           push: false
           files: |
             docker/docker-bake.hcl
-            ${{ steps.daemon.outputs.bake-file }}
-            ${{ steps.daemoninit.outputs.bake-file }}
-            ${{ steps.controller.outputs.bake-file }}
-            ${{ steps.cnimanager.outputs.bake-file }}
-            ${{ steps.cniplugin.outputs.bake-file }}
-            ${{ steps.cniipamplugin.outputs.bake-file }}
+            cwd://${{ steps.daemon.outputs.bake-file }}
+            cwd://${{ steps.daemoninit.outputs.bake-file }}
+            cwd://${{ steps.controller.outputs.bake-file }}
+            cwd://${{ steps.cnimanager.outputs.bake-file }}
+            cwd://${{ steps.cniplugin.outputs.bake-file }}
+            cwd://${{ steps.cniipamplugin.outputs.bake-file }}
 
