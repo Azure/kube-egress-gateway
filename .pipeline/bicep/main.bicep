@@ -54,6 +54,16 @@ module identities 'modules/identities.bicep' = {
   }
 }
 
+// Role Assignments
+module roleAssignments 'modules/roleAssignments.bicep' = {
+  name: 'role-assignments-deployment'
+  params: {
+    subscriptionId: subscriptionId
+    kubeletPrincipalId: identities.outputs.kubeletPrincipalId
+    nodeResourceGroupName: aks.outputs.nodeResourceGroup
+  }
+}
+
 // AKS Cluster
 module aks 'modules/aks.bicep' = {
   name: 'aks-deployment'
@@ -69,16 +79,6 @@ module aks 'modules/aks.bicep' = {
     subnetAksId: vnet.outputs.subnetAksId
     subnetGatewayId: vnet.outputs.subnetGatewayId
     subnetPodId: vnet.outputs.subnetPodId
-  }
-}
-
-// Role Assignments
-module roleAssignments 'modules/roleAssignments.bicep' = {
-  name: 'role-assignments-deployment'
-  params: {
-    subscriptionId: subscriptionId
-    kubeletPrincipalId: identities.outputs.kubeletPrincipalId
-    nodeResourceGroupName: aks.outputs.nodeResourceGroup
   }
 }
 
