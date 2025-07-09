@@ -29,6 +29,9 @@
     "loadBalancerName": {
       "value": "${LB_NAME}"
     },
+    "gatewayNodePoolName": {
+      "value": "${GW_NODE_POOL_NAME}"
+    },
     "subscriptionId": {
       "value": "${AZURE_SUBSCRIPTION_ID}"
     },
