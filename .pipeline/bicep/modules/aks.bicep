@@ -113,16 +113,6 @@ resource aksCluster 'Microsoft.ContainerService/managedClusters@2023-08-01' = {
         ]
       }
     ]
-    linuxProfile: {
-      adminUsername: adminUsername
-      ssh: {
-        publicKeys: [
-          {
-            keyData: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7hr2vEtjNRIQdJTjpqR6Yj4TZWs8W1XqzpG3PqJ5VR9k0j8QY1KZx9J8Vj5k7XYx8j5X9j8j5X8x7YVzRJJz8j5k8X8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8j5k8 generated-by-azure'
-          }
-        ]
-      }
-    }
     identityProfile: {
       kubeletidentity: {
         resourceId: aksKubeletIdentityId

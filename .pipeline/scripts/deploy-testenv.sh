@@ -6,16 +6,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BICEP_DIR="${SCRIPT_DIR}/../bicep"
 
 # Default values
-RESOURCE_GROUP=${RESOURCE_GROUP:-"kube-egress-gw-rg"}
-VNET_NAME=${VNET_NAME:-"gateway-vnet"}
-AKS_ID_NAME=${AKS_ID_NAME:-"gateway-aks-id"}
-AKS_KUBELET_ID_NAME=${AKS_KUBELET_ID_NAME:-"gateway-aks-kubelet-id"}
-AKS_CLUSTER_NAME=${AKS_CLUSTER_NAME:-"aks"}
-NETWORK_PLUGIN=${NETWORK_PLUGIN:-"overlay"}
-DNS_SERVER_IP=${DNS_SERVER_IP:-"10.245.0.10"}
-POD_CIDR=${POD_CIDR:-"10.244.0.0/16"}
-SERVICE_CIDR=${SERVICE_CIDR:-"10.245.0.0/16"}
-LB_NAME=${LB_NAME:-"kubeegressgateway-ilb"}
+export RESOURCE_GROUP=${RESOURCE_GROUP:-"kube-egress-gw-rg"}
+export VNET_NAME=${VNET_NAME:-"gateway-vnet"}
+export AKS_ID_NAME=${AKS_ID_NAME:-"gateway-aks-id"}
+export AKS_KUBELET_ID_NAME=${AKS_KUBELET_ID_NAME:-"gateway-aks-kubelet-id"}
+export AKS_CLUSTER_NAME=${AKS_CLUSTER_NAME:-"aks"}
+export NETWORK_PLUGIN=${NETWORK_PLUGIN:-"overlay"}
+export DNS_SERVER_IP=${DNS_SERVER_IP:-"10.245.0.10"}
+export POD_CIDR=${POD_CIDR:-"10.244.0.0/16"}
+export SERVICE_CIDR=${SERVICE_CIDR:-"10.245.0.0/16"}
+export LB_NAME=${LB_NAME:-"kubeegressgateway-ilb"}
 
 : "${AZURE_SUBSCRIPTION_ID:?Environment variable empty or not defined.}"
 : "${AZURE_TENANT_ID:?Environment variable empty or not defined.}"
@@ -41,6 +41,11 @@ fi
 echo "Generating Bicep parameters file"
 TEMP_PARAMS_FILE=$(mktemp)
 envsubst < "${BICEP_DIR}/parameters.json" > "${TEMP_PARAMS_FILE}"
+
+# print the temporary parameters file for debugging
+echo "Temporary parameters file created at: ${TEMP_PARAMS_FILE}"
+echo "Contents of the temporary parameters file:"
+cat "${TEMP_PARAMS_FILE}"
 
 # Deploy infrastructure using Bicep
 echo "Deploying infrastructure using Bicep templates"
