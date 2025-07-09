@@ -32,6 +32,9 @@ param subnetGatewayId string
 @description('Pod subnet resource ID')
 param subnetPodId string
 
+@description('gateway node pool name')
+param gatewayNodePoolName string
+
 // Helper function to determine network profile
 var networkProfiles = {
   kubenet: {
@@ -94,7 +97,7 @@ resource aksCluster 'Microsoft.ContainerService/managedClusters@2023-08-01' = {
         maxPods: selectedProfile.maxPods
       }
       {
-        name: 'gwnodepool'
+        name: gatewayNodePoolName
         count: 2
         vmSize: 'Standard_DS2_v2'
         osType: 'Linux'

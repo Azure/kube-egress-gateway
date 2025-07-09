@@ -18,6 +18,8 @@ export SERVICE_CIDR=${SERVICE_CIDR:-"10.245.0.0/16"}
 export LB_NAME=${LB_NAME:-"kubeegressgateway-ilb"}
 export GW_NODE_POOL_NAME=${GW_NODE_POOL_NAME:-"gwnodepool"}
 
+export schema='$schema' # dumb hack to avoid wiping the value from parameters.json
+
 : "${AZURE_SUBSCRIPTION_ID:?Environment variable empty or not defined.}"
 : "${AZURE_TENANT_ID:?Environment variable empty or not defined.}"
 

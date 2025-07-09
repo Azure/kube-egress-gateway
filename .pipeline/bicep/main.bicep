@@ -35,6 +35,9 @@ param subscriptionId string
 @description('Azure tenant ID')
 param tenantId string
 
+@description('Gateway node pool name')
+param gatewayNodePoolName string
+
 // Virtual Network
 module vnet 'modules/vnet.bicep' = {
   name: 'vnet-deployment'
@@ -78,6 +81,7 @@ module aks 'modules/aks.bicep' = {
     subnetAksId: vnet.outputs.subnetAksId
     subnetGatewayId: vnet.outputs.subnetGatewayId
     subnetPodId: vnet.outputs.subnetPodId
+    gatewayNodePoolName: gatewayNodePoolName
   }
 }
 
