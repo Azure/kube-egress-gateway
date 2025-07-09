@@ -58,7 +58,6 @@ module identities 'modules/identities.bicep' = {
 module roleAssignments 'modules/roleAssignments.bicep' = {
   name: 'role-assignments-deployment'
   params: {
-    subscriptionId: subscriptionId
     kubeletPrincipalId: identities.outputs.kubeletPrincipalId
     nodeResourceGroupName: aks.outputs.nodeResourceGroup
   }
