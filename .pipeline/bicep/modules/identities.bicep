@@ -19,6 +19,18 @@ resource aksKubeletIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@20
   location: location
 }
 
+// Preflight needs the AKS identity to have the Managed Identity Operator role
+// This allows the AKS cluster to manage the kubelet identity
+resource roleAssignmentAksIdentity 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(aksIdentity.id, 'Managed Identity Operator')
+  scope: aksKubeletIdentity
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'f1a07417-d97a-45cb-824c-7a7467783830') // Managed Identity Operator
+    principalId: aksIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 // Outputs
 output aksIdentityId string = aksIdentity.id
 output aksKubeletIdentityId string = aksKubeletIdentity.id

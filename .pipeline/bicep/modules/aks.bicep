@@ -32,9 +32,6 @@ param subnetGatewayId string
 @description('Pod subnet resource ID')
 param subnetPodId string
 
-@description('Admin username for AKS nodes')
-param adminUsername string = 'azureuser'
-
 // Helper function to determine network profile
 var networkProfiles = {
   kubenet: {
