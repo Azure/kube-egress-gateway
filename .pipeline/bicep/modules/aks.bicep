@@ -32,8 +32,8 @@ param subnetGatewayId string
 @description('Pod subnet resource ID')
 param subnetPodId string
 
-@description('Admin username for AKS nodes')
-param adminUsername string = 'azureuser'
+@description('Name of the AKS node pool for gateway nodes')
+param gwNodePoolName string
 
 // Helper function to determine network profile
 var networkProfiles = {
@@ -74,7 +74,7 @@ var networkProfiles = {
 var selectedProfile = networkProfiles[networkPlugin]
 
 // AKS Cluster
-resource aksCluster 'Microsoft.ContainerService/managedClusters@2023-08-01' = {
+resource aksCluster 'Microsoft.ContainerService/managedClusters@2025-04-01' = {
   name: aksClusterName
   location: location
   identity: {
@@ -90,16 +90,14 @@ resource aksCluster 'Microsoft.ContainerService/managedClusters@2023-08-01' = {
       {
         name: 'nodepool1'
         count: 2
-        vmSize: 'Standard_DS2_v2'
         osType: 'Linux'
         mode: 'System'
         vnetSubnetID: subnetAksId
         maxPods: selectedProfile.maxPods
       }
       {
-        name: 'gwnodepool'
+        name: gwNodePoolName
         count: 2
-        vmSize: 'Standard_DS2_v2'
         osType: 'Linux'
         mode: 'User'
         vnetSubnetID: subnetGatewayId

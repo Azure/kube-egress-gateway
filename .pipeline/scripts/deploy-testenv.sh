@@ -16,6 +16,7 @@ export DNS_SERVER_IP=${DNS_SERVER_IP:-"10.245.0.10"}
 export POD_CIDR=${POD_CIDR:-"10.244.0.0/16"}
 export SERVICE_CIDR=${SERVICE_CIDR:-"10.245.0.0/16"}
 export LB_NAME=${LB_NAME:-"kubeegressgateway-ilb"}
+export GW_NODE_POOL_NAME=${GW_NODE_POOL_NAME:-"gwnodepool"}
 
 : "${AZURE_SUBSCRIPTION_ID:?Environment variable empty or not defined.}"
 : "${AZURE_TENANT_ID:?Environment variable empty or not defined.}"
@@ -68,21 +69,10 @@ AZURE_CONFIG=$(echo ${DEPLOYMENT_OUTPUT} | jq '.properties.outputs.azureConfig.v
 
 # Post-deployment: Add VMSS tag and role assignment
 echo "Performing post-deployment configurations"
-readarray -t VMSS_INFO < <(az vmss list -g ${NODE_RESOURCE_GROUP} | jq -r '.[] | select(.name | contains("gwnodepool")) | .uniqueId,.name')
-if [ ${#VMSS_INFO[@]} -ge 2 ]; then
-    GW_VMSS_NAME=${VMSS_INFO[1]}
-    
-    # Add additional tag to GW VMSS
-    echo "Adding tags to gateway VMSS: ${GW_VMSS_NAME}"
-    az vmss update --name ${GW_VMSS_NAME} -g ${NODE_RESOURCE_GROUP} --set tags.aks-managed-gatewayIPPrefixSize=31 > /dev/null
-    
-    # Add Virtual Machine Contributor role for the specific VMSS
-    echo "Assigning Virtual Machine Contributor role to kubelet identity for VMSS"
-    az role assignment create --role "Virtual Machine Contributor" --assignee ${KUBELET_PRINCIPAL_ID} \
-        --scope "/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${NODE_RESOURCE_GROUP}/providers/Microsoft.Compute/virtualMachineScaleSets/${GW_VMSS_NAME}" > /dev/null
-else
-    echo "Warning: Gateway VMSS not found or not ready yet"
-fi
+
+# this has to be done manually because aks-managed tags are not allowed through aks-rp
+VMSS=$(az vmss list -g ${NODE_RESOURCE_GROUP} | jq --arg GW_NODE_POOL_NAME "${GW_NODE_POOL_NAME}" -r '.[] | select(.tags["aks-managed-poolName"] == $GW_NODE_POOL_NAME) | .name')
+az vmss update --name ${VMSS} -g ${NODE_RESOURCE_GROUP} --set tags.aks-managed-gatewayIPPrefixSize=31 > /dev/null
 
 # Generate azure configuration file for the controllers
 echo "Generating azure configuration file: $(pwd)/azure.json"

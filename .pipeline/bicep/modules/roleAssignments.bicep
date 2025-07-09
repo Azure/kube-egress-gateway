@@ -1,6 +1,3 @@
-@description('Azure subscription ID')
-param subscriptionId string
-
 @description('Kubelet identity principal ID')
 param kubeletPrincipalId string
 
@@ -22,11 +19,22 @@ module mainResourceGroupNetworkRole 'roleAssignment.bicep' = {
 // Network Contributor role for node resource group
 module nodeResourceGroupNetworkRole 'roleAssignment.bicep' = {
   name: 'node-rg-network-role'
-  scope: resourceGroup(subscriptionId, nodeResourceGroupName)
+  scope: resourceGroup(nodeResourceGroupName)
   params: {
     principalId: kubeletPrincipalId
     roleDefinitionId: '4d97b98b-1d4f-4787-a291-c67834d212e7' // Network Contributor
     principalType: 'ServicePrincipal'
     roleName: 'NetworkContributor'
+  }
+}
+
+module kubeletVMContributorRole 'roleAssignment.bicep' = {
+  name: 'kubelet-vm-contributor'
+  scope: resourceGroup(nodeResourceGroupName)
+  params: {
+    principalId: kubeletPrincipalId
+    roleDefinitionId: '9980e02c-c2be-4d73-94e8-173b1dc7cf3c' // Virtual Machine Contributor
+    principalType: 'ServicePrincipal'
+    roleName: 'VirtualMachineContributor'
   }
 }

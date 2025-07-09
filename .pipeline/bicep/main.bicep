@@ -35,6 +35,10 @@ param subscriptionId string
 @description('Azure tenant ID')
 param tenantId string
 
+// Ensure required parameters are provided
+@description('Name of the AKS node pool for gateway nodes')
+param gwNodePoolName string
+
 // Virtual Network
 module vnet 'modules/vnet.bicep' = {
   name: 'vnet-deployment'
@@ -58,7 +62,6 @@ module identities 'modules/identities.bicep' = {
 module roleAssignments 'modules/roleAssignments.bicep' = {
   name: 'role-assignments-deployment'
   params: {
-    subscriptionId: subscriptionId
     kubeletPrincipalId: identities.outputs.kubeletPrincipalId
     nodeResourceGroupName: aks.outputs.nodeResourceGroup
   }
@@ -79,8 +82,12 @@ module aks 'modules/aks.bicep' = {
     subnetAksId: vnet.outputs.subnetAksId
     subnetGatewayId: vnet.outputs.subnetGatewayId
     subnetPodId: vnet.outputs.subnetPodId
+    gwNodePoolName: gwNodePoolName
   }
 }
+
+// lookup vmss in the nodeResourceGroup by tag
+
 
 // Outputs
 output vnetId string = vnet.outputs.vnetId
