@@ -260,7 +260,7 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 func cmdCheck(args *skel.CmdArgs) error {
-	// get cni config
+	// get CNI config
 	config, err := conf.ParseCNIConfig(args.StdinData)
 	if err != nil {
 		return err
