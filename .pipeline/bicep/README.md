@@ -80,9 +80,8 @@ The template supports multiple AKS network plugins:
 
 After deployment, the script:
 1. Tags the gateway VMSS with `aks-managed-gatewayIPPrefixSize=31`
-2. Assigns VM Contributor role to the kubelet identity for the gateway VMSS
-3. Generates `azure.json` configuration file
-4. Optionally retrieves kubeconfig
+1. Generates `azure.json` configuration file
+1. Optionally retrieves kubeconfig
 
 ## Benefits of Bicep Approach
 
