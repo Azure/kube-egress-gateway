@@ -17,37 +17,21 @@ variables:
 - group: aks-ci
 
 jobs:
-- job: Run_KubeEgressGateway_E2E
+- job: Run_KubeEgressGateway_E2E_CNIOverlay
   timeoutInMinutes: 150
   steps:
-  - task: GoTool@0
-    inputs:
-      version: '1.24.3'
-  - bash: |
-      echo $(registry.password) | docker login $(registry.url) -u $(registry.username) --password-stdin
-    displayName: docker login
   - template: templates/e2e-steps.yml
+    parameters:
+      networkPlugin: 'overlay'
 - job: Run_KubeEgressGateway_E2E_Nodesubnet
   timeoutInMinutes: 150
   steps:
-  - task: GoTool@0
-    inputs:
-      version: '1.24.3'
-  - bash: |
-      echo $(registry.password) | docker login $(registry.url) -u $(registry.username) --password-stdin
-    displayName: docker login
   - template: templates/e2e-steps.yml
     parameters:
       networkPlugin: 'azure'
 - job: Run_KubeEgressGateway_E2E_Cilium
   timeoutInMinutes: 150
   steps:
-  - task: GoTool@0
-    inputs:
-      version: '1.24.3'
-  - bash: |
-      echo $(registry.password) | docker login $(registry.url) -u $(registry.username) --password-stdin
-    displayName: docker login
   - template: templates/e2e-steps.yml
     parameters:
       networkPlugin: 'cilium'

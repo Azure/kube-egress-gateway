@@ -16,6 +16,13 @@ parameters:
   default: 'overlay'
 
 steps:
+- task: GoTool@0
+  inputs:
+    version: ${{ parameters.goVersion }}
+
+- bash: |
+    echo $(registry.password) | docker login $(registry.url) -u $(registry.username) --password-stdin
+  displayName: docker login
 
 - bash: |
     az extension add -n aks-preview --version 14.0.0b1
@@ -32,7 +39,11 @@ steps:
 - bash: |
     export RESOURCE_GROUP="pod-egress-e2e-$(head /dev/urandom | LC_ALL=C tr -dc a-z0-9 | head -c 6 ; echo '')"
     echo "##vso[task.setvariable variable=resource_group]${RESOURCE_GROUP}"
-    NETWORK_PLUGIN=${{ parameters.networkPlugin }} KUBECONFIG_FILE=${{ parameters.kubeconfigFile }} .pipeline/scripts/deploy-testenv.sh
+    NETWORK_PLUGIN=${{ parameters.networkPlugin }} \
+      KUBECONFIG_FILE=${{ parameters.kubeconfigFile }} \
+      POD_CIDR=${{ parameters.podCidr }} \
+      SERVICE_CIDR=${{ parameters.serviceCidr }} \
+      .pipeline/scripts/deploy-testenv.sh
     export KUBECONFIG=$(pwd)/${{ parameters.kubeconfigFile }}
     echo "##vso[task.setvariable variable=kubeconfig]${KUBECONFIG}"
     kubectl get nodes
