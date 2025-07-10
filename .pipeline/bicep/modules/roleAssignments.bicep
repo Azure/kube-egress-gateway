@@ -5,8 +5,8 @@ param kubeletPrincipalId string
 param nodeResourceGroupName string
 
 // Network Contributor role for main resource group
-module mainResourceGroupNetworkRole 'roleAssignment.bicep' = {
-  name: 'main-rg-network-role'
+module kubeletNetworkContributor 'roleAssignment.bicep' = {
+  name: 'mc-rg-network-contributor'
   scope: resourceGroup()
   params: {
     principalId: kubeletPrincipalId
@@ -17,8 +17,8 @@ module mainResourceGroupNetworkRole 'roleAssignment.bicep' = {
 }
 
 // Network Contributor role for node resource group
-module nodeResourceGroupNetworkRole 'roleAssignment.bicep' = {
-  name: 'node-rg-network-role'
+module kubeletNetworkContributorNRG 'roleAssignment.bicep' = {
+  name: 'node-rg-network-contributor'
   scope: resourceGroup(nodeResourceGroupName)
   params: {
     principalId: kubeletPrincipalId
@@ -28,6 +28,7 @@ module nodeResourceGroupNetworkRole 'roleAssignment.bicep' = {
   }
 }
 
+// todo: scope should only be the gateway vmss instead of the whole resource group
 module kubeletVMContributorRole 'roleAssignment.bicep' = {
   name: 'kubelet-vm-contributor'
   scope: resourceGroup(nodeResourceGroupName)

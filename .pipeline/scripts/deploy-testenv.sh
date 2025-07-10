@@ -20,20 +20,16 @@ export GW_NODE_POOL_NAME=${GW_NODE_POOL_NAME:-"gwnodepool"}
 
 export schema='$schema' # dumb hack to avoid wiping the value from parameters.json
 
-: "${AZURE_SUBSCRIPTION_ID:?Environment variable empty or not defined.}"
-: "${AZURE_TENANT_ID:?Environment variable empty or not defined.}"
-
-# Get random location
-# should have quota for Standard_DS2_v2 vCPUs in AKS_UPSTREAM_E2E or custom sub
-if [[ -z "${LOCATION}" ]]; then
-    REGIONS=("eastus2" "northeurope" "westus2")
-    LOCATION="${REGIONS[${RANDOM} % ${#REGIONS[@]}]}"
-fi
-echo "Deploying resources in region: ${LOCATION}"
-
 # Create resource group
 RG_EXISTS=$(az group exists -n ${RESOURCE_GROUP})
 if [ "$RG_EXISTS" != "true" ]; then
+    # Get random location
+    # should have quota for Standard_DS2_v2 vCPUs in AKS_UPSTREAM_E2E or custom sub
+    if [[ -z "${LOCATION}" ]]; then
+        REGIONS=("eastus2" "northeurope" "westus2")
+        LOCATION="${REGIONS[${RANDOM} % ${#REGIONS[@]}]}"
+    fi
+    echo "Deploying resources in region: ${LOCATION}"
     echo "Creating resource group: ${RESOURCE_GROUP}"
     az group create -n ${RESOURCE_GROUP} -l ${LOCATION} --tags usage=pod-egress-e2e creation_date="$(date)"
 else
@@ -45,9 +41,7 @@ echo "Generating Bicep parameters file"
 TEMP_PARAMS_FILE=$(mktemp)
 envsubst < "${BICEP_DIR}/parameters.json" > "${TEMP_PARAMS_FILE}"
 
-# print the temporary parameters file for debugging
-echo "Temporary parameters file created at: ${TEMP_PARAMS_FILE}"
-echo "Contents of the temporary parameters file:"
+echo "Using parameters:"
 cat "${TEMP_PARAMS_FILE}"
 
 # Deploy infrastructure using Bicep
@@ -69,7 +63,7 @@ KUBELET_PRINCIPAL_ID=$(echo ${DEPLOYMENT_OUTPUT} | jq -r '.properties.outputs.ku
 KUBELET_CLIENT_ID=$(echo ${DEPLOYMENT_OUTPUT} | jq -r '.properties.outputs.kubeletClientId.value')
 AZURE_CONFIG=$(echo ${DEPLOYMENT_OUTPUT} | jq '.properties.outputs.azureConfig.value')
 
-# Post-deployment: Add VMSS tag and role assignment
+# Post-deployment: Add VMSS tag
 echo "Performing post-deployment configurations"
 
 # this has to be done manually because aks-managed tags are not allowed through aks-rp

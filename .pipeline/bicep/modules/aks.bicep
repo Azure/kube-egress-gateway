@@ -90,7 +90,6 @@ resource aksCluster 'Microsoft.ContainerService/managedClusters@2023-08-01' = {
       {
         name: 'nodepool1'
         count: 2
-        vmSize: 'Standard_DS2_v2'
         osType: 'Linux'
         mode: 'System'
         vnetSubnetID: subnetAksId
@@ -99,7 +98,6 @@ resource aksCluster 'Microsoft.ContainerService/managedClusters@2023-08-01' = {
       {
         name: gatewayNodePoolName
         count: 2
-        vmSize: 'Standard_DS2_v2'
         osType: 'Linux'
         mode: 'User'
         vnetSubnetID: subnetGatewayId
