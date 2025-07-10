@@ -12,6 +12,10 @@ pr:
 
 pool: kube-egress-gateway-e2e-pool
 
+variables:
+- group: pod-egress-e2e
+- group: aks-ci
+
 jobs:
 - job: Run_KubeEgressGateway_E2E
   timeoutInMinutes: 150
