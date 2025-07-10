@@ -124,8 +124,8 @@ func TestIsReady(t *testing.T) {
 }
 
 func TestStart(t *testing.T) {
-	os.Setenv(consts.PodNamespaceEnvKey, "default")
-	defer os.Unsetenv(consts.PodNamespaceEnvKey)
+	_ = os.Setenv(consts.PodNamespaceEnvKey, "default")
+	defer func() { _ = os.Unsetenv(consts.PodNamespaceEnvKey) }()
 	client := fake.NewFakeClient(&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: testCniUninstallConfigMapName, Namespace: "default"}, Data: map[string]string{"uninstall": "true"}})
 	mgr, err := NewCNIConfManager(testDir, testConfList, "", testCniUninstallConfigMapName, client, testGrpcPort)
 	if err != nil {
@@ -195,8 +195,8 @@ func TestRemoveCNIPluginConf(t *testing.T) {
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			os.Setenv(consts.PodNamespaceEnvKey, "default")
-			defer os.Unsetenv(consts.PodNamespaceEnvKey)
+			_ = os.Setenv(consts.PodNamespaceEnvKey, "default")
+			defer func() { _ = os.Unsetenv(consts.PodNamespaceEnvKey) }()
 			mgr, err := NewCNIConfManager(testDir, testConfList, "", testCniUninstallConfigMapName, test.client, testGrpcPort)
 			if err != nil {
 				t.Fatalf("failed to create cni conf manager: %v", err)
@@ -438,12 +438,12 @@ func copyFile(dir, src, dest string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open src file: %w", err)
 	}
-	defer sf.Close()
+	defer func() { _ = sf.Close() }()
 	df, err := os.Create(filepath.Join(dir, dest))
 	if err != nil {
 		return fmt.Errorf("failed to open dest file: %w", err)
 	}
-	defer df.Close()
+	defer func() { _ = df.Close() }()
 	_, err = io.Copy(df, sf)
 	if err != nil {
 		return fmt.Errorf("failed to copy file: %w", err)

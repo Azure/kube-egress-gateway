@@ -123,7 +123,11 @@ func (r *PodEndpointReconciler) reconcile(
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get gateway network namespace %s: %w", nsName, err)
 	}
-	defer gwns.Close()
+	defer func() {
+		if err := gwns.Close(); err != nil {
+			log.Error(err, "failed to close gateway namespace")
+		}
+	}()
 
 	if err := gwns.Do(func(nn ns.NetNS) error {
 		wgClient, err := r.WgCtrl.New()
@@ -243,7 +247,7 @@ func (r *PodEndpointReconciler) cleanUpWgLink(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get gateway network namespace %s: %w", consts.GatewayNetnsName, err)
 	}
-	defer gwns.Close()
+	defer func() { _ = gwns.Close() }()
 
 	if err := gwns.Do(func(nn ns.NetNS) error {
 		wgClient, err := r.WgCtrl.New()

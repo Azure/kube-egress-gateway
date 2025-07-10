@@ -45,11 +45,11 @@ var _ = Describe("test WithWireGuardNic", func() {
 				{Address: net.IPNet{IP: net.ParseIP("fe80::1234"), Mask: net.CIDRMask(128, 128)}},
 			},
 		}
-		os.Setenv("IS_UNIT_TEST_ENV", "true")
+		_ = os.Setenv("IS_UNIT_TEST_ENV", "true")
 	})
 
 	AfterEach(func() {
-		os.Setenv("IS_UNIT_TEST_ENV", "")
+		_ = os.Setenv("IS_UNIT_TEST_ENV", "")
 	})
 
 	It("should return error when pod network namespace is not found", func() {

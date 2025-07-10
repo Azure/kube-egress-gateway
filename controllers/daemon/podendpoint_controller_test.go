@@ -149,14 +149,14 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 					ResourceGroupName: vmssRG,
 				},
 			}
-			os.Setenv(consts.PodNamespaceEnvKey, testPodNamespace)
-			os.Setenv(consts.NodeNameEnvKey, testNodeName)
+			_ = os.Setenv(consts.PodNamespaceEnvKey, testPodNamespace)
+			_ = os.Setenv(consts.NodeNameEnvKey, testNodeName)
 			getTestReconciler(podEndpoint, gwConfig, node)
 		})
 
 		AfterEach(func() {
-			os.Setenv(consts.PodNamespaceEnvKey, "")
-			os.Setenv(consts.NodeNameEnvKey, "")
+			_ = os.Setenv(consts.PodNamespaceEnvKey, "")
+			_ = os.Setenv(consts.NodeNameEnvKey, "")
 		})
 
 		It("should report error when gateway namespace is not found", func() {
@@ -286,13 +286,13 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 		}
 
 		BeforeEach(func() {
-			os.Setenv(consts.PodNamespaceEnvKey, testPodNamespace)
-			os.Setenv(consts.NodeNameEnvKey, testNodeName)
+			_ = os.Setenv(consts.PodNamespaceEnvKey, testPodNamespace)
+			_ = os.Setenv(consts.NodeNameEnvKey, testNodeName)
 		})
 
 		AfterEach(func() {
-			os.Setenv(consts.PodNamespaceEnvKey, "")
-			os.Setenv(consts.NodeNameEnvKey, "")
+			_ = os.Setenv(consts.PodNamespaceEnvKey, "")
+			_ = os.Setenv(consts.NodeNameEnvKey, "")
 		})
 
 		It("should create new gateway status object if not exist", func() {
@@ -383,13 +383,13 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 				},
 			}
 
-			os.Setenv(consts.PodNamespaceEnvKey, testPodNamespace)
-			os.Setenv(consts.NodeNameEnvKey, testNodeName)
+			_ = os.Setenv(consts.PodNamespaceEnvKey, testPodNamespace)
+			_ = os.Setenv(consts.NodeNameEnvKey, testNodeName)
 		})
 
 		AfterEach(func() {
-			os.Setenv(consts.PodNamespaceEnvKey, "")
-			os.Setenv(consts.NodeNameEnvKey, "")
+			_ = os.Setenv(consts.PodNamespaceEnvKey, "")
+			_ = os.Setenv(consts.NodeNameEnvKey, "")
 		})
 
 		It("should clean deleted peer and route", func() {

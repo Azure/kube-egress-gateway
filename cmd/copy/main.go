@@ -15,7 +15,11 @@ func copyFile(sourceFile, destDir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open source file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			fmt.Printf("Failed to close source file: %v\n", err)
+		}
+	}()
 
 	sourceDir := filepath.Dir(sourceFile)
 	fileName, err := filepath.Rel(sourceDir, sourceFile)
@@ -27,7 +31,11 @@ func copyFile(sourceFile, destDir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open destination file: %w", err)
 	}
-	defer destFile.Close()
+	defer func() {
+		if err := destFile.Close(); err != nil {
+			fmt.Printf("Failed to close destination file: %v\n", err)
+		}
+	}()
 
 	_, err = io.Copy(destFile, file)
 	if err != nil {

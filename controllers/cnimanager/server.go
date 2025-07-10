@@ -89,6 +89,6 @@ func (s *NicService) PodRetrieve(ctx context.Context, in *cniprotocol.PodRetriev
 		return nil, status.Errorf(codes.Unknown, "failed to retrieve pod %s/%s: %s", in.GetPodConfig().GetPodNamespace(), in.GetPodConfig().GetPodName(), err)
 	}
 	return &cniprotocol.PodRetrieveResponse{
-		Annotations: pod.ObjectMeta.GetAnnotations(),
+		Annotations: pod.GetAnnotations(),
 	}, nil
 }

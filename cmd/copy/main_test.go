@@ -11,12 +11,20 @@ import (
 func TestCopyGoodCase(t *testing.T) {
 	srcDir, err := os.MkdirTemp(os.TempDir(), "source-*")
 	assert.NoError(t, err)
-	defer os.RemoveAll(srcDir)
+	defer func() {
+		if err := os.RemoveAll(srcDir); err != nil {
+			t.Logf("Failed to remove temp dir %s: %v", srcDir, err)
+		}
+	}()
 	tempFile, err := os.CreateTemp(srcDir, "file-*")
 	assert.NoError(t, err)
 	destDir, err := os.MkdirTemp(os.TempDir(), "dest-*")
 	assert.NoError(t, err)
-	defer os.RemoveAll(destDir)
+	defer func() {
+		if err := os.RemoveAll(destDir); err != nil {
+			t.Logf("Failed to remove temp dir %s: %v", destDir, err)
+		}
+	}()
 
 	actualErr := copyFile(tempFile.Name(), destDir)
 	assert.NoError(t, actualErr)
@@ -29,11 +37,11 @@ func TestCopyGoodCase(t *testing.T) {
 func TestCopyNonExistingFile(t *testing.T) {
 	srcDir, err := os.MkdirTemp(os.TempDir(), "source-*")
 	assert.NoError(t, err)
-	defer os.RemoveAll(srcDir)
+	defer func() { _ = os.RemoveAll(srcDir) }()
 	tempFilePath := filepath.Join(srcDir, "non-existing-file")
 	destDir, err := os.MkdirTemp(os.TempDir(), "dest-*")
 	assert.NoError(t, err)
-	defer os.RemoveAll(destDir)
+	defer func() { _ = os.RemoveAll(destDir) }()
 
 	actualErr := copyFile(tempFilePath, destDir)
 	assert.NotNil(t, actualErr)
@@ -44,7 +52,7 @@ func TestCopyNonExistingFile(t *testing.T) {
 func TestCopyToNonExistingDest(t *testing.T) {
 	srcDir, err := os.MkdirTemp(os.TempDir(), "source-*")
 	assert.NoError(t, err)
-	defer os.RemoveAll(srcDir)
+	defer func() { _ = os.RemoveAll(srcDir) }()
 	tempFile, err := os.CreateTemp(srcDir, "file-*")
 	assert.NoError(t, err)
 	destDir := filepath.Join(os.TempDir(), "non-existing-dir")
