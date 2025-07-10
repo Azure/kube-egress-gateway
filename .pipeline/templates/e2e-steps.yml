@@ -32,7 +32,7 @@ steps:
   displayName: az login
 
 - bash: |
-    docker buildx create --name multi-arch-builder --bootstrap --use --driver docker-container --driver-opt image=mcr.microsoft.com/oss/moby/buildkit:0.11.6-2
+    docker buildx create --name multi-arch-builder --bootstrap --use --driver docker-container --driver-opt image=mcr.microsoft.com/oss/v2/moby/buildkit:v0.23.2-2
     docker buildx ls
   displayName: create docker builder
 
