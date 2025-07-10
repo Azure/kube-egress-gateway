@@ -37,7 +37,7 @@ func WithWireGuardNic(containerID string, podNSPath string, ifName string, ipWra
 	if err != nil {
 		return err
 	}
-	defer podNetNS.Close()
+	defer func() { _ = podNetNS.Close() }()
 
 	var wgLink netlink.Link
 

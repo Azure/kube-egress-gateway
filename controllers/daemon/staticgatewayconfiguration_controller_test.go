@@ -519,13 +519,13 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 
 		Context("Test updating gateway node status", func() {
 			BeforeEach(func() {
-				os.Setenv(consts.PodNamespaceEnvKey, testPodNamespace)
-				os.Setenv(consts.NodeNameEnvKey, testNodeName)
+				_ = os.Setenv(consts.PodNamespaceEnvKey, testPodNamespace)
+				_ = os.Setenv(consts.NodeNameEnvKey, testNodeName)
 			})
 
 			AfterEach(func() {
-				os.Setenv(consts.PodNamespaceEnvKey, "")
-				os.Setenv(consts.NodeNameEnvKey, "")
+				_ = os.Setenv(consts.PodNamespaceEnvKey, "")
+				_ = os.Setenv(consts.NodeNameEnvKey, "")
 			})
 
 			gwNamespace := egressgatewayv1alpha1.GatewayConfiguration{
@@ -698,15 +698,14 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 					Interface: []imds.NetworkInterface{
 						{IPv4: imds.IPData{Subnet: []imds.Subnet{{Prefix: "31"}}}},
 					},
-				},
-			}
-			os.Setenv(consts.PodNamespaceEnvKey, testPodNamespace)
-			os.Setenv(consts.NodeNameEnvKey, testNodeName)
+				}}
+			_ = os.Setenv(consts.PodNamespaceEnvKey, testPodNamespace)
+			_ = os.Setenv(consts.NodeNameEnvKey, testNodeName)
 		})
 
 		AfterEach(func() {
-			os.Setenv(consts.PodNamespaceEnvKey, "")
-			os.Setenv(consts.NodeNameEnvKey, "")
+			_ = os.Setenv(consts.PodNamespaceEnvKey, "")
+			_ = os.Setenv(consts.NodeNameEnvKey, "")
 		})
 
 		It("should delete wglink, vmSecondaryIP, iptables rules and update gwStatus, while not delete ilb IP", func() {

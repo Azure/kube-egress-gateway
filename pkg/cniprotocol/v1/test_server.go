@@ -51,7 +51,7 @@ func (s *TestServer) PodRetrieve(ctx context.Context, in *PodRetrieveRequest) (*
 
 func (s *TestServer) GracefulStop() {
 	s.grpcServer.GracefulStop()
-	s.lis.Close()
+	_ = s.lis.Close()
 }
 
 func (s *TestServer) startServer() {
