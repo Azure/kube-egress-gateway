@@ -16,13 +16,6 @@ parameters:
   default: 'overlay'
 
 steps:
-- task: GoTool@0
-  inputs:
-    version: '${{ parameters.goVersion }}'
-
-- bash: |
-    echo $(registry.password) | docker login $(registry.url) -u $(registry.username) --password-stdin
-  displayName: docker login
 
 - bash: |
     az extension add -n aks-preview --version 14.0.0b1
