@@ -10,12 +10,6 @@ import (
 	"net"
 	"os"
 
-	"github.com/Azure/kube-egress-gateway/pkg/cni/conf"
-	"github.com/Azure/kube-egress-gateway/pkg/cni/ipam"
-	"github.com/Azure/kube-egress-gateway/pkg/cni/routes"
-	"github.com/Azure/kube-egress-gateway/pkg/cni/wireguard"
-	v1 "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
-	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	type100 "github.com/containernetworking/cni/pkg/types/100"
@@ -30,6 +24,13 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"k8s.io/klog/v2"
+
+	"github.com/Azure/kube-egress-gateway/pkg/cni/conf"
+	"github.com/Azure/kube-egress-gateway/pkg/cni/ipam"
+	"github.com/Azure/kube-egress-gateway/pkg/cni/routes"
+	"github.com/Azure/kube-egress-gateway/pkg/cni/wireguard"
+	v1 "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
+	"github.com/Azure/kube-egress-gateway/pkg/consts"
 )
 
 func main() {
