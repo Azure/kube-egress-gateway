@@ -70,7 +70,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err != nil {
 		return fmt.Errorf("failed to contact cni manager daemon: %w", err)
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			// Log error but don't fail the operation
+			klog.ErrorS(err, "failed to close gRPC connection")
+		}
+	}()
 	client := v1.NewNicServiceClient(conn)
 
 	// check if pod does not have gateway annotation, then skip the whole process
@@ -107,7 +112,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 			if err != nil {
 				return fmt.Errorf("failed to create wg client: %w", err)
 			}
-			defer wgclient.Close()
+			defer func() {
+				if err := wgclient.Close(); err != nil {
+					// Log error but don't fail the operation
+					klog.ErrorS(err, "failed to close wireguard client")
+				}
+			}()
 			wgDevice, err = wgclient.Device(consts.WireguardLinkName)
 			if err != nil {
 				return fmt.Errorf("failed to find wg device (%s): %w", consts.WireguardLinkName, err)
@@ -142,7 +152,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 			if err != nil {
 				return fmt.Errorf("failed to create wg client: %w", err)
 			}
-			defer wgclient.Close()
+			defer func() {
+				if err := wgclient.Close(); err != nil {
+					// Log error but don't fail the operation
+					klog.ErrorS(err, "failed to close wireguard client")
+				}
+			}()
 			err = wgclient.ConfigureDevice(consts.WireguardLinkName, wgtypes.Config{
 				PrivateKey: &privateKey,
 				Peers: []wgtypes.PeerConfig{
@@ -208,7 +223,11 @@ func cmdDel(args *skel.CmdArgs) error {
 		logger.Error(err, "failed to get pod namespace")
 		return nil
 	}
-	defer podNs.Close()
+	defer func() {
+		if err := podNs.Close(); err != nil {
+			logger.Error(err, "failed to close pod namespace")
+		}
+	}()
 	err = podNs.Do(func(nn ns.NetNS) error {
 		ifHandle, err := netlink.LinkByName(consts.WireguardLinkName)
 		if err != nil {
@@ -244,7 +263,11 @@ func cmdDel(args *skel.CmdArgs) error {
 		logger.Error(err, "failed to contact cni manager daemon")
 		return nil
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			logger.Error(err, "failed to close connection")
+		}
+	}()
 	client := v1.NewNicServiceClient(conn)
 	_, err = client.NicDel(context.Background(), &v1.NicDelRequest{
 		PodConfig: &v1.PodInfo{

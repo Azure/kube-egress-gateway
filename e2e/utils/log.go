@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"time"
 
-	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2"
 )
 
 func log(level string, format string, args ...interface{}) {
@@ -16,7 +16,7 @@ func log(level string, format string, args ...interface{}) {
 	_, file, line, _ := runtime.Caller(2)
 	extra := fmt.Sprintf(" [%s:%d]", file, line)
 
-	fmt.Fprintf(GinkgoWriter, current+": "+level+": "+format+extra+"\n", args...)
+	_, _ = fmt.Fprintf(ginkgo.GinkgoWriter, current+": "+level+": "+format+extra+"\n", args...)
 }
 
 // Logf prints info logs

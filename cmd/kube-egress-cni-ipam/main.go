@@ -49,7 +49,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err != nil {
 		return err
 	}
-	defer podNetNS.Close()
+	defer func() {
+		if err := podNetNS.Close(); err != nil {
+			// Log error but don't fail the operation
+			log.Error(err, "failed to close pod network namespace")
+		}
+	}()
 
 	var v4Address, v6Address net.IPNet
 	var ipv4AddrFound, ipv6AddrFound bool
