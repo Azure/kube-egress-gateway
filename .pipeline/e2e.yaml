@@ -13,76 +13,19 @@ pr:
 variables:
 - group: pod-egress-e2e
 - group: aks-ci
-- name: kubeconfig_file
-  value: e2e-kubeconfig
-- name: pod_cidr
-  value: 10.244.0.0/16
-- name: service_cidr
-  value: 10.245.0.0/16
 
 pool: kube-egress-gateway-e2e-pool
 
 jobs:
-- job: Run_KubeEgressGateway_E2E
+- job: Run_KubeEgressGateway_E2E_CNIOverlay
   timeoutInMinutes: 150
   steps:
-  - task: GoTool@0
-    inputs:
-      version: '1.24.3'
-  - bash: |
-      echo $(registry.password) | docker login $(registry.url) -u $(registry.username) --password-stdin
-    displayName: docker login
-  - bash: |
-      az extension add -n aks-preview --version 14.0.0b1
-      az extension list
-      az login --identity --resource-id $(AZURE_MANAGED_IDENTITY_CLIENT_ID)
-      az account set -s $(AZURE_SUBSCRIPTION_ID)
-    displayName: az login
-  - bash: |
-      docker buildx create --name multi-arch-builder --bootstrap --use --driver docker-container --driver-opt image=mcr.microsoft.com/oss/moby/buildkit:0.11.6-2
-      docker buildx ls
-    displayName: create docker builder
-  - bash: |
-      export RESOURCE_GROUP="pod-egress-e2e-$(head /dev/urandom | LC_ALL=C tr -dc a-z0-9 | head -c 6 ; echo '')"
-      echo "##vso[task.setvariable variable=resource_group]${RESOURCE_GROUP}"
-      .pipeline/scripts/deploy-testenv.sh
-      export KUBECONFIG=$(pwd)/${KUBECONFIG_FILE}
-      echo "##vso[task.setvariable variable=kubeconfig]${KUBECONFIG}"
-      kubectl get nodes
-    displayName: create aks cluster
-    env:
-      AZURE_SUBSCRIPTION_ID: $(AZURE_SUBSCRIPTION_ID)
-      AZURE_TENANT_ID: $(AZURE_TENANT_ID)
-  - bash: |
-      set -euo pipefail
-      mv $(pwd)/azure.json $(pwd)/config/azureconfig/azure.json
-      echo EXCEPTION_CIDRS=${POD_CIDR}","${SERVICE_CIDR} > $(pwd)/config/environment_variables/environment.env
-      IMAGE_REGISTRY=$(registry.url) E2E_PIPELINE=true make install
-      kubectl wait --for=condition=ready pod -A -l app=kube-egress-gateway --timeout=300s
-      kubectl get all -n kube-egress-gateway-system
-    displayName: build and install kube-egress-gateway components
-    env:
-      KUBECONFIG: $(kubeconfig)
-  - bash: |
-      set -euo pipefail
-      mkdir ${ARTIFACT_DIR}/logs
-      export LOG_DIR=${ARTIFACT_DIR}/logs
-      make e2e-test
-    displayName: run e2e tests
-    env:
-      KUBECONFIG: $(kubeconfig)
-      AZURE_SUBSCRIPTION_ID: $(AZURE_SUBSCRIPTION_ID)
-      AZURE_TENANT_ID: $(AZURE_TENANT_ID)
-      AZURE_MANAGED_IDENTITY_CLIENT_ID: $(AZURE_MANAGED_IDENTITY_CLIENT_ID)
-      COLLECT_LOG: true
-      ARTIFACT_DIR: $(Build.ArtifactStagingDirectory)
-  - bash: |
-      [ "$(az group exists -n $(resource_group))" == "true" ] && az group delete -n $(resource_group) --yes --no-wait
-    displayName: clean up resources
-    condition: always()
-  - task: PublishBuildArtifacts@1
-    inputs:
-      pathToPublish: '$(Build.ArtifactStagingDirectory)'
-      artifactName: Logs
-    condition: succeededOrFailed()
-
+  - template: templates/e2e-steps.yml
+    parameters:
+      networkPlugin: 'overlay'
+- job: Run_KubeEgressGateway_E2E_Nodesubnet
+  timeoutInMinutes: 150
+  steps:
+  - template: templates/e2e-steps.yml
+    parameters:
+      networkPlugin: 'azure'
