@@ -3,7 +3,7 @@ set -euo pipefail
 
 CURRENT_DATE="$(date +%s)"
 
-az login --service-principal -u "${AZURE_CLIENT_ID}" -p "${AZURE_CLIENT_SECRET}" --tenant "${AZURE_TENANT_ID}"
+az login --identity --resource-id ${AZURE_MANAGED_IDENTITY_CLIENT_ID}
 az group list --tag usage=pod-egress-e2e | jq -r '.[].name' | awk '{print $1}' | while read -r RESOURCE_GROUP; do
   RG_DATE="$(az group show -g ${RESOURCE_GROUP} | jq -r '.tags.creation_date')"
   RG_DATE_TOSEC="$(date --date="${RG_DATE}" +%s)"
