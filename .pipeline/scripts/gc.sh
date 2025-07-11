@@ -3,6 +3,7 @@ set -euo pipefail
 
 CURRENT_DATE="$(date +%s)"
 
+echo "logging in with managed identity: ${AZURE_MANAGED_IDENTITY_CLIENT_ID}"
 az login --identity --resource-id ${AZURE_MANAGED_IDENTITY_CLIENT_ID}
 az group list --tag usage=pod-egress-e2e | jq -r '.[].name' | awk '{print $1}' | while read -r RESOURCE_GROUP; do
   RG_DATE="$(az group show -g ${RESOURCE_GROUP} | jq -r '.tags.creation_date')"

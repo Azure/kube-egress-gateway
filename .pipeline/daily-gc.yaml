@@ -12,6 +12,9 @@ pr: none
 
 variables:
 - group: pod-egress-e2e
+- group: aks-ci
+
+pool: kube-egress-gateway-e2e-pool
 
 jobs:
 - job: Run_KubeEgressGateway_GC
