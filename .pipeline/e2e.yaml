@@ -29,10 +29,3 @@ jobs:
   - template: templates/e2e-steps.yml
     parameters:
       networkPlugin: 'azure'
-- job: Run_KubeEgressGateway_E2E_Cilium
-  timeoutInMinutes: 150
-  steps:
-  - template: templates/e2e-steps.yml
-    parameters:
-      networkPlugin: 'cilium'
-
