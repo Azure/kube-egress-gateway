@@ -49,11 +49,11 @@ var _ = Describe("Test kube-egress-cni operations", func() {
 		Expect(err).NotTo(HaveOccurred())
 		ipv6Net, err = netlink.ParseIPNet("fe80::5/64")
 		Expect(err).NotTo(HaveOccurred())
-		os.Setenv("IS_UNIT_TEST_ENV", "true")
+		Expect(os.Setenv("IS_UNIT_TEST_ENV", "true")).To(Succeed())
 	})
 
 	AfterEach(func() {
-		os.Setenv("IS_UNIT_TEST_ENV", "")
+		_ = os.Setenv("IS_UNIT_TEST_ENV", "")
 		Expect(targetNS.Close()).To(Succeed())
 		Expect(testutils.UnmountNS(targetNS)).To(Succeed())
 	})
@@ -98,8 +98,8 @@ var _ = Describe("Test kube-egress-cni operations", func() {
 
 		r, _, err := testutils.CmdAddWithArgs(args, func() error {
 			origCNIPath := os.Getenv("CNI_PATH")
-			os.Setenv("CNI_PATH", "./testdata") // contains static ipam plugin
-			defer os.Setenv("CNI_PATH", origCNIPath)
+			_ = os.Setenv("CNI_PATH", "./testdata") // contains static ipam plugin
+			defer func() { _ = os.Setenv("CNI_PATH", origCNIPath) }()
 			return cmdAdd(args)
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -132,8 +132,8 @@ var _ = Describe("Test kube-egress-cni operations", func() {
 
 		err = testutils.CmdDelWithArgs(args, func() error {
 			origCNIPath := os.Getenv("CNI_PATH")
-			os.Setenv("CNI_PATH", "./testdata") // contains static ipam plugin
-			defer os.Setenv("CNI_PATH", origCNIPath)
+			_ = os.Setenv("CNI_PATH", "./testdata") // contains static ipam plugin
+			defer func() { _ = os.Setenv("CNI_PATH", origCNIPath) }()
 			return cmdDel(args)
 		})
 		Expect(err).NotTo(HaveOccurred())

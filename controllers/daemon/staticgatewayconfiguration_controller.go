@@ -255,7 +255,7 @@ func (r *StaticGatewayConfigurationReconciler) cleanUp(ctx context.Context) erro
 	if err != nil {
 		return fmt.Errorf("failed to get network namespace %s: %w", consts.GatewayNetnsName, err)
 	}
-	defer gwns.Close()
+	defer func() { _ = gwns.Close() }()
 
 	var links []netlink.Link
 	var ips []netlink.Addr
@@ -617,7 +617,7 @@ func (r *StaticGatewayConfigurationReconciler) configureGatewayNamespace(
 	if err != nil {
 		return fmt.Errorf("failed to get network namespace %s: %w", consts.GatewayNetnsName, err)
 	}
-	defer gwns.Close()
+	defer func() { _ = gwns.Close() }()
 
 	if err := r.reconcileWireguardLink(ctx, gwns, gwConfig, privateKey); err != nil {
 		return err
