@@ -202,7 +202,7 @@ func newWatcher(cniConfDir string) (*fsnotify.Watcher, error) {
 	}
 
 	if err = watcher.Add(cniConfDir); err != nil {
-		watcher.Close()
+		_ = watcher.Close()
 		return nil, fmt.Errorf("failed to add watch on %q: %v", cniConfDir, err)
 	}
 

@@ -54,12 +54,12 @@ func (*netns) NewNS(nsName string) (ns.NetNS, error) {
 	if err != nil {
 		return nil, err
 	}
-	mountPointFd.Close()
+	_ = mountPointFd.Close()
 
 	// Ensure the mount point is cleaned up on errors
 	defer func() {
 		if err != nil {
-			os.RemoveAll(nsPath)
+			_ = os.RemoveAll(nsPath)
 		}
 	}()
 
@@ -80,7 +80,7 @@ func (*netns) NewNS(nsName string) (ns.NetNS, error) {
 		if err != nil {
 			return
 		}
-		defer origNS.Close()
+		defer func() { _ = origNS.Close() }()
 
 		// create a new netns on the current thread
 		err = unix.Unshare(unix.CLONE_NEWNET)
