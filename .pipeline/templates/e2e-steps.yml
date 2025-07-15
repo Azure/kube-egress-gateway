@@ -59,8 +59,26 @@ steps:
     mv $(pwd)/azure.json $(pwd)/config/azureconfig/azure.json
     echo EXCEPTION_CIDRS=${{ parameters.podCidr }}","${{ parameters.serviceCidr }} > $(pwd)/config/environment_variables/environment.env
     IMAGE_REGISTRY=$(registry.url) E2E_PIPELINE=true make install
-    kubectl wait --for=condition=ready pod -A -l app=kube-egress-gateway --timeout=300s
-    kubectl get all -n kube-egress-gateway-system
+    MAX_RETRIES=3
+    RETRY_DELAY=5
+    for i in $(seq 1 $MAX_RETRIES); do
+        echo "Attempt $i/$MAX_RETRIES: Waiting for kube-egress-gateway pods to be ready..."
+        
+        if kubectl wait --for=condition=ready pod -A -l app=kube-egress-gateway --timeout=300s; then
+            echo "Success! Pods are ready."
+            kubectl get all -n kube-egress-gateway-system
+            echo "Kube Egress Gateway components are successfully installed."
+            exit 0
+        fi
+        
+        if [ $i -lt $MAX_RETRIES ]; then
+            echo "Failed. Retrying in $RETRY_DELAY seconds..."
+            sleep $RETRY_DELAY
+        fi
+    done
+
+    echo "ERROR: All $MAX_RETRIES attempts failed"
+    exit 1
   displayName: build and install kube-egress-gateway components
   env:
     KUBECONFIG: $(kubeconfig)

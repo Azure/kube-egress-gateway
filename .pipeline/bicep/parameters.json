@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "vnetName": {
+      "value": "${VNET_NAME}"
+    },
+    "aksIdentityName": {
+      "value": "${AKS_ID_NAME}"
+    },
+    "aksKubeletIdentityName": {
+      "value": "${AKS_KUBELET_ID_NAME}"
+    },
+    "aksClusterName": {
+      "value": "${AKS_CLUSTER_NAME}"
+    },
+    "networkPlugin": {
+      "value": "${NETWORK_PLUGIN}"
+    },
+    "dnsServerIP": {
+      "value": "${DNS_SERVER_IP}"
+    },
+    "podCIDR": {
+      "value": "${POD_CIDR}"
+    },
+    "serviceCIDR": {
+      "value": "${SERVICE_CIDR}"
+    },
+    "loadBalancerName": {
+      "value": "${LB_NAME}"
+    },
+    "gatewayNodePoolName": {
+      "value": "${GW_NODE_POOL_NAME}"
+    },
+    "subscriptionId": {
+      "value": "${AZURE_SUBSCRIPTION_ID}"
+    },
+    "tenantId": {
+      "value": "${AZURE_TENANT_ID}"
+    }
+  }
+}
