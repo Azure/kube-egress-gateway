@@ -13,6 +13,7 @@ import (
 type CNIConfig struct {
 	types.NetConf
 
+	// ExcludedCIDRs in the CNI config will always bypass the gateway interface.
 	ExcludedCIDRs []string `json:"excludedCIDRs"`
 	SocketPath    string   `json:"socketPath"`
 }

@@ -186,10 +186,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 			}
 
-			exceptionsCidrs := append(resp.GetExceptionCidrs(), config.ExcludedCIDRs...)
+			exceptionCidrs := resp.GetExceptionCidrs()
 			defaultToGateway := resp.GetDefaultRoute() == v1.DefaultRoute_DEFAULT_ROUTE_STATIC_EGRESS_GATEWAY
+			if defaultToGateway {
+				exceptionCidrs = append(exceptionCidrs, config.ExcludedCIDRs...)
+			}
 			if os.Getenv("IS_UNIT_TEST_ENV") != "true" {
-				if err := routes.SetPodRoutes(consts.WireguardLinkName, exceptionsCidrs, defaultToGateway, "/proc/sys", result); err != nil {
+				if err := routes.SetPodRoutes(consts.WireguardLinkName, exceptionCidrs, defaultToGateway, "/proc/sys", result); err != nil {
 					return fmt.Errorf("failed to setup pod routes: %w", err)
 				}
 			}

@@ -25,7 +25,11 @@ const (
 )
 
 func createCmdArgs(targetNS ns.NetNS) *skel.CmdArgs {
-	conf := `{"cniVersion":"1.0.0","excludedCIDRs":["1.2.3.4/32","10.1.0.0/16"],"socketPath":"localhost:50051","gatewayName":"test","ipam":{"type":"static","addresses":[{"address":"fe80::5/64"},{"address":"10.4.0.5/24"}]},"name":"mynet","type":"kube-egress-cni","prevResult":{"cniVersion":"1.0.0","interfaces":[{"name":"eth0","sandbox":"somepath"}],"ips":[{"interface":0,"address":"10.2.0.1/24"}],"dns":{}}}`
+	return createCmdArgsWithCustomExcludedCIDRs(targetNS, []string{"1.2.3.4/32","10.1.0.0/16"})
+}
+
+func createCmdArgsWithCustomExcludedCIDRs(targetNS ns.NetNS, excludedCIDRs []string) *skel.CmdArgs {
+	conf := `{"cniVersion":"1.0.0","excludedCIDRs":["` + joinCIDRs(excludedCIDRs) + `"],"socketPath":"localhost:50051","gatewayName":"test","ipam":{"type":"static","addresses":[{"address":"fe80::5/64"},{"address":"10.4.0.5/24"}]},"name":"mynet","type":"kube-egress-cni","prevResult":{"cniVersion":"1.0.0","interfaces":[{"name":"eth0","sandbox":"somepath"}],"ips":[{"interface":0,"address":"10.2.0.1/24"}],"dns":{}}}`
 	return &skel.CmdArgs{
 		Args:        `IgnoreUnknown=true;K8S_POD_NAMESPACE=testns;K8S_POD_NAME=testpod`,
 		ContainerID: "test-container",
@@ -33,6 +37,17 @@ func createCmdArgs(targetNS ns.NetNS) *skel.CmdArgs {
 		IfName:      ifName,
 		StdinData:   []byte(conf),
 	}
+}
+
+func joinCIDRs(cidrs []string) string {
+	result := ""
+	for i, cidr := range cidrs {
+		if i > 0 {
+			result += `","`
+		}
+		result += cidr
+	}
+	return result
 }
 
 var _ = Describe("Test kube-egress-cni operations", func() {
@@ -150,5 +165,80 @@ var _ = Describe("Test kube-egress-cni operations", func() {
 			return cmdCheck(args)
 		})
 		Expect(err).NotTo(HaveOccurred())
+	})
+
+	Context("Exception CIDRs handling", func() {
+		BeforeEach(func() {
+			err := targetNS.Do(func(ns.NetNS) error {
+				defer GinkgoRecover()
+				Expect(netlink.LinkAdd(&netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Name: ifName}})).To(Succeed())
+				eth0, err := netlink.LinkByName(ifName)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(netlink.AddrAdd(eth0, &netlink.Addr{IPNet: ipv4Net})).To(Succeed())
+				Expect(netlink.AddrAdd(eth0, &netlink.Addr{IPNet: ipv6Net})).To(Succeed())
+				return nil
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should append config excluded CIDRs when default route is static egress gateway", func() {
+			// Test with default route set to static egress gateway
+			customArgs := createCmdArgsWithCustomExcludedCIDRs(targetNS, []string{"192.168.1.0/24", "172.16.0.0/16"})
+			grpcTestServer, err := cniprotocol.StartTestServerWithDefaultRoute(testAddr,
+				[]string{"10.0.0.0/8"}, // Server returns these exception CIDRs
+				map[string]string{consts.CNIGatewayAnnotationKey: "test-sgw"},
+				cniprotocol.DefaultRoute_DEFAULT_ROUTE_STATIC_EGRESS_GATEWAY)
+			Expect(err).NotTo(HaveOccurred())
+			defer grpcTestServer.GracefulStop()
+
+			_, _, err = testutils.CmdAddWithArgs(customArgs, func() error {
+				origCNIPath := os.Getenv("CNI_PATH")
+				_ = os.Setenv("CNI_PATH", "./testdata")
+				defer func() { _ = os.Setenv("CNI_PATH", origCNIPath) }()
+				return cmdAdd(customArgs)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify the gRPC calls were made correctly
+			msg := <-grpcTestServer.Received
+			podReq, ok := msg.(*cniprotocol.PodRetrieveRequest)
+			Expect(ok).To(BeTrue())
+			Expect(podReq.GetPodConfig().GetPodNamespace()).To(Equal("testns"))
+
+			msg = <-grpcTestServer.Received
+			nicReq, ok := msg.(*cniprotocol.NicAddRequest)
+			Expect(ok).To(BeTrue())
+			Expect(nicReq.GetGatewayName()).To(Equal("test-sgw"))
+		})
+
+		It("should not append config excluded CIDRs when default route is not static egress gateway", func() {
+			// Test with default route NOT set to static egress gateway
+			customArgs := createCmdArgsWithCustomExcludedCIDRs(targetNS, []string{"192.168.1.0/24", "172.16.0.0/16"})
+			grpcTestServer, err := cniprotocol.StartTestServerWithDefaultRoute(testAddr,
+				[]string{"10.0.0.0/8"}, // Server returns these exception CIDRs
+				map[string]string{consts.CNIGatewayAnnotationKey: "test-sgw"},
+				cniprotocol.DefaultRoute_DEFAULT_ROUTE_AZURE_NETWORKING) // Not static egress gateway
+			Expect(err).NotTo(HaveOccurred())
+			defer grpcTestServer.GracefulStop()
+
+			_, _, err = testutils.CmdAddWithArgs(customArgs, func() error {
+				origCNIPath := os.Getenv("CNI_PATH")
+				_ = os.Setenv("CNI_PATH", "./testdata")
+				defer func() { _ = os.Setenv("CNI_PATH", origCNIPath) }()
+				return cmdAdd(customArgs)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify the gRPC calls were made correctly
+			msg := <-grpcTestServer.Received
+			podReq, ok := msg.(*cniprotocol.PodRetrieveRequest)
+			Expect(ok).To(BeTrue())
+			Expect(podReq.GetPodConfig().GetPodNamespace()).To(Equal("testns"))
+
+			msg = <-grpcTestServer.Received
+			nicReq, ok := msg.(*cniprotocol.NicAddRequest)
+			Expect(ok).To(BeTrue())
+			Expect(nicReq.GetGatewayName()).To(Equal("test-sgw"))
+		})
 	})
 })
