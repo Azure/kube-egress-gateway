@@ -78,6 +78,7 @@ steps:
     done
 
     echo "ERROR: All $MAX_RETRIES attempts failed"
+    kubectl get all -n kube-egress-gateway-system -o wide
     exit 1
   displayName: build and install kube-egress-gateway components
   env:
