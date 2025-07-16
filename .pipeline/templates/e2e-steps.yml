@@ -59,7 +59,7 @@ steps:
     mv $(pwd)/azure.json $(pwd)/config/azureconfig/azure.json
     echo EXCEPTION_CIDRS=${{ parameters.podCidr }}","${{ parameters.serviceCidr }} > $(pwd)/config/environment_variables/environment.env
     IMAGE_REGISTRY=$(registry.url) E2E_PIPELINE=true make install
-    MAX_RETRIES=3
+    MAX_RETRIES=300
     RETRY_DELAY=5
     for i in $(seq 1 $MAX_RETRIES); do
         echo "Attempt $i/$MAX_RETRIES: Waiting for kube-egress-gateway pods to be ready..."
