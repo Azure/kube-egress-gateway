@@ -59,8 +59,8 @@ steps:
     mv $(pwd)/azure.json $(pwd)/config/azureconfig/azure.json
     echo EXCEPTION_CIDRS=${{ parameters.podCidr }}","${{ parameters.serviceCidr }} > $(pwd)/config/environment_variables/environment.env
     IMAGE_REGISTRY=$(registry.url) E2E_PIPELINE=true make install
-    MAX_RETRIES=300
-    RETRY_DELAY=5
+    MAX_RETRIES=10
+    BASE_DELAY=2
     for i in $(seq 1 $MAX_RETRIES); do
         echo "Attempt $i/$MAX_RETRIES: Waiting for kube-egress-gateway pods to be ready..."
         
@@ -72,8 +72,13 @@ steps:
         fi
         
         if [ $i -lt $MAX_RETRIES ]; then
-            echo "Failed. Retrying in $RETRY_DELAY seconds..."
-            sleep $RETRY_DELAY
+            # Exponential backoff: 2, 4, 8, 16, 32, 64, 128, 256, 512 seconds (capped at 300s)
+            DELAY=$((BASE_DELAY ** i))
+            if [ $DELAY -gt 300 ]; then
+                DELAY=300
+            fi
+            echo "Failed. Retrying in $DELAY seconds..."
+            sleep $DELAY
         fi
     done
 
