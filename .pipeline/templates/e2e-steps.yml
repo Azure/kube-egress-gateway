@@ -53,6 +53,7 @@ steps:
   env:
     AZURE_SUBSCRIPTION_ID: $(AZURE_SUBSCRIPTION_ID)
     AZURE_TENANT_ID: $(AZURE_TENANT_ID)
+    LOCATION: eastus
 
 - bash: |
     set -euo pipefail

@@ -89,8 +89,9 @@ resource aksCluster 'Microsoft.ContainerService/managedClusters@2023-08-01' = {
     agentPoolProfiles: [
       {
         name: 'nodepool1'
-        count: 2
+        count: 1
         osType: 'Linux'
+        vmSize: 'Standard_DS2_v3'
         mode: 'System'
         vnetSubnetID: subnetAksId
         maxPods: selectedProfile.maxPods
@@ -100,6 +101,7 @@ resource aksCluster 'Microsoft.ContainerService/managedClusters@2023-08-01' = {
         count: 2
         osType: 'Linux'
         mode: 'User'
+        vmSize: 'Standard_DS2_v3'
         vnetSubnetID: subnetGatewayId
         maxPods: selectedProfile.maxPods
         nodeLabels: {
