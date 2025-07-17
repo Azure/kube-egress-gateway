@@ -16,10 +16,16 @@ import (
 	"github.com/vishvananda/netlink/nl"
 	"golang.org/x/sys/unix"
 
+	v1 "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/iptableswrapper"
 	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper"
 )
+
+type nicSettings interface {
+	GetExceptionCidrs() []string
+	GetDefaultRoute() v1.DefaultRoute
+}
 
 type runner struct {
 	netlink  netlinkwrapper.Interface
@@ -35,7 +41,14 @@ func init() {
 	}
 }
 
-func SetPodRoutes(ifName string, exceptionCidrs []string, defaultToGateway bool, sysctlDir string, result *current.Result) error {
+// SetPodRoutes sets up the routes for the pod based on the provided nic settings.
+// excludedCIDRs are the CIDRs that should not go through the egress gateway.
+func SetPodRoutes(ifName string, nic nicSettings, excludedCIDRs []string, sysctlDir string, result *current.Result) error {
+	exceptionCidrs := nic.GetExceptionCidrs()
+	defaultToGateway := nic.GetDefaultRoute() == v1.DefaultRoute_DEFAULT_ROUTE_STATIC_EGRESS_GATEWAY
+	if defaultToGateway {
+		exceptionCidrs = append(exceptionCidrs, excludedCIDRs...)
+	}
 	eth0Link, err := routesRunner.netlink.LinkByName("eth0")
 	if err != nil {
 		return fmt.Errorf("failed to retrieve eth0 interface: %w", err)
