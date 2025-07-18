@@ -13,6 +13,9 @@ import (
 type CNIConfig struct {
 	types.NetConf
 
+	// ExcludedCIDRs in the CNI config will always bypass the gateway interface.
+	// note: this is different from the exception CIDRs in the StaticEgressGatewayConfig CRD
+	// which will always be excluded from the default route.
 	ExcludedCIDRs []string `json:"excludedCIDRs"`
 	SocketPath    string   `json:"socketPath"`
 }

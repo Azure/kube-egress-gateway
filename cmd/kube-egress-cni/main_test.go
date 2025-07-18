@@ -25,7 +25,11 @@ const (
 )
 
 func createCmdArgs(targetNS ns.NetNS) *skel.CmdArgs {
-	conf := `{"cniVersion":"1.0.0","excludedCIDRs":["1.2.3.4/32","10.1.0.0/16"],"socketPath":"localhost:50051","gatewayName":"test","ipam":{"type":"static","addresses":[{"address":"fe80::5/64"},{"address":"10.4.0.5/24"}]},"name":"mynet","type":"kube-egress-cni","prevResult":{"cniVersion":"1.0.0","interfaces":[{"name":"eth0","sandbox":"somepath"}],"ips":[{"interface":0,"address":"10.2.0.1/24"}],"dns":{}}}`
+	return createCmdArgsWithCustomExcludedCIDRs(targetNS, []string{"1.2.3.4/32", "10.1.0.0/16"})
+}
+
+func createCmdArgsWithCustomExcludedCIDRs(targetNS ns.NetNS, excludedCIDRs []string) *skel.CmdArgs {
+	conf := `{"cniVersion":"1.0.0","excludedCIDRs":["` + joinCIDRs(excludedCIDRs) + `"],"socketPath":"localhost:50051","gatewayName":"test","ipam":{"type":"static","addresses":[{"address":"fe80::5/64"},{"address":"10.4.0.5/24"}]},"name":"mynet","type":"kube-egress-cni","prevResult":{"cniVersion":"1.0.0","interfaces":[{"name":"eth0","sandbox":"somepath"}],"ips":[{"interface":0,"address":"10.2.0.1/24"}],"dns":{}}}`
 	return &skel.CmdArgs{
 		Args:        `IgnoreUnknown=true;K8S_POD_NAMESPACE=testns;K8S_POD_NAME=testpod`,
 		ContainerID: "test-container",
@@ -33,6 +37,17 @@ func createCmdArgs(targetNS ns.NetNS) *skel.CmdArgs {
 		IfName:      ifName,
 		StdinData:   []byte(conf),
 	}
+}
+
+func joinCIDRs(cidrs []string) string {
+	result := ""
+	for i, cidr := range cidrs {
+		if i > 0 {
+			result += `","`
+		}
+		result += cidr
+	}
+	return result
 }
 
 var _ = Describe("Test kube-egress-cni operations", func() {

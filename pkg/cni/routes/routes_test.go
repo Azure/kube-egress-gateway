@@ -15,6 +15,7 @@ import (
 	"go.uber.org/mock/gomock"
 	"golang.org/x/sys/unix"
 
+	v1 "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
 	"github.com/Azure/kube-egress-gateway/pkg/iptableswrapper/mockiptableswrapper"
 	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper/mocknetlinkwrapper"
 )
@@ -26,6 +27,19 @@ const (
 	allFile  = allDir + "/rp_filter"
 	eth0File = eth0Dir + "/rp_filter"
 )
+
+type testNicSettings struct {
+	exceptionCidrs []string
+	defaultRoute   v1.DefaultRoute
+}
+
+func (t *testNicSettings) GetExceptionCidrs() []string {
+	return t.exceptionCidrs
+}
+
+func (t *testNicSettings) GetDefaultRoute() v1.DefaultRoute {
+	return t.defaultRoute
+}
 
 func TestSetPodRoutes(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -56,6 +70,8 @@ func TestSetPodRoutes(t *testing.T) {
 	}
 	_, net1, _ := net.ParseCIDR("1.2.3.4/32")
 	_, net2, _ := net.ParseCIDR("172.17.0.4/16")
+	_, podCIDR, _ := net.ParseCIDR("10.244.0.0/16")
+	_, serviceCIDR, _ := net.ParseCIDR("10.245.0.0/16")
 	_, dnet, _ := net.ParseCIDR("0.0.0.0/0")
 	rule := netlink.NewRule()
 	rule.Mark = 8738
@@ -112,6 +128,23 @@ func TestSetPodRoutes(t *testing.T) {
 			}).Return(nil),
 		)
 	}
+	defaultGatewayRouteSetupProcessWithCNIExcludedCIDRs := func() {
+		defaultGatewayRouteSetupProcess()
+		gomock.InOrder(
+			mnl.EXPECT().RouteReplace(&netlink.Route{
+				Dst:       podCIDR,
+				Gw:        defaultGw,
+				LinkIndex: 1,
+				Protocol:  unix.RTPROT_STATIC,
+			}).Return(nil),
+			mnl.EXPECT().RouteReplace(&netlink.Route{
+				Dst:       serviceCIDR,
+				Gw:        defaultGw,
+				LinkIndex: 1,
+				Protocol:  unix.RTPROT_STATIC,
+			}).Return(nil),
+		)
+	}
 	defaultAzureNetworkingRouteSetupProcess := func() {
 		gomock.InOrder(
 			// retrieve eth0 link
@@ -150,6 +183,7 @@ func TestSetPodRoutes(t *testing.T) {
 		desc                string
 		defaultToGateway    bool
 		expectedRouteResult []*types.Route
+		cniExcludedCIDRs    []string
 		routeSetupProcess   func()
 	}{
 		{
@@ -164,8 +198,23 @@ func TestSetPodRoutes(t *testing.T) {
 			routeSetupProcess: defaultGatewayRouteSetupProcess,
 		},
 		{
-			desc:             "default to azure network",
+			desc:             "default to gateway with excludedCIDRs from CNI",
+			defaultToGateway: true,
+			cniExcludedCIDRs: []string{"10.244.0.0/16", "10.245.0.0/16"},
+			expectedRouteResult: []*types.Route{
+				{Dst: net.IPNet{IP: defaultGw, Mask: net.CIDRMask(32, 32)}},
+				{Dst: *dnet, GW: net.ParseIP("fe80::1")},
+				{Dst: *net1, GW: defaultGw},
+				{Dst: *net2, GW: defaultGw},
+				{Dst: *podCIDR, GW: defaultGw},
+				{Dst: *serviceCIDR, GW: defaultGw},
+			},
+			routeSetupProcess: defaultGatewayRouteSetupProcessWithCNIExcludedCIDRs,
+		},
+		{
+			desc:             "default to azure network and omit excludedCIDRs from routes",
 			defaultToGateway: false,
+			cniExcludedCIDRs: []string{"10.244.0.0/16", "10.245.0.0/16"},
 			expectedRouteResult: []*types.Route{
 				{Dst: *net1, GW: net.ParseIP("fe80::1")},
 				{Dst: *net2, GW: net.ParseIP("fe80::1")},
@@ -202,8 +251,16 @@ func TestSetPodRoutes(t *testing.T) {
 			t.Fatalf("Failed to create file %s: %v", eth0File, err)
 		}
 
+		nic := &testNicSettings{
+			exceptionCidrs: []string{"1.2.3.4/32", "172.17.0.4/16"},
+			defaultRoute:   v1.DefaultRoute_DEFAULT_ROUTE_AZURE_NETWORKING,
+		}
+		if test.defaultToGateway {
+			nic.defaultRoute = v1.DefaultRoute_DEFAULT_ROUTE_STATIC_EGRESS_GATEWAY
+		}
+
 		result := &current.Result{}
-		err := SetPodRoutes("wg0", []string{"1.2.3.4/32", "172.17.0.4/16"}, test.defaultToGateway, testDir, result)
+		err := SetPodRoutes("wg0", nic, test.cniExcludedCIDRs, testDir, result)
 		if err != nil {
 			t.Fatalf("SetPodRoutes returns unexpected error: %v", err)
 		}

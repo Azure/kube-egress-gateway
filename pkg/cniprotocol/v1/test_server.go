@@ -27,6 +27,7 @@ type TestServer struct {
 	grpcServer     *grpc.Server
 	podAnnotations map[string]string
 	exceptionCidrs []string
+	defaultRoute   DefaultRoute
 }
 
 func (s *TestServer) NicAdd(ctx context.Context, in *NicAddRequest) (*NicAddResponse, error) {
@@ -36,6 +37,7 @@ func (s *TestServer) NicAdd(ctx context.Context, in *NicAddRequest) (*NicAddResp
 		ListenPort:     TEST_SERVER_WIREGUARD_SERVER_PORT,
 		PublicKey:      TEST_SERVER_WIREGUARD_PUBLIC_KEY,
 		ExceptionCidrs: s.exceptionCidrs,
+		DefaultRoute:   s.defaultRoute,
 	}, nil
 }
 
@@ -62,11 +64,16 @@ func (s *TestServer) startServer() {
 }
 
 func StartTestServer(addr string, exceptionCidrs []string, podAnnotations map[string]string) (s *TestServer, err error) {
+	return StartTestServerWithDefaultRoute(addr, exceptionCidrs, podAnnotations, DefaultRoute_DEFAULT_ROUTE_UNSPECIFIED)
+}
+
+func StartTestServerWithDefaultRoute(addr string, exceptionCidrs []string, podAnnotations map[string]string, defaultRoute DefaultRoute) (s *TestServer, err error) {
 	s = &TestServer{
 		Received:       make(chan interface{}, 2),
 		grpcServer:     grpc.NewServer(),
 		podAnnotations: podAnnotations,
 		exceptionCidrs: exceptionCidrs,
+		defaultRoute:   defaultRoute,
 	}
 
 	s.lis, err = net.Listen("tcp", addr)
