@@ -418,10 +418,10 @@ k8s.io/utils v0.0.0-20241210054802-24370beab758 h1:sdbE21q2nlQtFh65saZY+rRM6x6aJ
 k8s.io/utils v0.0.0-20241210054802-24370beab758/go.mod h1:OLgZIPagt7ERELqWJFomSt595RzquPNLL48iOWgYOg0=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.8.6 h1:eihqzFmOkaHB27UsvaGrP4FBH1q00rUwNCEedmu8S+4=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.8.6/go.mod h1:4OImMMFi7wMfpcUcVrUvXO46mi21ndTTuRtQGzuEMD4=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.7.4 h1:MT0mOoi/PFPLOcsdyBfPjREZ+4k1huiQNUvtiVxt3B4=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.7.4/go.mod h1:gIyoG0RjyS8w3jRtqdPyIeMUAxg2NwIdg6+l99vDsP4=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.9.7 h1:53Gd3tfOrsR4ZhTzphn0z3Z9C+JerfFg+/+kadbAvMA=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.9.7/go.mod h1:HyNCAsUm+4cfj0FwUCQZulkHsyimW3hnN6+ezNrJe3k=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.8.0 h1:Ur/7vIHm6pjAJ3eHr+J+cMnOsmL+gdmxStbh1fn4qWs=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.8.0/go.mod h1:B1hLsHL+cBF6WV2cyBUaPXrT7r7Ky34euzcCk4s3J1E=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.10.0 h1:UQoc/ZF6cTdAv81AD6MumAhGo7nkQjfPRtsHYA5s4kY=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.10.0/go.mod h1:YRkZrzNlxsiPM6XyohVtuj/wUxLligMHDOPHACRzGm8=
 sigs.k8s.io/controller-runtime v0.21.0 h1:CYfjpEuicjUecRk+KAeyYh+ouUBn4llGyDYytIGcJS8=
 sigs.k8s.io/controller-runtime v0.21.0/go.mod h1:OSg14+F65eWqIu4DceX7k/+QRAbTTvxeQSNSOQpukWM=
 sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 h1:/Rv+M11QRah1itp8VhT6HoVx1Ray9eB4DBr+K+/sCJ8=
@@ -434,5 +434,5 @@ sigs.k8s.io/randfill v1.0.0/go.mod h1:XeLlZ/jmk4i1HRopwe7/aU3H5n1zNUcX6TM94b3QxO
 sigs.k8s.io/structured-merge-diff/v4 v4.6.0 h1:IUA9nvMmnKWcj5jl84xn+T5MnlZKThmUW1TdblaLVAc=
 sigs.k8s.io/structured-merge-diff/v4 v4.6.0/go.mod h1:dDy58f92j70zLsuZVuUX5Wp9vtxXpaZnkPGWeqDfCps=
 sigs.k8s.io/yaml v1.4.0/go.mod h1:Ejl7/uTz7PSA4eKMyQCUTnhZYNmLIl+5c2lQPGR2BPY=
-sigs.k8s.io/yaml v1.5.0 h1:M10b2U7aEUY6hRtU870n2VTPgR5RZiL/I6Lcc2F4NUQ=
-sigs.k8s.io/yaml v1.5.0/go.mod h1:wZs27Rbxoai4C0f8/9urLZtZtF3avA3gKvGyPdDqTO4=
+sigs.k8s.io/yaml v1.6.0 h1:G8fkbMSAFqgEFgh4b1wmtzDnioxFCUgTZhlbj5P9QYs=
+sigs.k8s.io/yaml v1.6.0/go.mod h1:796bPqUfzR/0jLAl6XjHl3Ck7MiyVv8dbTdyT3/pMf4=
