@@ -30,11 +30,11 @@ require (
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20230429144221-925a1e7659e6
 	google.golang.org/grpc v1.74.2
 	google.golang.org/protobuf v1.36.7
-	k8s.io/api v0.33.3
-	k8s.io/apimachinery v0.33.3
-	k8s.io/client-go v0.33.3
+	k8s.io/api v0.33.4
+	k8s.io/apimachinery v0.33.4
+	k8s.io/client-go v0.33.4
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/kubernetes v1.33.3
+	k8s.io/kubernetes v1.33.4
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.9.0
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.8.1
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.10.2
