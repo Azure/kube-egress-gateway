@@ -272,12 +272,21 @@ func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
 				}
 			}
 		}
-	} else {
+		
+		// If we get here, it might be a VM-based gateway nodepool
+		// First check if a VM with the matching name exists - we'll need to add VM listing capability to AzureManager
+		// This would require additional implementation in the AzureManager
+		// but for now we'll continue and let the client detect when to use VM vs VMSS configuration
+	} else if lbConfig.Spec.VmssResourceGroup != "" && lbConfig.Spec.VmssName != "" {
 		vmss, err := r.GetVMSS(ctx, lbConfig.Spec.VmssResourceGroup, lbConfig.Spec.VmssName)
 		if err != nil {
 			return nil, err
 		}
 		return vmss, nil
+	} else if lbConfig.Spec.VmResourceGroup != "" && lbConfig.Spec.VmName != "" {
+		// VM-based gateway - these methods would need to be implemented in AzureManager
+		// For now we'll return an error that indicates we need to use VM configuration
+		return nil, fmt.Errorf("gateway VM configuration found - use gateway VM configuration")
 	}
 	return nil, fmt.Errorf("gateway VMSS not found")
 }

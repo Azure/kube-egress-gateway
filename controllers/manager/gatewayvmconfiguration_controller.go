@@ -227,21 +227,51 @@ func (r *GatewayVMConfigurationReconciler) reconcile(
 	vmConfig.DeepCopyInto(existing)
 
 	vmss, ipPrefixLength, err := r.getGatewayVMSS(ctx, vmConfig)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "VM-based gateway detected") {
 		log.Error(err, "failed to get vmss")
 		return ctrl.Result{}, err
 	}
-
-	ipPrefix, ipPrefixID, isManaged, err := r.ensurePublicIPPrefix(ctx, ipPrefixLength, vmConfig)
-	if err != nil {
-		log.Error(err, "failed to ensure public ip prefix")
-		return ctrl.Result{}, err
-	}
-
+	
+	// Check if we're dealing with a VM-based gateway
 	var privateIPs []string
-	if privateIPs, err = r.reconcileVMSS(ctx, vmConfig, vmss, ipPrefixID, true); err != nil {
-		log.Error(err, "failed to reconcile VMSS")
-		return ctrl.Result{}, err
+	var isVmGateway bool
+	
+	if err != nil && strings.Contains(err.Error(), "VM-based gateway detected") {
+		isVmGateway = true
+		log.Info("VM-based gateway detected")
+		
+		// Get the VM
+		vm, vmPrefixLength, err := r.getGatewayVM(ctx, vmConfig)
+		if err != nil {
+			log.Error(err, "failed to get VM")
+			return ctrl.Result{}, err
+		}
+		
+		// VM gateway detected, use VM-specific methods
+		ipPrefixLength = vmPrefixLength
+		
+		ipPrefix, ipPrefixID, isManaged, err := r.ensurePublicIPPrefix(ctx, ipPrefixLength, vmConfig)
+		if err != nil {
+			log.Error(err, "failed to ensure public ip prefix")
+			return ctrl.Result{}, err
+		}
+		
+		if privateIPs, err = r.reconcileVM(ctx, vmConfig, vm, ipPrefixID, true); err != nil {
+			log.Error(err, "failed to reconcile VM")
+			return ctrl.Result{}, err
+		}
+	} else {
+		// VMSS gateway
+		ipPrefix, ipPrefixID, isManaged, err := r.ensurePublicIPPrefix(ctx, ipPrefixLength, vmConfig)
+		if err != nil {
+			log.Error(err, "failed to ensure public ip prefix")
+			return ctrl.Result{}, err
+		}
+		
+		if privateIPs, err = r.reconcileVMSS(ctx, vmConfig, vmss, ipPrefixID, true); err != nil {
+			log.Error(err, "failed to reconcile VMSS")
+			return ctrl.Result{}, err
+		}
 	}
 
 	if !isManaged {
@@ -294,15 +324,28 @@ func (r *GatewayVMConfigurationReconciler) ensureDeleted(
 	succeeded := false
 	defer func() { mc.ObserveControllerReconcileMetrics(succeeded) }()
 
+	// Check if we're dealing with a VM-based gateway
 	vmss, _, err := r.getGatewayVMSS(ctx, vmConfig)
-	if err != nil {
+	if err != nil && strings.Contains(err.Error(), "VM-based gateway detected") {
+		// VM-based gateway
+		vm, _, err := r.getGatewayVM(ctx, vmConfig)
+		if err != nil {
+			log.Info("Gateway VM not found, skip cleaning up", "error", err.Error())
+		} else {
+			if _, err := r.reconcileVM(ctx, vmConfig, vm, "", false); err != nil {
+				log.Error(err, "failed to cleanup VM")
+				return ctrl.Result{}, err
+			}
+		}
+	} else if err != nil {
 		log.Error(err, "failed to get vmss")
 		return ctrl.Result{}, err
-	}
-
-	if _, err := r.reconcileVMSS(ctx, vmConfig, vmss, "", false); err != nil {
-		log.Error(err, "failed to reconcile VMSS")
-		return ctrl.Result{}, err
+	} else {
+		// VMSS-based gateway
+		if _, err := r.reconcileVMSS(ctx, vmConfig, vmss, "", false); err != nil {
+			log.Error(err, "failed to reconcile VMSS")
+			return ctrl.Result{}, err
+		}
 	}
 
 	if err := r.ensurePublicIPPrefixDeleted(ctx, vmConfig); err != nil {
@@ -326,11 +369,14 @@ func (r *GatewayVMConfigurationReconciler) getGatewayVMSS(
 	ctx context.Context,
 	vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
 ) (*compute.VirtualMachineScaleSet, int32, error) {
+	// Check for nodepools first (could be VMSS or VM-based)
 	if vmConfig.Spec.GatewayNodepoolName != "" {
+		// First try to find a VMSS matching the nodepool name
 		vmssList, err := r.ListVMSS(ctx)
 		if err != nil {
 			return nil, 0, err
 		}
+		
 		for i := range vmssList {
 			vmss := vmssList[i]
 			if v, ok := vmss.Tags[consts.AKSNodepoolTagKey]; ok {
@@ -347,14 +393,29 @@ func (r *GatewayVMConfigurationReconciler) getGatewayVMSS(
 				}
 			}
 		}
-	} else {
+		
+		// If we get here, it's not a VMSS-based nodepool
+		// We need to check if it's a VM-based nodepool
+		log := log.FromContext(ctx)
+		log.Info("No VMSS found for nodepool - checking for VM-based gateway nodepool")
+		
+		// This would require implementation of VM-specific methods in the AzureManager
+		// For now we'll return an error indicating we should use VM configuration
+		return nil, 0, fmt.Errorf("no VMSS found for gateway nodepool - may be using VM-based gateway")
+	} else if vmConfig.Spec.VmssName != "" && vmConfig.Spec.VmssResourceGroup != "" {
+		// Explicit VMSS configuration
 		vmss, err := r.GetVMSS(ctx, vmConfig.Spec.VmssResourceGroup, vmConfig.Spec.VmssName)
 		if err != nil {
 			return nil, 0, err
 		}
 		return vmss, vmConfig.Spec.PublicIpPrefixSize, nil
+	} else if vmConfig.Spec.VmName != "" && vmConfig.Spec.VmResourceGroup != "" {
+		// We need to return error here to indicate that VM-based gateway is detected
+		// The main reconcile method will handle this case
+		return nil, vmConfig.Spec.PublicIpPrefixSize, fmt.Errorf("VM-based gateway detected")
 	}
-	return nil, 0, fmt.Errorf("gateway VMSS not found")
+	
+	return nil, 0, fmt.Errorf("gateway configuration not found - specify either GatewayNodepoolName, GatewayVmssProfile, or GatewayVmProfile")
 }
 
 func managedSubresourceName(vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration) string {

@@ -1,0 +1,5 @@
+func vmProfileIsEmpty(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) bool {
+	return gwConfig.Spec.GatewayVmProfile.VmResourceGroup == "" &&
+		gwConfig.Spec.GatewayVmProfile.VmName == "" &&
+		gwConfig.Spec.GatewayVmProfile.PublicIpPrefixSize == 0
+}
