@@ -484,13 +484,24 @@ func isReady(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) bool {
 }
 
 func applyToNode(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) bool {
+	// Check if the configuration is based on nodepool name
 	if gwConfig.Spec.GatewayNodepoolName != "" {
 		name, ok := nodeTags[consts.AKSNodepoolTagKey]
 		return ok && strings.EqualFold(name, gwConfig.Spec.GatewayNodepoolName)
-	} else {
+	} else if gwConfig.Spec.GatewayVmssProfile.VmssName != "" && gwConfig.Spec.GatewayVmssProfile.VmssResourceGroup != "" {
+		// Check if the configuration is based on VMSS
 		vmssProfile := gwConfig.Spec.GatewayVmssProfile
 		return strings.EqualFold(vmssProfile.VmssName, nodeMeta.Compute.VMScaleSetName) &&
 			strings.EqualFold(vmssProfile.VmssResourceGroup, nodeMeta.Compute.ResourceGroupName)
+	} else {
+		// Check if the configuration is based on VM
+		vmProfile := gwConfig.Spec.GatewayVmProfile
+		// For VMs, the vmScaleSetName would be empty in the node metadata
+		// Check for the VM name instead and resource group
+		isVM := nodeMeta.Compute.VMScaleSetName == ""
+		return isVM && 
+			strings.EqualFold(vmProfile.VmName, nodeMeta.Compute.Name) &&
+			strings.EqualFold(vmProfile.VmResourceGroup, nodeMeta.Compute.ResourceGroupName)
 	}
 }
 

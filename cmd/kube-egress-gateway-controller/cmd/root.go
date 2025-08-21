@@ -19,6 +19,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/ratelimit"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -26,6 +27,7 @@ import (
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	controllers "github.com/Azure/kube-egress-gateway/controllers/manager"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
+	kubeazclient "github.com/Azure/kube-egress-gateway/pkg/azmanager/azclient"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/metrics"
@@ -215,7 +217,7 @@ func getClientFactoryFromConfig(cloud *config.CloudConfig) (azclient.ClientFacto
 	if cloud.RateLimitConfig != nil {
 		rateLimitConf.Config = *(*ratelimit.Config)(cloud.RateLimitConfig)
 	}
-	clientOps, _, err := azclient.GetAzCoreClientOption(&cloud.ARMClientConfig)
+	clientOps, armOptions, err := azclient.GetAzCoreClientOption(&cloud.ARMClientConfig)
 	if err != nil {
 		return factory, err
 	}
@@ -231,5 +233,18 @@ func getClientFactoryFromConfig(cloud *config.CloudConfig) (azclient.ClientFacto
 	if err != nil {
 		return factory, err
 	}
-	return factory, nil
+
+	// Extend the factory with VM client support
+	extendedFactory, err := kubeazclient.ExtendClientFactory(
+		factory,
+		cloud.SubscriptionID,
+		authProvider.GetAzIdentity(),
+		armOptions,
+	)
+	if err != nil {
+		log.Log.Error(err, "Failed to extend client factory with VM client support, continuing with standard factory")
+		return factory, nil
+	}
+	
+	return extendedFactory, nil
 }

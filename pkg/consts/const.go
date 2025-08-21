@@ -48,8 +48,17 @@ const (
 	// nodepool mode label value in aks clusters
 	AKSNodepoolModeValue = "gateway"
 
+	// VM mode tag value in aks clusters
+	AKSVMGatewayTagKey = "aks-managed-gatewayVM"
+
+	// VM mode tag value in aks clusters
+	AKSVMGatewayTagValue = "true"
+
 	// gateway nodepool ip prefix size tag key in aks clusters
 	AKSNodepoolIPPrefixSizeTagKey = "aks-managed-gatewayIPPrefixSize"
+
+	// gateway VM ip prefix size tag key in aks clusters
+	AKSVMIPPrefixSizeTagKey = "aks-managed-gatewayVMIPPrefixSize"
 
 	// Owning StaticGatewayConfiguration namespace key on secret label
 	OwningSGCNamespaceLabel = "egressgateway.kubernetes.azure.com/owning-gateway-config-namespace"

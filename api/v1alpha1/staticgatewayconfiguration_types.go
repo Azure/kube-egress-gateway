@@ -25,6 +25,20 @@ type GatewayVmssProfile struct {
 	PublicIpPrefixSize int32 `json:"publicIpPrefixSize,omitempty"`
 }
 
+// GatewayVmProfile finds an existing gateway VM (virtual machine).
+type GatewayVmProfile struct {
+	// Resource group of the VM. Must be in the same subscription.
+	VmResourceGroup string `json:"vmResourceGroup,omitempty"`
+
+	// Name of the VM
+	VmName string `json:"vmName,omitempty"`
+
+	// Public IP prefix size to be applied to this VM.
+	//+kubebuilder:validation:Minimum=0
+	//+kubebuilder:validation:Maximum=31
+	PublicIpPrefixSize int32 `json:"publicIpPrefixSize,omitempty"`
+}
+
 // RouteType defines the type of defaultRoute.
 // +kubebuilder:validation:Enum=azureNetworking;staticEgressGateway
 type RouteType string
@@ -49,6 +63,10 @@ type StaticGatewayConfigurationSpec struct {
 	// Profile of the gateway VMSS to apply the gateway configuration.
 	// +optional
 	GatewayVmssProfile `json:"gatewayVmssProfile,omitempty"`
+
+	// Profile of the gateway VM to apply the gateway configuration.
+	// +optional
+	GatewayVmProfile `json:"gatewayVmProfile,omitempty"`
 
 	// Pod default route, should be either azureNetworking (pod's eth0) or staticEgressGateway (default).
 	//+kubebuilder:default=staticEgressGateway
