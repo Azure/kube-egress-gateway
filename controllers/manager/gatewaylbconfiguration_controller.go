@@ -696,6 +696,8 @@ func (r *GatewayLBConfigurationReconciler) reconcileGatewayVMConfig(
 	if _, err := controllerutil.CreateOrPatch(ctx, r, vmConfig, func() error {
 		vmConfig.Spec.GatewayNodepoolName = lbConfig.Spec.GatewayNodepoolName
 		vmConfig.Spec.GatewayVmssProfile = lbConfig.Spec.GatewayVmssProfile
+		vmConfig.Spec.GatewayVmProfile = lbConfig.Spec.GatewayVmProfile
+		vmConfig.Spec.GatewayPoolProfile = lbConfig.Spec.GatewayPoolProfile
 		vmConfig.Spec.ProvisionPublicIps = lbConfig.Spec.ProvisionPublicIps
 		vmConfig.Spec.PublicIpPrefixId = lbConfig.Spec.PublicIpPrefixId
 		return controllerutil.SetControllerReference(lbConfig, vmConfig, r.Client.Scheme())
