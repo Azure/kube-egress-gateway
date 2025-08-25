@@ -227,16 +227,46 @@ func (r *GatewayLBConfigurationReconciler) ensureDeleted(
 	return ctrl.Result{}, nil
 }
 
+// getLBPropertyName generates property names for LB resources based on either VMSS or VM
 func getLBPropertyName(
 	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
 	vmss *compute.VirtualMachineScaleSet,
 ) (*lbPropertyNames, error) {
+	// If we're using GatewayPoolProfile with type "vm", we'll get a specific error
+	// This will be caught and handled by the caller
+	if vmss == nil {
+		return nil, fmt.Errorf("gateway resource is nil")
+	}
+
 	if vmss.Properties == nil || vmss.Properties.UniqueID == nil {
 		return nil, fmt.Errorf("gateway vmss does not have UID")
 	}
 	names := &lbPropertyNames{
 		frontendName: *vmss.Properties.UniqueID,
 		backendName:  *vmss.Properties.UniqueID,
+		lbRuleName:   string(lbConfig.GetUID()),
+		probeName:    string(lbConfig.GetUID()),
+	}
+	return names, nil
+}
+
+
+// getLBPropertyNameForVM generates property names for LB resources based on VM
+func getLBPropertyNameForVM(
+	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
+	vm *compute.VirtualMachine,
+) (*lbPropertyNames, error) {
+	if vm == nil {
+		return nil, fmt.Errorf("gateway vm is nil")
+	}
+
+	if vm.Properties == nil || vm.Properties.VMID == nil {
+		return nil, fmt.Errorf("gateway vm does not have ID")
+	}
+	
+	names := &lbPropertyNames{
+		frontendName: *vm.Properties.VMID,
+		backendName:  *vm.Properties.VMID,
 		lbRuleName:   string(lbConfig.GetUID()),
 		probeName:    string(lbConfig.GetUID()),
 	}
@@ -309,14 +339,15 @@ func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
 		// Return an error that indicates we need to use VM configuration
 		return nil, fmt.Errorf("gateway VM configuration found - use gateway VM configuration")
 	} else if lbConfig.Spec.VmssResourceGroup != "" && lbConfig.Spec.VmssName != "" {
+		// Legacy VMSS profile
 		vmss, err := r.GetVMSS(ctx, lbConfig.Spec.VmssResourceGroup, lbConfig.Spec.VmssName)
 		if err != nil {
 			return nil, err
 		}
 		return vmss, nil
 	} else if lbConfig.Spec.VmResourceGroup != "" && lbConfig.Spec.VmName != "" {
-		// VM-based gateway - these methods would need to be implemented in AzureManager
-		// For now we'll return an error that indicates we need to use VM configuration
+		// Legacy VM profile
+		// Return an error that indicates we need to use VM configuration
 		return nil, fmt.Errorf("gateway VM configuration found - use gateway VM configuration")
 	}
 	return nil, fmt.Errorf("gateway VMSS not found")
