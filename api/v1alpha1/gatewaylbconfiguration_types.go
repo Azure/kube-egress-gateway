@@ -27,6 +27,11 @@ type GatewayLBConfigurationSpec struct {
 	// +optional
 	GatewayVmProfile `json:"gatewayVmProfile,omitempty"`
 
+	// Profile of the gateway pool to apply the gateway configuration.
+	// This is a more generic profile that will replace both GatewayVmssProfile and GatewayVmProfile.
+	// +optional
+	GatewayPoolProfile `json:"gatewayPoolProfile,omitempty"`
+
 	// Whether to provision public IP prefixes for outbound.
 	//+kubebuilder:default=true
 	ProvisionPublicIps bool `json:"provisionPublicIps"`
