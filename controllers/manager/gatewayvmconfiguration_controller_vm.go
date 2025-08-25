@@ -22,14 +22,20 @@ func (r *GatewayVMConfigurationReconciler) getGatewayVM(
 	vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
 ) (*compute.VirtualMachine, int32, error) {
 	log := log.FromContext(ctx)
-	// Check for VM-based nodepools first
-	if vmConfig.Spec.GatewayNodepoolName != "" {
-		// We'd need to find a VM matching the nodepool name
-		// This would require listing all VMs and checking their tags
-		// For now, we'll implement direct VM reference only
-		return nil, 0, fmt.Errorf("VM-based nodepool gateway not fully implemented yet")
+	// Check for the new GatewayPoolProfile first
+	if vmConfig.Spec.GatewayPoolProfile.Type == "vm" {
+		// GatewayPoolProfile with VM type
+		log.Info(fmt.Sprintf("Getting VM with name %s in resource group %s from pool profile", 
+			vmConfig.Spec.GatewayPoolProfile.Name, vmConfig.Spec.GatewayPoolProfile.ResourceGroup))
+		vm, err := r.GetVM(ctx, vmConfig.Spec.GatewayPoolProfile.ResourceGroup, vmConfig.Spec.GatewayPoolProfile.Name)
+		if err != nil {
+			log.Error(err, "Failed to get VM from pool profile")
+			return nil, 0, err
+		}
+		return vm, vmConfig.Spec.GatewayPoolProfile.PublicIpPrefixSize, nil
+	// Check for VM-based nodepools
 	} else if vmConfig.Spec.VmName != "" && vmConfig.Spec.VmResourceGroup != "" {
-		// Explicit VM configuration
+		// Explicit VM configuration (in the case gatewayVMProfile
 		log.Info(fmt.Sprintf("Getting VM with name %s in resource group %s", vmConfig.Spec.VmName, vmConfig.Spec.VmResourceGroup))
 		vm, err := r.GetVM(ctx, vmConfig.Spec.VmResourceGroup, vmConfig.Spec.VmName)
 		if err != nil {
