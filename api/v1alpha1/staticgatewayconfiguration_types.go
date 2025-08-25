@@ -68,6 +68,12 @@ type StaticGatewayConfigurationSpec struct {
 	// +optional
 	GatewayVmProfile `json:"gatewayVmProfile,omitempty"`
 
+
+	// Profile of the gateway pool to apply the gateway configuration.
+	// This is a more generic profile that will replace both GatewayVmssProfile and GatewayVmProfile.
+	// +optional
+	GatewayPoolProfile `json:"gatewayPoolProfile,omitempty"`
+
 	// Pod default route, should be either azureNetworking (pod's eth0) or staticEgressGateway (default).
 	//+kubebuilder:default=staticEgressGateway
 	DefaultRoute RouteType `json:"defaultRoute,omitempty"`
