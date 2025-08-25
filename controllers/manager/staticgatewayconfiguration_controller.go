@@ -351,6 +351,14 @@ func vmProfileIsEmpty(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration
 		gwConfig.Spec.GatewayVmProfile.PublicIpPrefixSize == 0
 }
 
+
+func gatewayPoolProfileIsEmpty(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) bool {
+	return gwConfig.Spec.GatewayPoolProfile.Type == "" &&
+		gwConfig.Spec.GatewayPoolProfile.Name == "" &&
+		gwConfig.Spec.GatewayPoolProfile.ResourceGroup == "" &&
+		gwConfig.Spec.GatewayPoolProfile.PublicIpPrefixSize == 0
+}
+
 func (r *StaticGatewayConfigurationReconciler) reconcileWireguardKey(
 	ctx context.Context,
 	gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration,
