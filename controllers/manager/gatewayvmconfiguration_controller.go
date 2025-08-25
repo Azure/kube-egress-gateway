@@ -402,6 +402,21 @@ func (r *GatewayVMConfigurationReconciler) getGatewayVMSS(
 		// This would require implementation of VM-specific methods in the AzureManager
 		// For now we'll return an error indicating we should use VM configuration
 		return nil, 0, fmt.Errorf("no VMSS found for gateway nodepool - may be using VM-based gateway")
+	} else if vmConfig.Spec.GatewayPoolProfile.Type != "" {
+		// Handle the new GatewayPoolProfile
+		switch vmConfig.Spec.GatewayPoolProfile.Type {
+		case "vmss":
+			vmss, err := r.GetVMSS(ctx, vmConfig.Spec.GatewayPoolProfile.ResourceGroup, vmConfig.Spec.GatewayPoolProfile.Name)
+			if err != nil {
+				return nil, 0, err
+			}
+			return vmss, vmConfig.Spec.GatewayPoolProfile.PublicIpPrefixSize, nil
+		case "vm":
+			// VM-based gateway detected
+			return nil, vmConfig.Spec.GatewayPoolProfile.PublicIpPrefixSize, fmt.Errorf("VM-based gateway detected")
+		default:
+			return nil, 0, fmt.Errorf("unknown gateway pool type: %s", vmConfig.Spec.GatewayPoolProfile.Type)
+		}
 	} else if vmConfig.Spec.VmssName != "" && vmConfig.Spec.VmssResourceGroup != "" {
 		// Explicit VMSS configuration
 		vmss, err := r.GetVMSS(ctx, vmConfig.Spec.VmssResourceGroup, vmConfig.Spec.VmssName)
@@ -415,7 +430,7 @@ func (r *GatewayVMConfigurationReconciler) getGatewayVMSS(
 		return nil, vmConfig.Spec.PublicIpPrefixSize, fmt.Errorf("VM-based gateway detected")
 	}
 	
-	return nil, 0, fmt.Errorf("gateway configuration not found - specify either GatewayNodepoolName, GatewayVmssProfile, or GatewayVmProfile")
+	return nil, 0, fmt.Errorf("gateway configuration not found - specify either GatewayNodepoolName, GatewayPoolProfile, GatewayVmssProfile, or GatewayVmProfile")
 }
 
 func managedSubresourceName(vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration) string {
