@@ -326,6 +326,34 @@ func validate(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) error 
 		}
 	}
 
+	// Validate GatewayPoolProfile if provided
+	if !gatewayPoolProfileIsEmpty(gwConfig) {
+		if gwConfig.Spec.GatewayPoolProfile.Type == "" {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewayPoolProfile").Child("type"),
+				gwConfig.Spec.GatewayPoolProfile.Type,
+				"Gateway pool type is empty (must be 'vm' or 'vmss')"))
+		} else if gwConfig.Spec.GatewayPoolProfile.Type != "vm" && gwConfig.Spec.GatewayPoolProfile.Type != "vmss" {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewayPoolProfile").Child("type"),
+				gwConfig.Spec.GatewayPoolProfile.Type,
+				"Gateway pool type must be 'vm' or 'vmss'"))
+		}
+		if gwConfig.Spec.GatewayPoolProfile.ResourceGroup == "" {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewayPoolProfile").Child("resourceGroup"),
+				gwConfig.Spec.GatewayPoolProfile.ResourceGroup,
+				"Gateway pool resource group is empty"))
+		}
+		if gwConfig.Spec.GatewayPoolProfile.Name == "" {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewayPoolProfile").Child("name"),
+				gwConfig.Spec.GatewayPoolProfile.Name,
+				"Gateway pool name is empty"))
+		}
+		if gwConfig.Spec.GatewayPoolProfile.PublicIpPrefixSize < 0 || gwConfig.Spec.GatewayPoolProfile.PublicIpPrefixSize > 31 {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewayPoolProfile").Child("publicIpPrefixSize"),
+				gwConfig.Spec.GatewayPoolProfile.PublicIpPrefixSize,
+				"Gateway pool public ip prefix size should be between 0 and 31 inclusively"))
+		}
+	}
+
 	if !gwConfig.Spec.ProvisionPublicIps && gwConfig.Spec.PublicIpPrefixId != "" {
 		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("publicipprefixid"),
 			gwConfig.Spec.PublicIpPrefixId,
