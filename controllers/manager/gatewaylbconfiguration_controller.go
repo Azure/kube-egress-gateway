@@ -296,6 +296,18 @@ func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
 		} else {
 			log.Info("VM client not available, cannot check for VM-based gateway nodepool")
 		}
+
+	} else if lbConfig.Spec.GatewayPoolProfile.Type == "vmss" {
+		// Use the generic pool profile for VMSS
+		vmss, err := r.GetVMSS(ctx, lbConfig.Spec.GatewayPoolProfile.ResourceGroup, lbConfig.Spec.GatewayPoolProfile.Name)
+		if err != nil {
+			return nil, err
+		}
+		return vmss, nil
+	} else if lbConfig.Spec.GatewayPoolProfile.Type == "vm" {
+		// VM-based gateway using the generic pool profile
+		// Return an error that indicates we need to use VM configuration
+		return nil, fmt.Errorf("gateway VM configuration found - use gateway VM configuration")
 	} else if lbConfig.Spec.VmssResourceGroup != "" && lbConfig.Spec.VmssName != "" {
 		vmss, err := r.GetVMSS(ctx, lbConfig.Spec.VmssResourceGroup, lbConfig.Spec.VmssName)
 		if err != nil {
