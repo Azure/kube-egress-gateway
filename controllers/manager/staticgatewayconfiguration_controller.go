@@ -260,11 +260,12 @@ func validate(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) error 
 	vmProfileEmpty := vmProfileIsEmpty(gwConfig)
 	
 	// Check if any of the gateway specifications are provided
-	if gwConfig.Spec.GatewayNodepoolName == "" && vmssProfileIsEmpty(gwConfig) && vmProfileEmpty {
+	gatewayPoolEmpty := gatewayPoolProfileIsEmpty(gwConfig)
+	if gwConfig.Spec.GatewayNodepoolName == "" && vmssProfileIsEmpty(gwConfig) && vmProfileEmpty && gatewayPoolEmpty {
 		allErrs = append(allErrs, field.Invalid(field.NewPath("spec"),
-			fmt.Sprintf("GatewayNodepoolName: %s, GatewayVmssProfile: %#v, GatewayVmProfile: %#v", 
-			gwConfig.Spec.GatewayNodepoolName, gwConfig.Spec.GatewayVmssProfile, gwConfig.Spec.GatewayVmProfile),
-			"One of GatewayNodepoolName, GatewayVmssProfile, or GatewayVmProfile must be provided"))
+			fmt.Sprintf("GatewayNodepoolName: %s, GatewayVmssProfile: %#v, GatewayVmProfile: %#v, GatewayPoolProfile: %#v", 
+			gwConfig.Spec.GatewayNodepoolName, gwConfig.Spec.GatewayVmssProfile, gwConfig.Spec.GatewayVmProfile, gwConfig.Spec.GatewayPoolProfile),
+			"One of GatewayNodepoolName, GatewayPoolProfile, GatewayVmssProfile, or GatewayVmProfile must be provided"))
 	}
 
 	// Count how many gateway specifications are provided
