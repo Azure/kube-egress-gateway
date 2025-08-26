@@ -388,6 +388,8 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 		}
 	}
 
+	// Variables for LB property names
+	var frontendName, backendName, lbRuleName, probeName string
 	// get gateway resource (either VMSS or VM)
 	// Check if this is a VM-based gateway
 	if err != nil && strings.Contains(err.Error(), "gateway VM configuration found") {
@@ -418,9 +420,10 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 			return "", 0, vmErr
 		}
 		
-		// Continue with VM-based names
-		frontendID = r.GetLBFrontendIPConfigurationID(names.frontendName)
-		backendID = r.GetLBBackendAddressPoolID(names.backendName)
+		frontendName = names.frontendName
+		backendName = names.backendName
+		lbRuleName = names.lbRuleName
+		probeName = names.probeName
 	} else if err != nil {
 		log.Error(err, "failed to get resource")
 		return "", 0, err
@@ -433,16 +436,20 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 		return "", 0, err
 		}
 		
-		frontendID = r.GetLBFrontendIPConfigurationID(names.frontendName)
-		backendID = r.GetLBBackendAddressPoolID(names.backendName)
+		frontendName = names.frontendName
+		backendName = names.backendName
+		lbRuleName = names.lbRuleName
+		probeName = names.probeName
 	}
+	
+	frontendID := r.GetLBFrontendIPConfigurationID(frontendName)
+	backendID := r.GetLBBackendAddressPoolID(backendName)
 
 	if lb.Properties == nil {
 		return "", 0, fmt.Errorf("lb property is empty")
 	}
 
-	frontendID := r.GetLBFrontendIPConfigurationID(names.frontendName)
-	frontendIP, err = findFrontendIP(lb, names.frontendName)
+	frontendIP, err = findFrontendIP(lb, frontendName)
 	if err != nil {
 		return "", 0, err
 	}
@@ -454,7 +461,7 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 				return "", 0, err
 			}
 			lb.Properties.FrontendIPConfigurations =
-				append(lb.Properties.FrontendIPConfigurations, getExpectedFrontendConfig(to.Ptr(names.frontendName), subnet.ID))
+				append(lb.Properties.FrontendIPConfigurations, getExpectedFrontendConfig(to.Ptr(frontendName), subnet.ID))
 			updateLB = true
 		}
 	} else {
@@ -464,9 +471,9 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 	backendID := r.GetLBBackendAddressPoolID(names.backendName)
 	foundBackend := false
 	for _, backendPool := range lb.Properties.BackendAddressPools {
-		if strings.EqualFold(*backendPool.Name, names.backendName) &&
+		if strings.EqualFold(*backendPool.Name, backendName) &&
 			strings.EqualFold(*backendPool.ID, *backendID) {
-			log.Info("Found LB backendAddressPool", "backendName", names.backendName)
+			log.Info("Found LB backendAddressPool", "backendName", backendName)
 			foundBackend = true
 			break
 		}
@@ -474,14 +481,14 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 	if !foundBackend {
 		if needLB {
 			lb.Properties.BackendAddressPools =
-				append(lb.Properties.BackendAddressPools, getExpectedBackendPool(to.Ptr(names.backendName)))
+				append(lb.Properties.BackendAddressPools, getExpectedBackendPool(to.Ptr(backendName)))
 			updateLB = true
 		}
 	}
 
-	probeID := r.GetLBProbeID(names.probeName)
-	expectedLBRule := getExpectedLBRule(&names.lbRuleName, frontendID, backendID, probeID)
-	expectedProbe := getExpectedLBProbe(&names.probeName, r.LBProbePort, lbConfig)
+	probeID := r.GetLBProbeID(probeName)
+	expectedLBRule := getExpectedLBRule(&lbRuleName, frontendID, backendID, probeID)
+	expectedProbe := getExpectedLBProbe(&probeName, r.LBProbePort, lbConfig)
 
 	lbRules := lb.Properties.LoadBalancingRules
 	if needLB {
