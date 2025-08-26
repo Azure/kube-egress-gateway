@@ -388,19 +388,53 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 		}
 	}
 
-	// get gateway VMSS
-	// we need this because each gateway vmss needs one frontendConfig and one backendpool
-	vmss, err := r.getGatewayVMSS(ctx, lbConfig)
-	if err != nil {
-		log.Error(err, "failed to get vmss")
+	// get gateway resource (either VMSS or VM)
+	// Check if this is a VM-based gateway
+	if err != nil && strings.Contains(err.Error(), "gateway VM configuration found") {
+		log.Info("VM-based gateway detected, getting VM for LB configuration")
+		
+		var vm *compute.VirtualMachine
+		var vmErr error
+		
+		if lbConfig.Spec.GatewayPoolProfile.Type == "vm" {
+			// Use the generic pool profile for VM
+			vm, vmErr = r.GetVM(ctx, lbConfig.Spec.GatewayPoolProfile.ResourceGroup, lbConfig.Spec.GatewayPoolProfile.Name)
+		} else if lbConfig.Spec.VmResourceGroup != "" && lbConfig.Spec.VmName != "" {
+			// Legacy VM profile
+			vm, vmErr = r.GetVM(ctx, lbConfig.Spec.VmResourceGroup, lbConfig.Spec.VmName)
+		} else {
+			vmErr = fmt.Errorf("VM-based gateway detected but no VM details provided")
+		}
+		
+		if vmErr != nil {
+			log.Error(vmErr, "failed to get VM")
+			return "", 0, vmErr
+		}
+		
+		// Get LB property names for VM
+		names, vmErr := getLBPropertyNameForVM(lbConfig, vm)
+		if vmErr != nil {
+			log.Error(vmErr, "failed to get LB property names for VM")
+			return "", 0, vmErr
+		}
+		
+		// Continue with VM-based names
+		frontendID = r.GetLBFrontendIPConfigurationID(names.frontendName)
+		backendID = r.GetLBBackendAddressPoolID(names.backendName)
+	} else if err != nil {
+		log.Error(err, "failed to get resource")
 		return "", 0, err
-	}
-
+	} else {
+	// VMSS-based gateway
 	// get lbPropertyNames
 	names, err := getLBPropertyName(lbConfig, vmss)
 	if err != nil {
 		log.Error(err, "failed to get LB property names")
 		return "", 0, err
+		}
+		
+		frontendID = r.GetLBFrontendIPConfigurationID(names.frontendName)
+		backendID = r.GetLBBackendAddressPoolID(names.backendName)
 	}
 
 	if lb.Properties == nil {
