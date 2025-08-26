@@ -227,16 +227,46 @@ func (r *GatewayLBConfigurationReconciler) ensureDeleted(
 	return ctrl.Result{}, nil
 }
 
+// getLBPropertyName generates property names for LB resources based on either VMSS or VM
 func getLBPropertyName(
 	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
 	vmss *compute.VirtualMachineScaleSet,
 ) (*lbPropertyNames, error) {
+	// If we're using GatewayPoolProfile with type "vm", we'll get a specific error
+	// This will be caught and handled by the caller
+	if vmss == nil {
+		return nil, fmt.Errorf("gateway resource is nil")
+	}
+
 	if vmss.Properties == nil || vmss.Properties.UniqueID == nil {
 		return nil, fmt.Errorf("gateway vmss does not have UID")
 	}
 	names := &lbPropertyNames{
 		frontendName: *vmss.Properties.UniqueID,
 		backendName:  *vmss.Properties.UniqueID,
+		lbRuleName:   string(lbConfig.GetUID()),
+		probeName:    string(lbConfig.GetUID()),
+	}
+	return names, nil
+}
+
+
+// getLBPropertyNameForVM generates property names for LB resources based on VM
+func getLBPropertyNameForVM(
+	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
+	vm *compute.VirtualMachine,
+) (*lbPropertyNames, error) {
+	if vm == nil {
+		return nil, fmt.Errorf("gateway vm is nil")
+	}
+
+	if vm.Properties == nil || vm.Properties.VMID == nil {
+		return nil, fmt.Errorf("gateway vm does not have ID")
+	}
+	
+	names := &lbPropertyNames{
+		frontendName: *vm.Properties.VMID,
+		backendName:  *vm.Properties.VMID,
 		lbRuleName:   string(lbConfig.GetUID()),
 		probeName:    string(lbConfig.GetUID()),
 	}
@@ -272,12 +302,53 @@ func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
 				}
 			}
 		}
-	} else {
+		
+		// Check if it's a VM-based gateway nodepool
+		if r.VmClient != nil {
+			log.Info("No matching VMSS found, checking for VM-based gateway nodepool")
+			vmList, err := r.ListVMs(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to list VMs: %v", err)
+			}
+			
+			for i := range vmList {
+				vm := vmList[i]
+				if v, ok := vm.Tags[consts.AKSNodepoolTagKey]; ok {
+					if strings.EqualFold(to.Val(v), lbConfig.Spec.GatewayNodepoolName) {
+						// VM-based gateway found, return a custom error to signal VM-based gateway detection
+						log.Info("Found VM-based gateway", "vmName", *vm.Name)
+						return nil, fmt.Errorf("gateway VM configuration found - use gateway VM configuration")
+					}
+				}
+			}
+			
+			log.Info("No matching VMs found for nodepool", "nodepoolName", lbConfig.Spec.GatewayNodepoolName)
+		} else {
+			log.Info("VM client not available, cannot check for VM-based gateway nodepool")
+		}
+
+	} else if lbConfig.Spec.GatewayPoolProfile.Type == "vmss" {
+		// Use the generic pool profile for VMSS
+		vmss, err := r.GetVMSS(ctx, lbConfig.Spec.GatewayPoolProfile.ResourceGroup, lbConfig.Spec.GatewayPoolProfile.Name)
+		if err != nil {
+			return nil, err
+		}
+		return vmss, nil
+	} else if lbConfig.Spec.GatewayPoolProfile.Type == "vm" {
+		// VM-based gateway using the generic pool profile
+		// Return an error that indicates we need to use VM configuration
+		return nil, fmt.Errorf("gateway VM configuration found - use gateway VM configuration")
+	} else if lbConfig.Spec.VmssResourceGroup != "" && lbConfig.Spec.VmssName != "" {
+		// Legacy VMSS profile
 		vmss, err := r.GetVMSS(ctx, lbConfig.Spec.VmssResourceGroup, lbConfig.Spec.VmssName)
 		if err != nil {
 			return nil, err
 		}
 		return vmss, nil
+	} else if lbConfig.Spec.VmResourceGroup != "" && lbConfig.Spec.VmName != "" {
+		// Legacy VM profile
+		// Return an error that indicates we need to use VM configuration
+		return nil, fmt.Errorf("gateway VM configuration found - use gateway VM configuration")
 	}
 	return nil, fmt.Errorf("gateway VMSS not found")
 }
@@ -317,27 +388,68 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 		}
 	}
 
-	// get gateway VMSS
-	// we need this because each gateway vmss needs one frontendConfig and one backendpool
-	vmss, err := r.getGatewayVMSS(ctx, lbConfig)
-	if err != nil {
-		log.Error(err, "failed to get vmss")
+	// Variables for LB property names
+	var frontendName, backendName, lbRuleName, probeName string
+	// get gateway resource (either VMSS or VM)
+	// Check if this is a VM-based gateway
+	if err != nil && strings.Contains(err.Error(), "gateway VM configuration found") {
+		log.Info("VM-based gateway detected, getting VM for LB configuration")
+		
+		var vm *compute.VirtualMachine
+		var vmErr error
+		
+		if lbConfig.Spec.GatewayPoolProfile.Type == "vm" {
+			// Use the generic pool profile for VM
+			vm, vmErr = r.GetVM(ctx, lbConfig.Spec.GatewayPoolProfile.ResourceGroup, lbConfig.Spec.GatewayPoolProfile.Name)
+		} else if lbConfig.Spec.VmResourceGroup != "" && lbConfig.Spec.VmName != "" {
+			// Legacy VM profile
+			vm, vmErr = r.GetVM(ctx, lbConfig.Spec.VmResourceGroup, lbConfig.Spec.VmName)
+		} else {
+			vmErr = fmt.Errorf("VM-based gateway detected but no VM details provided")
+		}
+		
+		if vmErr != nil {
+			log.Error(vmErr, "failed to get VM")
+			return "", 0, vmErr
+		}
+		
+		// Get LB property names for VM
+		names, vmErr := getLBPropertyNameForVM(lbConfig, vm)
+		if vmErr != nil {
+			log.Error(vmErr, "failed to get LB property names for VM")
+			return "", 0, vmErr
+		}
+		
+		frontendName = names.frontendName
+		backendName = names.backendName
+		lbRuleName = names.lbRuleName
+		probeName = names.probeName
+	} else if err != nil {
+		log.Error(err, "failed to get resource")
 		return "", 0, err
-	}
-
+	} else {
+	// VMSS-based gateway
 	// get lbPropertyNames
 	names, err := getLBPropertyName(lbConfig, vmss)
 	if err != nil {
 		log.Error(err, "failed to get LB property names")
 		return "", 0, err
+		}
+		
+		frontendName = names.frontendName
+		backendName = names.backendName
+		lbRuleName = names.lbRuleName
+		probeName = names.probeName
 	}
+	
+	frontendID := r.GetLBFrontendIPConfigurationID(frontendName)
+	backendID := r.GetLBBackendAddressPoolID(backendName)
 
 	if lb.Properties == nil {
 		return "", 0, fmt.Errorf("lb property is empty")
 	}
 
-	frontendID := r.GetLBFrontendIPConfigurationID(names.frontendName)
-	frontendIP, err = findFrontendIP(lb, names.frontendName)
+	frontendIP, err = findFrontendIP(lb, frontendName)
 	if err != nil {
 		return "", 0, err
 	}
@@ -349,7 +461,7 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 				return "", 0, err
 			}
 			lb.Properties.FrontendIPConfigurations =
-				append(lb.Properties.FrontendIPConfigurations, getExpectedFrontendConfig(to.Ptr(names.frontendName), subnet.ID))
+				append(lb.Properties.FrontendIPConfigurations, getExpectedFrontendConfig(to.Ptr(frontendName), subnet.ID))
 			updateLB = true
 		}
 	} else {
@@ -359,9 +471,9 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 	backendID := r.GetLBBackendAddressPoolID(names.backendName)
 	foundBackend := false
 	for _, backendPool := range lb.Properties.BackendAddressPools {
-		if strings.EqualFold(*backendPool.Name, names.backendName) &&
+		if strings.EqualFold(*backendPool.Name, backendName) &&
 			strings.EqualFold(*backendPool.ID, *backendID) {
-			log.Info("Found LB backendAddressPool", "backendName", names.backendName)
+			log.Info("Found LB backendAddressPool", "backendName", backendName)
 			foundBackend = true
 			break
 		}
@@ -369,14 +481,14 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 	if !foundBackend {
 		if needLB {
 			lb.Properties.BackendAddressPools =
-				append(lb.Properties.BackendAddressPools, getExpectedBackendPool(to.Ptr(names.backendName)))
+				append(lb.Properties.BackendAddressPools, getExpectedBackendPool(to.Ptr(backendName)))
 			updateLB = true
 		}
 	}
 
-	probeID := r.GetLBProbeID(names.probeName)
-	expectedLBRule := getExpectedLBRule(&names.lbRuleName, frontendID, backendID, probeID)
-	expectedProbe := getExpectedLBProbe(&names.probeName, r.LBProbePort, lbConfig)
+	probeID := r.GetLBProbeID(probeName)
+	expectedLBRule := getExpectedLBRule(&lbRuleName, frontendID, backendID, probeID)
+	expectedProbe := getExpectedLBProbe(&probeName, r.LBProbePort, lbConfig)
 
 	lbRules := lb.Properties.LoadBalancingRules
 	if needLB {
@@ -687,6 +799,8 @@ func (r *GatewayLBConfigurationReconciler) reconcileGatewayVMConfig(
 	if _, err := controllerutil.CreateOrPatch(ctx, r, vmConfig, func() error {
 		vmConfig.Spec.GatewayNodepoolName = lbConfig.Spec.GatewayNodepoolName
 		vmConfig.Spec.GatewayVmssProfile = lbConfig.Spec.GatewayVmssProfile
+		vmConfig.Spec.GatewayVmProfile = lbConfig.Spec.GatewayVmProfile
+		vmConfig.Spec.GatewayPoolProfile = lbConfig.Spec.GatewayPoolProfile
 		vmConfig.Spec.ProvisionPublicIps = lbConfig.Spec.ProvisionPublicIps
 		vmConfig.Spec.PublicIpPrefixId = lbConfig.Spec.PublicIpPrefixId
 		return controllerutil.SetControllerReference(lbConfig, vmConfig, r.Client.Scheme())

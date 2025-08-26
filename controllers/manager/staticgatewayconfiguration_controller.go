@@ -253,21 +253,42 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 }
 
 func validate(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) error {
-	// need to validate either GatewayNodepoolName or GatewayVmssProfile is provided, but not both
+	// need to validate that one of GatewayNodepoolName, GatewayVmssProfile, or GatewayVmProfile is provided, but not multiple
 	var allErrs field.ErrorList
-
-	if gwConfig.Spec.GatewayNodepoolName == "" && vmssProfileIsEmpty(gwConfig) {
-		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewaynodepoolname"),
-			fmt.Sprintf("GatewayNodepoolName: %s, GatewayVmssProfile: %#v", gwConfig.Spec.GatewayNodepoolName, gwConfig.Spec.GatewayVmssProfile),
-			"Either GatewayNodepoolName or GatewayVmssProfile must be provided"))
+	
+	// Check if VM profile is empty
+	vmProfileEmpty := vmProfileIsEmpty(gwConfig)
+	
+	// Check if any of the gateway specifications are provided
+	gatewayPoolEmpty := gatewayPoolProfileIsEmpty(gwConfig)
+	if gwConfig.Spec.GatewayNodepoolName == "" && vmssProfileIsEmpty(gwConfig) && vmProfileEmpty && gatewayPoolEmpty {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec"),
+			fmt.Sprintf("GatewayNodepoolName: %s, GatewayVmssProfile: %#v, GatewayVmProfile: %#v, GatewayPoolProfile: %#v", 
+			gwConfig.Spec.GatewayNodepoolName, gwConfig.Spec.GatewayVmssProfile, gwConfig.Spec.GatewayVmProfile, gwConfig.Spec.GatewayPoolProfile),
+			"One of GatewayNodepoolName, GatewayPoolProfile, GatewayVmssProfile, or GatewayVmProfile must be provided"))
 	}
 
-	if gwConfig.Spec.GatewayNodepoolName != "" && !vmssProfileIsEmpty(gwConfig) {
-		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewaynodepoolname"),
-			fmt.Sprintf("GatewayNodepoolName: %s, GatewayVmssProfile: %#v", gwConfig.Spec.GatewayNodepoolName, gwConfig.Spec.GatewayVmssProfile),
-			"Only one of GatewayNodepoolName and GatewayVmssProfile should be provided"))
+	// Count how many gateway specifications are provided
+	specCount := 0
+	if gwConfig.Spec.GatewayNodepoolName != "" {
+		specCount++
+	}
+	if !vmssProfileIsEmpty(gwConfig) {
+		specCount++
+	}
+	if !vmProfileEmpty {
+		specCount++
+	}
+	
+	// Only one gateway specification should be provided
+	if specCount > 1 {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec"),
+			fmt.Sprintf("GatewayNodepoolName: %s, GatewayVmssProfile: %#v, GatewayVmProfile: %#v", 
+			gwConfig.Spec.GatewayNodepoolName, gwConfig.Spec.GatewayVmssProfile, gwConfig.Spec.GatewayVmProfile),
+			"Only one of GatewayNodepoolName, GatewayVmssProfile, or GatewayVmProfile should be provided"))
 	}
 
+	// Validate VMSS profile if provided
 	if !vmssProfileIsEmpty(gwConfig) {
 		if gwConfig.Spec.GatewayVmssProfile.VmssResourceGroup == "" {
 			allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewayvmssprofile").Child("vmssresourcegroup"),
@@ -283,6 +304,53 @@ func validate(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) error 
 			allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewayvmssprofile").Child("publicipprefixsize"),
 				gwConfig.Spec.GatewayVmssProfile.PublicIpPrefixSize,
 				"Gateway vmss public ip prefix size should be between 0 and 31 inclusively"))
+		}
+	}
+	
+	// Validate VM profile if provided
+	if !vmProfileIsEmpty(gwConfig) {
+		if gwConfig.Spec.GatewayVmProfile.VmResourceGroup == "" {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewayVmProfile").Child("vmResourceGroup"),
+				gwConfig.Spec.GatewayVmProfile.VmResourceGroup,
+				"Gateway vm resource group is empty"))
+		}
+		if gwConfig.Spec.GatewayVmProfile.VmName == "" {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewayVmProfile").Child("vmName"),
+				gwConfig.Spec.GatewayVmProfile.VmName,
+				"Gateway vm name is empty"))
+		}
+		if gwConfig.Spec.GatewayVmProfile.PublicIpPrefixSize < 0 || gwConfig.Spec.GatewayVmProfile.PublicIpPrefixSize > 31 {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewayVmProfile").Child("publicIpPrefixSize"),
+				gwConfig.Spec.GatewayVmProfile.PublicIpPrefixSize,
+				"Gateway vm public ip prefix size should be between 0 and 31 inclusively"))
+		}
+	}
+
+	// Validate GatewayPoolProfile if provided
+	if !gatewayPoolProfileIsEmpty(gwConfig) {
+		if gwConfig.Spec.GatewayPoolProfile.Type == "" {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewayPoolProfile").Child("type"),
+				gwConfig.Spec.GatewayPoolProfile.Type,
+				"Gateway pool type is empty (must be 'vm' or 'vmss')"))
+		} else if gwConfig.Spec.GatewayPoolProfile.Type != "vm" && gwConfig.Spec.GatewayPoolProfile.Type != "vmss" {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewayPoolProfile").Child("type"),
+				gwConfig.Spec.GatewayPoolProfile.Type,
+				"Gateway pool type must be 'vm' or 'vmss'"))
+		}
+		if gwConfig.Spec.GatewayPoolProfile.ResourceGroup == "" {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewayPoolProfile").Child("resourceGroup"),
+				gwConfig.Spec.GatewayPoolProfile.ResourceGroup,
+				"Gateway pool resource group is empty"))
+		}
+		if gwConfig.Spec.GatewayPoolProfile.Name == "" {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewayPoolProfile").Child("name"),
+				gwConfig.Spec.GatewayPoolProfile.Name,
+				"Gateway pool name is empty"))
+		}
+		if gwConfig.Spec.GatewayPoolProfile.PublicIpPrefixSize < 0 || gwConfig.Spec.GatewayPoolProfile.PublicIpPrefixSize > 31 {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("gatewayPoolProfile").Child("publicIpPrefixSize"),
+				gwConfig.Spec.GatewayPoolProfile.PublicIpPrefixSize,
+				"Gateway pool public ip prefix size should be between 0 and 31 inclusively"))
 		}
 	}
 
@@ -304,6 +372,20 @@ func vmssProfileIsEmpty(gwConfig *egressgatewayv1alpha1.StaticGatewayConfigurati
 	return gwConfig.Spec.GatewayVmssProfile.VmssResourceGroup == "" &&
 		gwConfig.Spec.GatewayVmssProfile.VmssName == "" &&
 		gwConfig.Spec.GatewayVmssProfile.PublicIpPrefixSize == 0
+}
+
+func vmProfileIsEmpty(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) bool {
+	return gwConfig.Spec.GatewayVmProfile.VmResourceGroup == "" &&
+		gwConfig.Spec.GatewayVmProfile.VmName == "" &&
+		gwConfig.Spec.GatewayVmProfile.PublicIpPrefixSize == 0
+}
+
+
+func gatewayPoolProfileIsEmpty(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) bool {
+	return gwConfig.Spec.GatewayPoolProfile.Type == "" &&
+		gwConfig.Spec.GatewayPoolProfile.Name == "" &&
+		gwConfig.Spec.GatewayPoolProfile.ResourceGroup == "" &&
+		gwConfig.Spec.GatewayPoolProfile.PublicIpPrefixSize == 0
 }
 
 func (r *StaticGatewayConfigurationReconciler) reconcileWireguardKey(

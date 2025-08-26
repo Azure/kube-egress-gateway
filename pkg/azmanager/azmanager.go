@@ -24,6 +24,8 @@ import (
 
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
+	kubeazclient "github.com/Azure/kube-egress-gateway/pkg/azmanager/azclient"
+	"github.com/Azure/kube-egress-gateway/pkg/azmanager/vmclient"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 )
 
@@ -106,6 +108,7 @@ type AzureManager struct {
 	PublicIPPrefixClient publicipprefixclient.Interface
 	InterfaceClient      interfaceclient.Interface
 	SubnetClient         subnetclient.Interface
+	VmClient             vmclient.Interface
 }
 
 func CreateAzureManager(cloud *config.CloudConfig, factory azclient.ClientFactory) (*AzureManager, error) {
@@ -119,6 +122,14 @@ func CreateAzureManager(cloud *config.CloudConfig, factory azclient.ClientFactor
 	az.VmssVMClient = factory.GetVirtualMachineScaleSetVMClient()
 	az.InterfaceClient = factory.GetInterfaceClient()
 	az.SubnetClient = factory.GetSubnetClient()
+	
+	// Check if the factory is our extended factory with VM client support
+	if extFactory, ok := factory.(*kubeazclient.ExtendedClientFactory); ok {
+		az.VmClient = extFactory.GetVirtualMachineClient()
+	} else {
+		// Log a warning that VM support will not be available
+		log.Log.Info("VM client not available in factory, VM-based gateway support will not be available")
+	}
 
 	return &az, nil
 }
