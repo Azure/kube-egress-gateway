@@ -14,6 +14,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -31,6 +32,10 @@ import (
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 )
 
+var (
+	namespaceAgentPool = uuid.Must(uuid.Parse("2c96e82c-842f-11f0-8ea5-6bee14278ecd"))
+)
+
 // GatewayLBConfigurationReconciler reconciles a GatewayLBConfiguration object
 type GatewayLBConfigurationReconciler struct {
 	client.Client
@@ -46,12 +51,12 @@ type lbPropertyNames struct {
 	probeName    string
 }
 
-//+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations/finalizers,verbs=update
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations/finalizers,verbs=update
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get;update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -227,16 +232,20 @@ func (r *GatewayLBConfigurationReconciler) ensureDeleted(
 	return ctrl.Result{}, nil
 }
 
+type AgentPool interface {
+	GetUniqueID() string
+}
+
 func getLBPropertyName(
 	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
-	vmss *compute.VirtualMachineScaleSet,
+	ap AgentPool,
 ) (*lbPropertyNames, error) {
-	if vmss.Properties == nil || vmss.Properties.UniqueID == nil {
-		return nil, fmt.Errorf("gateway vmss does not have UID")
+	if ap.GetUniqueID() == "" {
+		return nil, fmt.Errorf("gateway node pool does not have UID")
 	}
 	names := &lbPropertyNames{
-		frontendName: *vmss.Properties.UniqueID,
-		backendName:  *vmss.Properties.UniqueID,
+		frontendName: ap.GetUniqueID(),
+		backendName:  ap.GetUniqueID(),
 		lbRuleName:   string(lbConfig.GetUID()),
 		probeName:    string(lbConfig.GetUID()),
 	}
@@ -258,7 +267,7 @@ func (r *GatewayLBConfigurationReconciler) getGatewayLB(ctx context.Context) (*n
 func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
 	ctx context.Context,
 	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
-) (*compute.VirtualMachineScaleSet, error) {
+) (AgentPool, error) {
 	if lbConfig.Spec.GatewayNodepoolName != "" {
 		vmssList, err := r.ListVMSS(ctx)
 		if err != nil {
@@ -268,7 +277,23 @@ func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
 			vmss := vmssList[i]
 			if v, ok := vmss.Tags[consts.AKSNodepoolTagKey]; ok {
 				if strings.EqualFold(to.Val(v), lbConfig.Spec.GatewayNodepoolName) {
-					return vmss, nil
+					return &agentPoolVmss{vmss: vmss}, nil
+				}
+			}
+		}
+
+		vmsList, err := r.ListVMs(ctx) // this will be expensive, can we page here?
+		if err != nil {
+			return nil, err
+		}
+		for i := range vmsList {
+			vm := vmsList[i]
+			if v, ok := vm.Tags[consts.AKSNodepoolTagKey]; ok {
+				if strings.EqualFold(to.Val(v), lbConfig.Spec.GatewayNodepoolName) {
+					return &agentPoolVMs{
+						agentPoolName: lbConfig.Spec.GatewayNodepoolName,
+						vms:           []*compute.VirtualMachine{vm}, // just a placeholder for now
+					}, nil
 				}
 			}
 		}
@@ -277,9 +302,29 @@ func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
 		if err != nil {
 			return nil, err
 		}
-		return vmss, nil
+		return &agentPoolVmss{vmss: vmss}, nil
 	}
 	return nil, fmt.Errorf("gateway VMSS not found")
+}
+
+type agentPoolVMs struct {
+	agentPoolName string
+	vms           []*compute.VirtualMachine
+}
+
+func (a *agentPoolVMs) GetUniqueID() string {
+	return uuid.NewMD5(namespaceAgentPool, []byte(a.agentPoolName)).String()
+}
+
+type agentPoolVmss struct {
+	vmss *compute.VirtualMachineScaleSet
+}
+
+func (r *agentPoolVmss) GetUniqueID() string {
+	if r.vmss == nil || r.vmss.Properties == nil || r.vmss.Properties.UniqueID == nil {
+		return ""
+	}
+	return *r.vmss.Properties.UniqueID
 }
 
 func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
@@ -319,14 +364,14 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 
 	// get gateway VMSS
 	// we need this because each gateway vmss needs one frontendConfig and one backendpool
-	vmss, err := r.getGatewayVMSS(ctx, lbConfig)
+	agentPool, err := r.getGatewayVMSS(ctx, lbConfig)
 	if err != nil {
 		log.Error(err, "failed to get vmss")
 		return "", 0, err
 	}
 
 	// get lbPropertyNames
-	names, err := getLBPropertyName(lbConfig, vmss)
+	names, err := getLBPropertyName(lbConfig, agentPool)
 	if err != nil {
 		log.Error(err, "failed to get LB property names")
 		return "", 0, err
