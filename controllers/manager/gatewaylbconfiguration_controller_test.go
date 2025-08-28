@@ -150,7 +150,12 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			})
 
 			It("should return expected vmss in list", func() {
-				vmss := &compute.VirtualMachineScaleSet{Tags: map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")}}
+				vmss := &compute.VirtualMachineScaleSet{
+					Tags: map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")},
+					Properties: &compute.VirtualMachineScaleSetProperties{
+						UniqueID: to.Ptr("1234"),
+					},
+				}
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{
 					{ID: to.Ptr("dummy")},
@@ -158,7 +163,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				}, nil)
 				foundVMSS, err := r.getGatewayVMSS(context.Background(), lbConfig)
 				Expect(err).To(BeNil())
-				Expect(to.Val(foundVMSS)).To(Equal(to.Val(vmss)))
+				Expect(foundVMSS.GetUniqueID()).To(Equal(*vmss.Properties.UniqueID))
 			})
 
 			It("should return error when getting vmss fails", func() {
@@ -172,12 +177,17 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 
 			It("should return expected vmss from get", func() {
 				lbConfig.Spec.GatewayNodepoolName = ""
-				vmss := &compute.VirtualMachineScaleSet{ID: to.Ptr("test")}
+				vmss := &compute.VirtualMachineScaleSet{
+					ID: to.Ptr("test"),
+					Properties: &compute.VirtualMachineScaleSetProperties{
+						UniqueID: to.Ptr("1234"),
+					},
+				}
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().Get(gomock.Any(), "vmssRG", "vmss", gomock.Any()).Return(vmss, nil)
 				foundVMSS, err := r.getGatewayVMSS(context.Background(), lbConfig)
 				Expect(err).To(BeNil())
-				Expect(to.Val(foundVMSS)).To(Equal(to.Val(vmss)))
+				Expect(foundVMSS.GetUniqueID()).To(Equal(*vmss.Properties.UniqueID))
 			})
 		})
 

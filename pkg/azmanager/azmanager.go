@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient"
 	_ "sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -103,6 +104,7 @@ type AzureManager struct {
 	LoadBalancerClient   loadbalancerclient.Interface
 	VmssClient           virtualmachinescalesetclient.Interface
 	VmssVMClient         virtualmachinescalesetvmclient.Interface
+	VMClient             virtualmachineclient.Interface
 	PublicIPPrefixClient publicipprefixclient.Interface
 	InterfaceClient      interfaceclient.Interface
 	SubnetClient         subnetclient.Interface
@@ -119,6 +121,7 @@ func CreateAzureManager(cloud *config.CloudConfig, factory azclient.ClientFactor
 	az.VmssVMClient = factory.GetVirtualMachineScaleSetVMClient()
 	az.InterfaceClient = factory.GetInterfaceClient()
 	az.SubnetClient = factory.GetSubnetClient()
+	az.VMClient = factory.GetVirtualMachineClient()
 
 	return &az, nil
 }
@@ -226,6 +229,43 @@ func (az *AzureManager) GetVMSS(ctx context.Context, resourceGroup, vmssName str
 		return nil, err
 	}
 	return vmss, nil
+}
+
+func (az *AzureManager) ListVMs(ctx context.Context) ([]*compute.VirtualMachine, error) {
+	logger := log.FromContext(ctx).WithValues("operation", "ListVMs", "resourceGroup", az.LoadBalancerResourceGroup)
+	ctx = log.IntoContext(ctx, logger)
+	var vmsList []*compute.VirtualMachine
+	err := wrapRetry(ctx, "ListVMs", func(ctx context.Context) error {
+		var err error
+		vmsList, err = az.VMClient.List(ctx, az.ResourceGroup)
+		return err
+	}, isRateLimitError)
+	if err != nil {
+		return nil, err
+	}
+	return vmsList, nil
+}
+
+func (az *AzureManager) GetVM(ctx context.Context, resourceGroup, vmName string) (*compute.VirtualMachine, error) {
+	if resourceGroup == "" {
+		resourceGroup = az.ResourceGroup
+	}
+	if vmName == "" {
+		return nil, fmt.Errorf("vm name is empty")
+	}
+	logger := log.FromContext(ctx).WithValues("operation", "GetVM", "resourceGroup", resourceGroup, "resourceName", vmName)
+	ctx = log.IntoContext(ctx, logger)
+
+	var vm *compute.VirtualMachine
+	err := wrapRetry(ctx, "GetVM", func(ctx context.Context) error {
+		var err error
+		vm, err = az.VMClient.Get(ctx, resourceGroup, vmName, nil)
+		return err
+	}, isRateLimitError, retrySettings{OverallTimeout: to.Ptr(5 * time.Minute)})
+	if err != nil {
+		return nil, err
+	}
+	return vm, nil
 }
 
 func (az *AzureManager) CreateOrUpdateVMSS(ctx context.Context, resourceGroup, vmssName string, vmss compute.VirtualMachineScaleSet) (*compute.VirtualMachineScaleSet, error) {
