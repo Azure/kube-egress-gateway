@@ -26,6 +26,7 @@ import (
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
+	"github.com/Azure/kube-egress-gateway/pkg/compat"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/metrics"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
@@ -34,6 +35,7 @@ import (
 // GatewayLBConfigurationReconciler reconciles a GatewayLBConfiguration object
 type GatewayLBConfigurationReconciler struct {
 	client.Client
+	CompatClient *compat.CompatClient // Added for Go 1.25.0 compatibility
 	*azmanager.AzureManager
 	Recorder    record.EventRecorder
 	LBProbePort int
@@ -67,7 +69,7 @@ func (r *GatewayLBConfigurationReconciler) Reconcile(ctx context.Context, req ct
 
 	// Fetch the GatewayLBConfiguration instance.
 	lbConfig := &egressgatewayv1alpha1.GatewayLBConfiguration{}
-	if err := r.Get(ctx, req.NamespacedName, lbConfig); err != nil {
+	if err := r.CompatClient.Get(ctx, req.NamespacedName, lbConfig); err != nil {
 		if apierrors.IsNotFound(err) {
 			// Object not found, return.
 			return ctrl.Result{}, nil
@@ -77,7 +79,7 @@ func (r *GatewayLBConfigurationReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	gwConfig := &egressgatewayv1alpha1.StaticGatewayConfiguration{}
-	if err := r.Get(ctx, req.NamespacedName, gwConfig); err != nil {
+	if err := r.CompatClient.Get(ctx, req.NamespacedName, gwConfig); err != nil {
 		log.Error(err, "unable to fetch StaticGatewayConfiguration instance")
 		return ctrl.Result{}, err
 	}
@@ -102,6 +104,9 @@ func (r *GatewayLBConfigurationReconciler) Reconcile(ctx context.Context, req ct
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *GatewayLBConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Initialize the compatibility client for Go 1.25.0
+	r.CompatClient = compat.NewCompatClient(mgr.GetClient())
+	
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&egressgatewayv1alpha1.GatewayLBConfiguration{}).
 		Owns(&egressgatewayv1alpha1.GatewayVMConfiguration{}).
@@ -128,7 +133,7 @@ func (r *GatewayLBConfigurationReconciler) reconcile(
 	if !controllerutil.ContainsFinalizer(lbConfig, consts.LBConfigFinalizerName) {
 		log.Info("Adding finalizer")
 		controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
-		err := r.Update(ctx, lbConfig)
+		err := r.CompatClient.Update(ctx, lbConfig)
 		if err != nil {
 			log.Error(err, "failed to add finalizer")
 			return ctrl.Result{}, err
@@ -159,7 +164,7 @@ func (r *GatewayLBConfigurationReconciler) reconcile(
 
 	if !equality.Semantic.DeepEqual(existing, lbConfig) {
 		log.Info(fmt.Sprintf("Updating GatewayLBConfiguration %s/%s", lbConfig.Namespace, lbConfig.Name))
-		if err := r.Status().Update(ctx, lbConfig); err != nil {
+		if err := r.CompatClient.Status().Update(ctx, lbConfig); err != nil {
 			log.Error(err, "failed to update gateway LB configuration")
 		}
 	}
@@ -198,7 +203,7 @@ func (r *GatewayLBConfigurationReconciler) ensureDeleted(
 			Namespace: lbConfig.Namespace,
 		},
 	}
-	if err := r.Delete(ctx, vmConfig); err == nil {
+	if err := r.CompatClient.Delete(ctx, vmConfig); err == nil {
 		// deleting vmConfig, skip reconciling lb
 		log.Info("Waiting gateway vmss to be cleaned first")
 		succeeded = true
@@ -217,7 +222,7 @@ func (r *GatewayLBConfigurationReconciler) ensureDeleted(
 
 	log.Info("Removing finalizer")
 	controllerutil.RemoveFinalizer(lbConfig, consts.LBConfigFinalizerName)
-	if err := r.Update(ctx, lbConfig); err != nil {
+	if err := r.CompatClient.Update(ctx, lbConfig); err != nil {
 		log.Error(err, "failed to remove finalizer")
 		return ctrl.Result{}, err
 	}

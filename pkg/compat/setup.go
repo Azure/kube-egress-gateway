@@ -17,12 +17,12 @@ func SetupControllerWithManager(
 	mgr manager.Manager,
 	setupFunc func(client.Client, *runtime.Scheme, record.EventRecorder, logr.Logger) error) error {
 
-	compatClient := NewCompatClient(mgr.GetClient())
+	// Use the manager's client directly since our CompatClient might not fully implement client.Client
 	scheme := mgr.GetScheme()
 	recorder := mgr.GetEventRecorderFor("compat-controller")
 	logger := ctrl.Log.WithName("compat")
 
-	return setupFunc(compatClient, scheme, recorder, logger)
+	return setupFunc(mgr.GetClient(), scheme, recorder, logger)
 }
 
 // WrapReconcilerClient wraps an existing reconciler's client field with our compatibility layer

@@ -32,6 +32,7 @@ import (
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
+	"github.com/Azure/kube-egress-gateway/pkg/compat"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/metrics"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
@@ -40,6 +41,7 @@ import (
 // GatewayVMConfigurationReconciler reconciles a GatewayVMConfiguration object
 type GatewayVMConfigurationReconciler struct {
 	client.Client
+	CompatClient   *compat.CompatClient // Added for Go 1.25.0 compatibility
 	*azmanager.AzureManager
 	Recorder record.EventRecorder
 }
@@ -70,7 +72,7 @@ func (r *GatewayVMConfigurationReconciler) Reconcile(ctx context.Context, req ct
 	if req.Namespace == "" && req.Name != "" {
 		log.Info(fmt.Sprintf("Reconciling node event %s", req.Name))
 		node := &corev1.Node{}
-		if err := r.Get(ctx, req.NamespacedName, node); err != nil {
+		if err := r.CompatClient.Get(ctx, req.NamespacedName, node); err != nil {
 			if apierrors.IsNotFound(err) {
 				return ctrl.Result{}, nil
 			}
@@ -79,7 +81,7 @@ func (r *GatewayVMConfigurationReconciler) Reconcile(ctx context.Context, req ct
 		}
 
 		vmConfigList := &egressgatewayv1alpha1.GatewayVMConfigurationList{}
-		if err := r.List(ctx, vmConfigList); err != nil {
+		if err := r.CompatClient.List(ctx, vmConfigList); err != nil {
 			log.Error(err, "failed to list GatewayVMConfiguration")
 			return ctrl.Result{}, err
 		}
@@ -108,7 +110,7 @@ func (r *GatewayVMConfigurationReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{}
-	if err := r.Get(ctx, req.NamespacedName, vmConfig); err != nil {
+	if err := r.CompatClient.Get(ctx, req.NamespacedName, vmConfig); err != nil {
 		if apierrors.IsNotFound(err) {
 			// Object not found, return.
 			return ctrl.Result{}, nil
@@ -118,7 +120,7 @@ func (r *GatewayVMConfigurationReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	gwConfig := &egressgatewayv1alpha1.StaticGatewayConfiguration{}
-	if err := r.Get(ctx, req.NamespacedName, gwConfig); err != nil {
+	if err := r.CompatClient.Get(ctx, req.NamespacedName, gwConfig); err != nil {
 		log.Error(err, "failed to fetch StaticGatewayConfiguration instance")
 		return ctrl.Result{}, err
 	}
@@ -143,6 +145,9 @@ func (r *GatewayVMConfigurationReconciler) Reconcile(ctx context.Context, req ct
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *GatewayVMConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Initialize the compatibility client for Go 1.25.0
+	r.CompatClient = compat.NewCompatClient(mgr.GetClient())
+	
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&egressgatewayv1alpha1.GatewayVMConfiguration{}).
 		// allow for node events to trigger reconciliation when either node label matches
@@ -216,7 +221,7 @@ func (r *GatewayVMConfigurationReconciler) reconcile(
 	if !controllerutil.ContainsFinalizer(vmConfig, consts.VMConfigFinalizerName) {
 		log.Info("Adding finalizer")
 		controllerutil.AddFinalizer(vmConfig, consts.VMConfigFinalizerName)
-		err := r.Update(ctx, vmConfig)
+		err := r.CompatClient.Update(ctx, vmConfig)
 		if err != nil {
 			log.Error(err, "failed to add finalizer")
 			return ctrl.Result{}, err
@@ -262,7 +267,7 @@ func (r *GatewayVMConfigurationReconciler) reconcile(
 
 	if !equality.Semantic.DeepEqual(existing, vmConfig) {
 		log.Info(fmt.Sprintf("Updating GatewayVMConfiguration %s/%s", vmConfig.Namespace, vmConfig.Name))
-		if err := r.Status().Update(ctx, vmConfig); err != nil {
+		if err := r.CompatClient.Status().Update(ctx, vmConfig); err != nil {
 			log.Error(err, "failed to update gateway vm configuration")
 		}
 	}
@@ -312,7 +317,7 @@ func (r *GatewayVMConfigurationReconciler) ensureDeleted(
 
 	log.Info("Removing finalizer")
 	controllerutil.RemoveFinalizer(vmConfig, consts.VMConfigFinalizerName)
-	if err := r.Update(ctx, vmConfig); err != nil {
+	if err := r.CompatClient.Update(ctx, vmConfig); err != nil {
 		log.Error(err, "failed to remove finalizer")
 		return ctrl.Result{}, err
 	}
@@ -532,7 +537,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSS(
 		vmConfig.Status.GatewayVMProfiles = vmprofiles
 	}
 
-	err = r.Status().Update(ctx, vmConfig)
+	err = r.CompatClient.Status().Update(ctx, vmConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update vm config status: %w", err)
 	}

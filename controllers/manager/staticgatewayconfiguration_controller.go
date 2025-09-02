@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	"github.com/Azure/kube-egress-gateway/pkg/compat"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/metrics"
 )
@@ -36,6 +37,7 @@ var _ reconcile.Reconciler = &StaticGatewayConfigurationReconciler{}
 // StaticGatewayConfigurationReconciler reconciles gateway loadBalancer according to a StaticGatewayConfiguration object
 type StaticGatewayConfigurationReconciler struct {
 	client.Client
+	CompatClient    *compat.CompatClient // Added for Go 1.25.0 compatibility
 	SecretNamespace string
 	Recorder        record.EventRecorder
 }
@@ -55,7 +57,7 @@ func (r *StaticGatewayConfigurationReconciler) Reconcile(ctx context.Context, re
 
 	// Fetch the StaticGatewayConfiguration instance.
 	gwConfig := &egressgatewayv1alpha1.StaticGatewayConfiguration{}
-	if err := r.Get(ctx, req.NamespacedName, gwConfig); err != nil {
+	if err := r.CompatClient.Get(ctx, req.NamespacedName, gwConfig); err != nil {
 		if apierrors.IsNotFound(err) {
 			// Object not found, return.
 			return ctrl.Result{}, nil
@@ -74,6 +76,9 @@ func (r *StaticGatewayConfigurationReconciler) Reconcile(ctx context.Context, re
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *StaticGatewayConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Initialize the compatibility client for Go 1.25.0
+	r.CompatClient = compat.NewCompatClient(mgr.GetClient())
+	
 	secretPredicate := predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
 			// no need to trigger reconcile for secrets creation
@@ -147,7 +152,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 	if !controllerutil.ContainsFinalizer(gwConfig, consts.SGCFinalizerName) {
 		log.Info("Adding finalizer")
 		controllerutil.AddFinalizer(gwConfig, consts.SGCFinalizerName)
-		err := r.Update(ctx, gwConfig)
+		err := r.CompatClient.Update(ctx, gwConfig)
 		if err != nil {
 			log.Error(err, "failed to add finalizer")
 			return err
@@ -212,7 +217,7 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 			Namespace: r.SecretNamespace,
 		},
 	}
-	if err := r.Delete(ctx, secret); err != nil {
+	if err := r.CompatClient.Delete(ctx, secret); err != nil {
 		if !apierrors.IsNotFound(err) {
 			log.Error(err, "failed to delete existing gateway LB configuration")
 			return err
@@ -229,7 +234,7 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 			Namespace: gwConfig.Namespace,
 		},
 	}
-	if err := r.Delete(ctx, lbConfig); err != nil {
+	if err := r.CompatClient.Delete(ctx, lbConfig); err != nil {
 		if !apierrors.IsNotFound(err) {
 			log.Error(err, "failed to delete existing gateway LB configuration")
 			return err
@@ -241,7 +246,7 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleted(
 	if secretDeleted && lbConfigDeleted {
 		log.Info("Secret and LBConfig are deleted, removing finalizer")
 		controllerutil.RemoveFinalizer(gwConfig, consts.SGCFinalizerName)
-		if err := r.Update(ctx, gwConfig); err != nil {
+		if err := r.CompatClient.Update(ctx, gwConfig); err != nil {
 			log.Error(err, "failed to remove finalizer")
 			return err
 		}

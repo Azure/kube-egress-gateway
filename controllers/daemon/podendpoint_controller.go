@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	"github.com/Azure/kube-egress-gateway/pkg/compat"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper"
 	"github.com/Azure/kube-egress-gateway/pkg/netnswrapper"
@@ -38,6 +39,7 @@ var _ reconcile.Reconciler = &PodEndpointReconciler{}
 // PodEndpointReconciler reconciles gateway node network according to a PodEndpoint object
 type PodEndpointReconciler struct {
 	client.Client
+	CompatClient *compat.CompatClient // Added for Go 1.25.0 compatibility
 	TickerEvents chan event.GenericEvent
 	Netlink      netlinkwrapper.Interface
 	NetNS        netnswrapper.Interface
@@ -70,7 +72,7 @@ func (r *PodEndpointReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	podEndpoint := &egressgatewayv1alpha1.PodEndpoint{}
-	if err := r.Get(ctx, req.NamespacedName, podEndpoint); err != nil {
+	if err := r.CompatClient.Get(ctx, req.NamespacedName, podEndpoint); err != nil {
 		if apierrors.IsNotFound(err) {
 			// Object not found, return.
 			return ctrl.Result{}, nil
@@ -85,7 +87,7 @@ func (r *PodEndpointReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 	// Fetch the StaticGatewayConfiguration instance.
 	gwConfig := &egressgatewayv1alpha1.StaticGatewayConfiguration{}
-	if err := r.Get(ctx, gwConfigKey, gwConfig); err != nil {
+	if err := r.CompatClient.Get(ctx, gwConfigKey, gwConfig); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to fetch StaticGatewayConfiguration(%s/%s): %w", gwConfigKey.Namespace, gwConfigKey.Name, err)
 	}
 
@@ -103,6 +105,7 @@ func (r *PodEndpointReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.Netlink = netlinkwrapper.NewNetLink()
 	r.NetNS = netnswrapper.NewNetNS()
 	r.WgCtrl = wgctrlwrapper.NewWgCtrl()
+	r.CompatClient = compat.NewCompatClient(r.Client)
 	controller, err := ctrl.NewControllerManagedBy(mgr).For(&egressgatewayv1alpha1.PodEndpoint{}).Build(r)
 	if err != nil {
 		return err
@@ -190,11 +193,11 @@ func (r *PodEndpointReconciler) cleanUp(ctx context.Context) error {
 	log.Info("Cleaning up orphaned wireguard peers")
 
 	podEndpointList := &egressgatewayv1alpha1.PodEndpointList{}
-	if err := r.List(ctx, podEndpointList); err != nil {
+	if err := r.CompatClient.List(ctx, podEndpointList); err != nil {
 		return fmt.Errorf("failed to list PodEndpoints: %w", err)
 	}
 	gwConfigList := &egressgatewayv1alpha1.StaticGatewayConfigurationList{}
-	if err := r.List(ctx, gwConfigList); err != nil {
+	if err := r.CompatClient.List(ctx, gwConfigList); err != nil {
 		return fmt.Errorf("failed to list staticGatewayConfigurations: %w", err)
 	}
 	gwConfigMap := make(map[string]string)
@@ -359,7 +362,7 @@ func (r *PodEndpointReconciler) updateGatewayNodeStatus(
 	}
 
 	gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
-	if err := r.Get(ctx, gwStatusKey, gwStatus); err != nil {
+	if err := r.CompatClient.Get(ctx, gwStatusKey, gwStatus); err != nil {
 		if !apierrors.IsNotFound(err) {
 			log.Error(err, "failed to get existing gateway status object %s/%s", gwStatusKey.Namespace, gwStatusKey.Name)
 			return err
@@ -373,7 +376,7 @@ func (r *PodEndpointReconciler) updateGatewayNodeStatus(
 			log.Info(fmt.Sprintf("Creating new gateway status(%s/%s)", gwStatusKey.Namespace, gwStatusKey.Name))
 
 			node := &corev1.Node{}
-			if err := r.Get(ctx, types.NamespacedName{Name: os.Getenv(consts.NodeNameEnvKey)}, node); err != nil {
+			if err := r.CompatClient.Get(ctx, types.NamespacedName{Name: os.Getenv(consts.NodeNameEnvKey)}, node); err != nil {
 				return fmt.Errorf("failed to get current node: %w", err)
 			}
 
@@ -390,7 +393,7 @@ func (r *PodEndpointReconciler) updateGatewayNodeStatus(
 				return fmt.Errorf("failed to set gwStatus owner reference to node: %w", err)
 			}
 			log.Info("Creating new gateway status object")
-			if err := r.Create(ctx, gwStatus); err != nil {
+			if err := r.CompatClient.Create(ctx, gwStatus); err != nil {
 				return fmt.Errorf("failed to create gwStatus object: %w", err)
 			}
 		}
@@ -421,7 +424,7 @@ func (r *PodEndpointReconciler) updateGatewayNodeStatus(
 			}
 			gwStatus.Spec.ReadyPeerConfigurations = peers
 			log.Info("Updating gateway status object")
-			if err := r.Update(ctx, gwStatus); err != nil {
+			if err := r.CompatClient.Update(ctx, gwStatus); err != nil {
 				return fmt.Errorf("failed to update gwStatus object: %w", err)
 			}
 		}
