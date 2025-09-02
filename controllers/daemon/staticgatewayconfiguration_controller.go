@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
+	"github.com/Azure/kube-egress-gateway/pkg/compat"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/healthprobe"
 	"github.com/Azure/kube-egress-gateway/pkg/imds"
@@ -45,6 +46,7 @@ var _ reconcile.Reconciler = &StaticGatewayConfigurationReconciler{}
 // StaticGatewayConfigurationReconciler reconciles gateway node network according to a StaticGatewayConfiguration object
 type StaticGatewayConfigurationReconciler struct {
 	client.Client
+	CompatClient  *compat.CompatClient // Added for Go 1.25.0 compatibility
 	TickerEvents  chan event.GenericEvent
 	LBProbeServer *healthprobe.LBProbeServer
 	Netlink       netlinkwrapper.Interface
@@ -106,7 +108,7 @@ func (r *StaticGatewayConfigurationReconciler) Reconcile(ctx context.Context, re
 
 	// Fetch the StaticGatewayConfiguration instance.
 	gwConfig := &egressgatewayv1alpha1.StaticGatewayConfiguration{}
-	if err := r.Get(ctx, req.NamespacedName, gwConfig); err != nil {
+	if err := r.CompatClient.Get(ctx, req.NamespacedName, gwConfig); err != nil {
 		if apierrors.IsNotFound(err) {
 			// Object not found, return.
 			return ctrl.Result{}, nil
@@ -142,6 +144,7 @@ func (r *StaticGatewayConfigurationReconciler) SetupWithManager(mgr ctrl.Manager
 	r.NetNS = netnswrapper.NewNetNS()
 	r.IPTables = utiliptables.New(utiliptables.ProtocolIPv4)
 	r.WgCtrl = wgctrlwrapper.NewWgCtrl()
+	r.CompatClient = compat.NewCompatClient(r.Client)
 	controller, err := ctrl.NewControllerManagedBy(mgr).
 		For(&egressgatewayv1alpha1.StaticGatewayConfiguration{}).
 		// We need to watch GatewayVMConfiguration also, because vmSecondaryIP may change, e.g. duing upgrade
@@ -232,7 +235,7 @@ func (r *StaticGatewayConfigurationReconciler) cleanUp(ctx context.Context) erro
 	log.Info("Cleaning up orphaned gateway network configurations")
 
 	gwConfigList := &egressgatewayv1alpha1.StaticGatewayConfigurationList{}
-	if err := r.List(ctx, gwConfigList); err != nil {
+	if err := r.CompatClient.List(ctx, gwConfigList); err != nil {
 		return fmt.Errorf("failed to list staticGatewayConfigurations: %w", err)
 	}
 	existingWgLinks := make(map[string]struct{})
@@ -424,7 +427,7 @@ func (r *StaticGatewayConfigurationReconciler) getWireguardPrivateKey(
 		Name:      gwConfig.Status.PrivateKeySecretRef.Name,
 	}
 	secret := &corev1.Secret{}
-	if err := r.Get(ctx, *secretKey, secret); err != nil {
+	if err := r.CompatClient.Get(ctx, *secretKey, secret); err != nil {
 		return nil, fmt.Errorf("failed to retrieve wireguard private key secret: %w", err)
 	}
 
@@ -450,7 +453,7 @@ func (r *StaticGatewayConfigurationReconciler) getVMIP(
 
 	// Fetch the StaticGatewayConfiguration instance.
 	vmConfig := &egressgatewayv1alpha1.GatewayVMConfiguration{}
-	if err := r.Get(ctx, types.NamespacedName{Namespace: gwConfig.Namespace, Name: gwConfig.Name}, vmConfig); err != nil {
+	if err := r.CompatClient.Get(ctx, types.NamespacedName{Namespace: gwConfig.Namespace, Name: gwConfig.Name}, vmConfig); err != nil {
 		return "", "", err
 	}
 
@@ -1044,7 +1047,7 @@ func (r *StaticGatewayConfigurationReconciler) updateGatewayNodeStatus(
 	}
 
 	gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
-	if err := r.Get(ctx, gwStatusKey, gwStatus); err != nil {
+	if err := r.CompatClient.Get(ctx, gwStatusKey, gwStatus); err != nil {
 		if !apierrors.IsNotFound(err) {
 			log.Error(err, "failed to get existing gateway status object %s/%s", gwStatusKey.Namespace, gwStatusKey.Name)
 			return err
@@ -1058,7 +1061,7 @@ func (r *StaticGatewayConfigurationReconciler) updateGatewayNodeStatus(
 			log.Info(fmt.Sprintf("Creating new gateway status(%s/%s)", gwStatusKey.Namespace, gwStatusKey.Name))
 
 			node := &corev1.Node{}
-			if err := r.Get(ctx, types.NamespacedName{Name: os.Getenv(consts.NodeNameEnvKey)}, node); err != nil {
+			if err := r.CompatClient.Get(ctx, types.NamespacedName{Name: os.Getenv(consts.NodeNameEnvKey)}, node); err != nil {
 				return fmt.Errorf("failed to get current node: %w", err)
 			}
 
@@ -1075,7 +1078,7 @@ func (r *StaticGatewayConfigurationReconciler) updateGatewayNodeStatus(
 				return fmt.Errorf("failed to set gwStatus owner reference to node: %w", err)
 			}
 			log.Info("Creating new gateway status object")
-			if err := r.Create(ctx, gwStatus); err != nil {
+			if err := r.CompatClient.Create(ctx, gwStatus); err != nil {
 				return fmt.Errorf("failed to create gwStatus object: %w", err)
 			}
 		}
@@ -1106,7 +1109,7 @@ func (r *StaticGatewayConfigurationReconciler) updateGatewayNodeStatus(
 		}
 		if changed {
 			log.Info("Updating gateway status object")
-			if err := r.Update(ctx, gwStatus); err != nil {
+			if err := r.CompatClient.Update(ctx, gwStatus); err != nil {
 				return fmt.Errorf("failed to update gwStatus object: %w", err)
 			}
 		}

@@ -1,6 +1,6 @@
 // Example of how to update a controller to use the compatibility layer
 
-package example
+package examples
 
 import (
 	"context"
@@ -15,14 +15,16 @@ import (
 
 // ExampleReconciler demonstrates how to update a controller to use the compatibility layer
 type ExampleReconciler struct {
-	client.Client // This will be wrapped by our compatibility layer
+	client.Client                      // Keep the original client
+	CompatClient  *compat.CompatClient // Add compatibility client
 	Scheme        *runtime.Scheme
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ExampleReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// Wrap the client with our compatibility layer
-	r.Client = compat.NewCompatClient(mgr.GetClient())
+	// Initialize the compatibility client
+	r.Client = mgr.GetClient()
+	r.CompatClient = compat.NewCompatClient(mgr.GetClient())
 
 	return ctrl.NewControllerManagedBy(mgr).
 		// Add your controller configuration here

@@ -41,7 +41,7 @@ import (
 // GatewayVMConfigurationReconciler reconciles a GatewayVMConfiguration object
 type GatewayVMConfigurationReconciler struct {
 	client.Client
-	CompatClient   *compat.CompatClient // Added for Go 1.25.0 compatibility
+	CompatClient *compat.CompatClient // Added for Go 1.25.0 compatibility
 	*azmanager.AzureManager
 	Recorder record.EventRecorder
 }
@@ -147,7 +147,7 @@ func (r *GatewayVMConfigurationReconciler) Reconcile(ctx context.Context, req ct
 func (r *GatewayVMConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Initialize the compatibility client for Go 1.25.0
 	r.CompatClient = compat.NewCompatClient(mgr.GetClient())
-	
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&egressgatewayv1alpha1.GatewayVMConfiguration{}).
 		// allow for node events to trigger reconciliation when either node label matches

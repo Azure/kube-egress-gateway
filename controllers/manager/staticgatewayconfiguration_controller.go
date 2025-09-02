@@ -78,7 +78,7 @@ func (r *StaticGatewayConfigurationReconciler) Reconcile(ctx context.Context, re
 func (r *StaticGatewayConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Initialize the compatibility client for Go 1.25.0
 	r.CompatClient = compat.NewCompatClient(mgr.GetClient())
-	
+
 	secretPredicate := predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
 			// no need to trigger reconcile for secrets creation

@@ -36,6 +36,7 @@ import (
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
+	"github.com/Azure/kube-egress-gateway/pkg/compat"
 	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
@@ -115,7 +116,8 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			It("should only report error in get", func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
-				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
+				compatClient := compat.NewCompatClient(cl)
+				r = &GatewayLBConfigurationReconciler{Client: cl, CompatClient: compatClient, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				getErr = getResource(cl, foundLBConfig)
 
@@ -186,7 +188,8 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(gwConfig, lbConfig).Build()
-				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
+				compatClient := compat.NewCompatClient(cl)
+				r = &GatewayLBConfigurationReconciler{Client: cl, CompatClient: compatClient, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 			})
 
 			It("should report error if gateway LB is not found", func() {
@@ -463,7 +466,8 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 
 			It("should create a new vmConfig", func() {
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(gwConfig, lbConfig).Build()
-				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
+				compatClient := compat.NewCompatClient(cl)
+				r = &GatewayLBConfigurationReconciler{Client: cl, CompatClient: compatClient, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 				Expect(reconcileErr).To(BeNil())
 				Expect(res).To(Equal(ctrl.Result{}))
@@ -890,6 +894,18 @@ func getExpectedLB() *network.LoadBalancer {
 				},
 			},
 		},
+	}
+}
+
+// Helper function to create reconciler with compatibility client
+func createReconciler(cl client.Client, az *azmanager.AzureManager) *GatewayLBConfigurationReconciler {
+	compatClient := compat.NewCompatClient(cl)
+	return &GatewayLBConfigurationReconciler{
+		Client:       cl,
+		CompatClient: compatClient,
+		AzureManager: az,
+		Recorder:     record.NewFakeRecorder(10),
+		LBProbePort:  lbProbePort,
 	}
 }
 

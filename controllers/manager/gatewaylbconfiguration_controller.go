@@ -106,7 +106,7 @@ func (r *GatewayLBConfigurationReconciler) Reconcile(ctx context.Context, req ct
 func (r *GatewayLBConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Initialize the compatibility client for Go 1.25.0
 	r.CompatClient = compat.NewCompatClient(mgr.GetClient())
-	
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&egressgatewayv1alpha1.GatewayLBConfiguration{}).
 		Owns(&egressgatewayv1alpha1.GatewayVMConfiguration{}).
