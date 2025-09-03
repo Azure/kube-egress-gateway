@@ -87,14 +87,6 @@ PLATFORMS ?= linux/amd64
 PLATFORMS_MULTI_ARCH ?= linux/amd64,linux/arm64,linux/arm
 OUTPUT_TYPE ?= registry
 
-.PHONY: build-simple
-build-simple: generate fmt ## Build manager binary without linting.
-	CGO_ENABLED=0 go build -o bin/manager ./cmd/kube-egress-gateway-controller/main.go
-	CGO_ENABLED=0 go build -o bin/daemon ./cmd/kube-egress-gateway-daemon/main.go
-	CGO_ENABLED=0 go build -o bin/cni ./cmd/kube-egress-cni/main.go
-	CGO_ENABLED=0 go build -o bin/cni-ipam ./cmd/kube-egress-cni-ipam/main.go
-	CGO_ENABLED=0 go build -o bin/cnimanager ./cmd/kube-egress-gateway-cnimanager/main.go
-
 .PHONY: build
 build: generate fmt vet ## Build manager binary.
 	CGO_ENABLED=0 go build -o bin/manager ./cmd/kube-egress-gateway-controller/main.go
@@ -197,7 +189,7 @@ GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
 .PHONY: golangci-lint 
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
-	test -s $(LOCALBIN)/golangci-lint || curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(LOCALBIN) v1.56.2
+	test -s $(LOCALBIN)/golangci-lint || curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(LOCALBIN) v2.2.1
 
 PROTOC_GEN_GO ?= $(LOCALBIN)/protoc-gen-go
 .PHONY: protoc-gen-go
@@ -222,4 +214,3 @@ BUF ?= $(LOCALBIN)/buf
 buf: $(BUF)  ## Download buf locally if necessary.
 $(BUF): $(LOCALBIN)
 	test -s $(LOCALBIN)/buf || GOBIN=$(LOCALBIN) go install github.com/bufbuild/buf/cmd/buf@latest
-
