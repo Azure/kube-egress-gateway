@@ -32,7 +32,5 @@ jobs:
         with:
             # Use latest version to ensure Go 1.25 compatibility
           version: latest
-          # Skip cache to avoid version conflicts during Go upgrade
-          skip-cache: true
           # Optional: golangci-lint command line arguments.
           args: -v --timeout 10m ./...
