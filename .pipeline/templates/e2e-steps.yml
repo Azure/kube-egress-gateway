@@ -1,7 +1,7 @@
 parameters:
 - name: goVersion
   type: string
-  default: '1.24.3'
+  default: '1.25.0'
 - name: podCidr
   type: string
   default: '10.244.0.0/16'
