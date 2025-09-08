@@ -18,7 +18,7 @@ pool: 1ES-AKS-DevInfra-Normal-Yellow
 
 jobs:
 - job: Run_KubeEgressGateway_E2E_CNIOverlay
-  timeoutInMinutes: 150
+  timeoutInMinutes: 149
   steps:
   - template: templates/e2e-steps.yml
     parameters:
