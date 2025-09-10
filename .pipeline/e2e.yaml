@@ -1,14 +1,6 @@
 name: $(Date:yyyyMMdd)$(Rev:.r)_e2e
 
-trigger:
-  branches:
-    include:
-    - main
-
-pr:
-  branches:
-    include:
-    - main
+trigger: none
 
 variables:
 - group: pod-egress-e2e

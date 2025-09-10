@@ -21,11 +21,88 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Create AKS Cluster
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.3'
+
+      - name: Create AKS cluster
         run: |
-          az aks create \
-            --resource-group kube-egress-e2e \
-            --name egress1 \
-            --node-count 2 \
-            --enable-managed-identity \
-            --generate-ssh-keys
+          export NETWORK_PLUGIN=overlay
+          export KUBECONFIG_FILE=e2e-kubeconfig
+          export POD_CIDR=10.244.0.0/16
+          export SERVICE_CIDR=10.245.0.0/16
+          export RESOURCE_GROUP="pod-egress-e2e-$(head /dev/urandom | LC_ALL=C tr -dc a-z0-9 | head -c 6 ; echo '')"
+          echo "RESOURCE_GROUP=${RESOURCE_GROUP}" >> $GITHUB_ENV
+          
+          .pipeline/scripts/deploy-testenv.sh
+          
+          export KUBECONFIG=$(pwd)/e2e-kubeconfig
+          echo "KUBECONFIG=${KUBECONFIG}" >> $GITHUB_ENV
+          kubectl get nodes
+        env:
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          LOCATION: eastus2
+
+      - name: Docker login
+        run: |
+          az acr login --name ${{ secrets.REGISTRY_URL }}
+
+      - name: Create docker builder
+        run: |
+          docker buildx create --name multi-arch-builder --bootstrap --use --driver docker-container --driver-opt image=mcr.microsoft.com/oss/v2/moby/buildkit:v0.23.2-2
+          docker buildx ls
+
+      - name: Build and install kube-egress-gateway components
+        run: |
+          set -euo pipefail
+          mv $(pwd)/azure.json $(pwd)/config/azureconfig/azure.json
+          echo EXCEPTION_CIDRS=10.244.0.0/16,10.245.0.0/16 > $(pwd)/config/environment_variables/environment.env
+          IMAGE_REGISTRY=${{ secrets.REGISTRY_URL }} E2E_PIPELINE=true make install
+          MAX_RETRIES=10
+          BASE_DELAY=2
+          for i in $(seq 1 $MAX_RETRIES); do
+              echo "Attempt $i/$MAX_RETRIES: Waiting for kube-egress-gateway pods to be ready..."
+              
+              if kubectl wait --for=condition=ready pod -A -l app=kube-egress-gateway --timeout=300s; then
+                  echo "Success! Pods are ready."
+                  kubectl get all -n kube-egress-gateway-system
+                  echo "Kube Egress Gateway components are successfully installed."
+                  exit 0
+              fi
+              
+              if [ $i -lt $MAX_RETRIES ]; then
+                  # Exponential backoff: 2, 4, 8, 16, 32, 64, 128, 256, 512 seconds (capped at 300s)
+                  DELAY=$((BASE_DELAY ** i))
+                  if [ $DELAY -gt 300 ]; then
+                      DELAY=300
+                  fi
+                  echo "Failed. Retrying in $DELAY seconds..."
+                  sleep $DELAY
+              fi
+          done
+
+          echo "ERROR: All $MAX_RETRIES attempts failed"
+          kubectl get all -n kube-egress-gateway-system -o wide
+          exit 1
+
+      - name: Run e2e tests
+        run: |
+          set -euo pipefail
+          mkdir ${ARTIFACT_DIR}/logs
+          export LOG_DIR=${ARTIFACT_DIR}/logs
+          make e2e-test
+        env:
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_MANAGED_IDENTITY_CLIENT_ID: ${{ secrets.AZURE_MANAGED_IDENTITY_CLIENT_ID }}
+          COLLECT_LOG: true
+          ARTIFACT_DIR: ${{ runner.temp }}/artifacts
+
+      - name: Clean up resources
+        if: always()
+        run: |
+          if [ -n "$RESOURCE_GROUP" ]; then
+            [ "$(az group exists -n $RESOURCE_GROUP)" == "true" ] && az group delete -n $RESOURCE_GROUP --yes --no-wait
+          fi
