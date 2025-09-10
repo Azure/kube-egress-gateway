@@ -1,0 +1,30 @@
+name: AKS E2E
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login with UAMI
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Create AKS Cluster
+        run: |
+          az aks create \
+            --resource-group kube-egress-e2e \
+            --name egress1 \
+            --node-count 2 \
+            --enable-managed-identity \
+            --generate-ssh-keys
