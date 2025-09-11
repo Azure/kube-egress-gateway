@@ -28,8 +28,7 @@ jobs:
 
       - name: Docker login
         run: |
-          REGISTRY="${{ secrets.REGISTRY_URL }}%.azurecr.io"
-          az acr login --name ${REGISTRY}
+          az acr login --name ${{ secrets.REGISTRY_URL }}
 
       - name: Create docker builder
         run: |
