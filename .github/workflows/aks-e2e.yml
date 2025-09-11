@@ -98,7 +98,7 @@ jobs:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_MANAGED_IDENTITY_CLIENT_ID: ${{ secrets.AZURE_MANAGED_IDENTITY_CLIENT_ID }}
           COLLECT_LOG: true
-          ARTIFACT_DIR: ${{ runner.temp }}/artifacts
+          ARTIFACT_DIR: ${{ runner.temp }}
 
       - name: Clean up resources
         if: always()
