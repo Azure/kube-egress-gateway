@@ -28,7 +28,8 @@ jobs:
 
       - name: Docker login
         run: |
-          az acr login --name ${{ secrets.REGISTRY_URL }}
+          REGISTRY="${{ secrets.REGISTRY_URL }}%.azurecr.io"
+          az acr login --name ${REGISTRY}
 
       - name: Create docker builder
         run: |
@@ -96,7 +97,7 @@ jobs:
         env:
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_MANAGED_IDENTITY_CLIENT_ID: ${{ secrets.AZURE_MANAGED_IDENTITY_CLIENT_ID }}
+          AZURE_MANAGED_IDENTITY_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           COLLECT_LOG: true
           ARTIFACT_DIR: ${{ runner.temp }}
 
