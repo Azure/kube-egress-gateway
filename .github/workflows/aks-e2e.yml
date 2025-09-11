@@ -26,6 +26,15 @@ jobs:
         with:
           go-version: '1.24.3'
 
+      - name: Docker login
+        run: |
+          az acr login --name ${{ secrets.REGISTRY_URL }}
+
+      - name: Create docker builder
+        run: |
+          docker buildx create --name multi-arch-builder --bootstrap --use --driver docker-container --driver-opt image=mcr.microsoft.com/oss/v2/moby/buildkit:v0.23.2-2
+          docker buildx ls
+
       - name: Create AKS cluster
         run: |
           export NETWORK_PLUGIN=overlay
@@ -44,15 +53,6 @@ jobs:
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           LOCATION: eastus2
-
-      - name: Docker login
-        run: |
-          az acr login --name ${{ secrets.REGISTRY_URL }}
-
-      - name: Create docker builder
-        run: |
-          docker buildx create --name multi-arch-builder --bootstrap --use --driver docker-container --driver-opt image=mcr.microsoft.com/oss/v2/moby/buildkit:v0.23.2-2
-          docker buildx ls
 
       - name: Build and install kube-egress-gateway components
         run: |
