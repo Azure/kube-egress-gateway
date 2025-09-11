@@ -44,9 +44,8 @@ envsubst < "${BICEP_DIR}/parameters.json" > "${TEMP_PARAMS_FILE}"
 echo "Using parameters:"
 cat "${TEMP_PARAMS_FILE}"
 
-echo "performing what-if on deployment"
-
-az deployment group what-if --resource-group ${RESOURCE_GROUP} --template-file "${BICEP_DIR}/main.bicep" --parameters "@${TEMP_PARAMS_FILE}" --parameters location="${LOCATION}"
+# echo "performing what-if on deployment"
+# az deployment group what-if --resource-group ${RESOURCE_GROUP} --template-file "${BICEP_DIR}/main.bicep" --parameters "@${TEMP_PARAMS_FILE}" --parameters location="${LOCATION}"
 
 # Deploy infrastructure using Bicep
 echo "Deploying infrastructure using Bicep templates"
