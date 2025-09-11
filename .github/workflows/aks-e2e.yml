@@ -35,9 +35,6 @@ jobs:
           export RESOURCE_GROUP="pod-egress-e2e-$(head /dev/urandom | LC_ALL=C tr -dc a-z0-9 | head -c 6 ; echo '')"
           echo "RESOURCE_GROUP=${RESOURCE_GROUP}" >> $GITHUB_ENV
           
-          az group create -n ${RESOURCE_GROUP} -l ${LOCATION}
-          az aks create -n dummy -g ${RESOURCE_GROUP} --generate-ssh-keys
-          
           .pipeline/scripts/deploy-testenv.sh
           
           export KUBECONFIG=$(pwd)/e2e-kubeconfig
