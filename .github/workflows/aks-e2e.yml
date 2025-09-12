@@ -26,15 +26,6 @@ jobs:
         with:
           go-version: '1.24.3'
 
-      - name: Docker login
-        run: |
-          az acr login --name ${{ secrets.REGISTRY_URL }}
-
-      - name: Create docker builder
-        run: |
-          docker buildx create --name multi-arch-builder --bootstrap --use --driver docker-container --driver-opt image=mcr.microsoft.com/oss/v2/moby/buildkit:v0.23.2-2
-          docker buildx ls
-
       - name: Create AKS cluster
         run: |
           export NETWORK_PLUGIN=overlay
@@ -57,6 +48,11 @@ jobs:
       - name: Build and install kube-egress-gateway components
         run: |
           set -euo pipefail
+          docker buildx create --name multi-arch-builder --bootstrap --use --driver docker-container --driver-opt image=mcr.microsoft.com/oss/v2/moby/buildkit:v0.23.2-2
+          docker buildx ls
+
+          az acr login --name ${{ secrets.REGISTRY_URL }}
+
           mv $(pwd)/azure.json $(pwd)/config/azureconfig/azure.json
           echo EXCEPTION_CIDRS=10.244.0.0/16,10.245.0.0/16 > $(pwd)/config/environment_variables/environment.env
           IMAGE_REGISTRY=${{ secrets.REGISTRY_URL }} E2E_PIPELINE=true make install
