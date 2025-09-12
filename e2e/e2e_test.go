@@ -5,19 +5,18 @@ package e2e
 
 import (
 	"context"
-	"errors"
 	"net"
+	"os"
 	"regexp"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	clientset "k8s.io/client-go/kubernetes"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/Azure/kube-egress-gateway/api/v1alpha1"
@@ -35,7 +34,7 @@ var _ = Describe("Test staticGatewayConfiguration deployment", func() {
 	var k8sClient client.Client
 	// there is no easy way to get pod log with controller-runtime client, use client-go client instead
 	var podLogClient clientset.Interface
-	var azureClientFactory azclient.ClientFactory
+	var azureClientFactory *network.ClientFactory
 	var testns string
 
 	BeforeEach(func() {
@@ -44,8 +43,14 @@ var _ = Describe("Test staticGatewayConfiguration deployment", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(k8sClient).NotTo(BeNil())
 		Expect(podLogClient).NotTo(BeNil())
-		azureClientFactory, err = utils.CreateAzureClients()
+		cred, err := azidentity.NewDefaultAzureCredential(nil)
 		Expect(err).NotTo(HaveOccurred())
+
+		azureClientFactory, err = network.NewClientFactory(os.Getenv("AZURE_SUBSCRIPTION_ID"), cred, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		// azureClientFactory, err = utils.CreateAzureClients()
+		// Expect(err).NotTo(HaveOccurred())
 		testns = genTestNamespace()
 		err = utils.CreateNamespace(testns, k8sClient)
 		Expect(err).NotTo(HaveOccurred())
@@ -114,7 +119,7 @@ var _ = Describe("Test staticGatewayConfiguration deployment", func() {
 		rg, vmss, loc, prefixLen, err := utils.GetGatewayVmssProfile(k8sClient)
 		Expect(err).NotTo(HaveOccurred())
 		By("Creating a pip prefix")
-		pipPrefixClient := azureClientFactory.GetPublicIPPrefixClient()
+		pipPrefixClient := azureClientFactory.NewPublicIPPrefixesClient()
 		Expect(err).NotTo(HaveOccurred())
 		prefixName := "test-prefix-" + string(uuid.NewUUID())[0:4]
 		testPrefix := network.PublicIPPrefix{
@@ -129,18 +134,17 @@ var _ = Describe("Test staticGatewayConfiguration deployment", func() {
 				Tier: to.Ptr(network.PublicIPPrefixSKUTierRegional),
 			},
 		}
-		prefix, err := pipPrefixClient.CreateOrUpdate(context.Background(), rg, prefixName, testPrefix)
+		poller, err := pipPrefixClient.BeginCreateOrUpdate(context.Background(), rg, prefixName, testPrefix, nil)
 		Expect(err).NotTo(HaveOccurred())
+
+		prefix, err := poller.PollUntilDone(context.Background(), nil)
+		Expect(err).NotTo(HaveOccurred())
+
 		defer func() {
-			err := utils.WaitPipPrefixDeletion(rg, prefixName, pipPrefixClient)
-			// retry for InternalServerError due to temporary NRP issue. TODO remove this
-			var respErr *azcore.ResponseError
-			if err != nil && errors.As(err, &respErr) && respErr.ErrorCode == "InternalServerError" {
-				err = utils.WaitPipPrefixDeletion(rg, prefixName, pipPrefixClient)
-				if err != nil && errors.As(err, &respErr) && respErr.ErrorCode == "InternalServerError" {
-					err = utils.WaitPipPrefixDeletion(rg, prefixName, pipPrefixClient)
-				}
-			}
+			poller, err := pipPrefixClient.BeginDelete(context.Background(), rg, prefixName, nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = poller.PollUntilDone(context.Background(), nil)
 			Expect(err).NotTo(HaveOccurred())
 		}()
 		utils.Logf("Got BYO pip prefix: %s", to.Val(prefix.Properties.IPPrefix))
