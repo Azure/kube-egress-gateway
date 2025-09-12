@@ -11,6 +11,9 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        network_plugin: [overlay, azure, cilium]
     steps:
       - uses: actions/checkout@v4
 
@@ -28,7 +31,7 @@ jobs:
 
       - name: Create AKS cluster
         run: |
-          export NETWORK_PLUGIN=overlay
+          export NETWORK_PLUGIN=${{ matrix.network_plugin }}
           export KUBECONFIG_FILE=e2e-kubeconfig
           export POD_CIDR=10.244.0.0/16
           export SERVICE_CIDR=10.245.0.0/16
