@@ -35,6 +35,9 @@ param subnetPodId string
 @description('gateway node pool name')
 param gatewayNodePoolName string
 
+@description('ACR to assign AcrPull to Kubelet')
+param acrName string
+
 // Helper function to determine network profile
 var networkProfiles = {
   kubenet: {
@@ -135,6 +138,15 @@ resource aksCluster 'Microsoft.ContainerService/managedClusters@2023-08-01' = {
     } : {}, contains(selectedProfile, 'podCidr') ? {
       podCidr: selectedProfile.podCidr
     } : {})
+  }
+}
+
+module acrRole 'roleAssignment2.bicep' = {
+  name: 'acrRoleAssignment'
+  scope: resourceGroup('kube-egress-gateway-e2e')
+  params: {
+    acrName: acrName
+    principalId: aksCluster.properties.identityProfile.kubeletidentity.objectId
   }
 }
 
