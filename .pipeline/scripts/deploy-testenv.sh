@@ -50,6 +50,7 @@ DEPLOYMENT_OUTPUT=$(az deployment group create \
     --resource-group ${RESOURCE_GROUP} \
     --template-file "${BICEP_DIR}/main.bicep" \
     --parameters "@${TEMP_PARAMS_FILE}" \
+    --parameters acrName="${REGISTRY_URL%%.*}" \
     --parameters location="${LOCATION}" \
     --output json)
 

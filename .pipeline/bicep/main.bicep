@@ -38,6 +38,9 @@ param tenantId string
 @description('Gateway node pool name')
 param gatewayNodePoolName string
 
+@description('ACR to assign AcrPull to Kubelet')
+param acrName string
+
 // Virtual Network
 module vnet 'modules/vnet.bicep' = {
   name: 'vnet-deployment'
@@ -82,6 +85,7 @@ module aks 'modules/aks.bicep' = {
     subnetGatewayId: vnet.outputs.subnetGatewayId
     subnetPodId: vnet.outputs.subnetPodId
     gatewayNodePoolName: gatewayNodePoolName
+    acrName: acrName
   }
 }
 
