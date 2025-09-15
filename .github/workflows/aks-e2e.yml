@@ -15,14 +15,14 @@ jobs:
       matrix:
         network_plugin: [overlay, azure, cilium]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Azure Login with UAMI
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -44,8 +44,8 @@ jobs:
           echo "KUBECONFIG=${KUBECONFIG}" >> $GITHUB_ENV
           kubectl get nodes
         env:
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
           LOCATION: eastus2
 
       - name: Build and install kube-egress-gateway components
@@ -54,11 +54,11 @@ jobs:
           docker buildx create --name multi-arch-builder --bootstrap --use --driver docker-container --driver-opt image=mcr.microsoft.com/oss/v2/moby/buildkit:v0.23.2-2
           docker buildx ls
 
-          az acr login --name ${{ secrets.REGISTRY_URL }}
+          az acr login --name ${{ vars.REGISTRY_URL }}
 
           mv $(pwd)/azure.json $(pwd)/config/azureconfig/azure.json
           echo EXCEPTION_CIDRS=10.244.0.0/16,10.245.0.0/16 > $(pwd)/config/environment_variables/environment.env
-          IMAGE_REGISTRY=${{ secrets.REGISTRY_URL }} E2E_PIPELINE=true make install
+          IMAGE_REGISTRY=${{ vars.REGISTRY_URL }} E2E_PIPELINE=true make install
           MAX_RETRIES=10
           BASE_DELAY=2
           for i in $(seq 1 $MAX_RETRIES); do
@@ -93,9 +93,8 @@ jobs:
           export LOG_DIR=${ARTIFACT_DIR}/logs
           make e2e-test
         env:
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_MANAGED_IDENTITY_CLIENT_ID: ${{ secrets.AZURE_MANAGED_IDENTITY_CLIENT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
           COLLECT_LOG: true
           ARTIFACT_DIR: ${{ runner.temp }}
 
