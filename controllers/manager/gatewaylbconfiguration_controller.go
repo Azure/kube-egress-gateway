@@ -233,6 +233,10 @@ func (r *GatewayLBConfigurationReconciler) ensureDeleted(
 }
 
 type AgentPool interface {
+	Reconcile(ctx context.Context,
+		vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
+		ipPrefixID string,
+		wantIPConfig bool) ([]string, error) // todo refactor to some config struct
 	GetUniqueID() string
 }
 
@@ -277,7 +281,7 @@ func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
 			vmss := vmssList[i]
 			if v, ok := vmss.Tags[consts.AKSNodepoolTagKey]; ok {
 				if strings.EqualFold(to.Val(v), lbConfig.Spec.GatewayNodepoolName) {
-					return &agentPoolVmss{vmss: vmss}, nil
+					return &agentPoolVMSS{vmss: vmss}, nil
 				}
 			}
 		}
@@ -292,7 +296,6 @@ func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
 				if strings.EqualFold(to.Val(v), lbConfig.Spec.GatewayNodepoolName) {
 					return &agentPoolVMs{
 						agentPoolName: lbConfig.Spec.GatewayNodepoolName,
-						vms:           []*compute.VirtualMachine{vm}, // just a placeholder for now
 					}, nil
 				}
 			}
@@ -302,25 +305,53 @@ func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
 		if err != nil {
 			return nil, err
 		}
-		return &agentPoolVmss{vmss: vmss}, nil
+		return &agentPoolVMSS{vmss: vmss}, nil
 	}
 	return nil, fmt.Errorf("gateway VMSS not found")
 }
 
+func NewAgentPoolVM(agentPoolName string, c client.Client, manager *azmanager.AzureManager) *agentPoolVMs {
+	return &agentPoolVMs{
+		agentPoolName: agentPoolName,
+		Client:        c,
+		AzureManager:  manager,
+	}
+}
+
 type agentPoolVMs struct {
 	agentPoolName string
-	vms           []*compute.VirtualMachine
+	client.Client
+	*azmanager.AzureManager
+}
+
+func (a *agentPoolVMs) Reconcile(ctx context.Context, vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration, ipPrefixID string, wantIPConfig bool) ([]string, error) {
+	// TODO implement me
+	panic("implement me")
 }
 
 func (a *agentPoolVMs) GetUniqueID() string {
 	return uuid.NewMD5(namespaceAgentPool, []byte(a.agentPoolName)).String()
 }
 
-type agentPoolVmss struct {
-	vmss *compute.VirtualMachineScaleSet
+func NewAgentPoolVMSS(vmss *compute.VirtualMachineScaleSet, c client.Client, manager *azmanager.AzureManager) *agentPoolVMSS {
+	return &agentPoolVMSS{
+		vmss:         vmss,
+		Client:       c,
+		AzureManager: manager,
+	}
 }
 
-func (r *agentPoolVmss) GetUniqueID() string {
+type agentPoolVMSS struct {
+	vmss *compute.VirtualMachineScaleSet
+	client.Client
+	*azmanager.AzureManager
+}
+
+func (r *agentPoolVMSS) Reconcile(ctx context.Context, vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration, ipPrefixID string, wantIPConfig bool) ([]string, error) {
+	return r.reconcileVMSS(ctx, vmConfig, r.vmss, ipPrefixID, wantIPConfig)
+}
+
+func (r *agentPoolVMSS) GetUniqueID() string {
 	if r.vmss == nil || r.vmss.Properties == nil || r.vmss.Properties.UniqueID == nil {
 		return ""
 	}
