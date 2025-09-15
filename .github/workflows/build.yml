@@ -110,4 +110,3 @@ jobs:
             cwd://${{ steps.cnimanager.outputs.bake-file }}
             cwd://${{ steps.cniplugin.outputs.bake-file }}
             cwd://${{ steps.cniipamplugin.outputs.bake-file }}
-
