@@ -493,7 +493,7 @@ func (az *AzureManager) CreateOrUpdateNetworkInterface(ctx context.Context, reso
 	logger := log.FromContext(ctx).WithValues("operation", "CreateOrUpdateNetworkInterface", "resourceGroup", resourceGroup, "resourceName", nicName)
 	ctx = log.IntoContext(ctx, logger)
 	var nic *network.Interface
-	err := wrapRetry(ctx, "CreateOrUpdatePublicIPPrefix", func(ctx context.Context) error {
+	err := wrapRetry(ctx, "CreateOrUpdateNetworkInterface", func(ctx context.Context) error {
 		var err error
 		nic, err = az.InterfaceClient.CreateOrUpdate(ctx, resourceGroup, nicName, networkInterface)
 		return err
