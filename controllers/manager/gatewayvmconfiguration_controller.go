@@ -590,23 +590,10 @@ func (r *agentPoolVMs) reconcileNIC(
 		}
 	}
 
-	// expected IPconfig
-	expectedIPConfig := &network.InterfaceIPConfiguration{
-		Name: to.Ptr(ipConfigName),
-		Properties: &network.InterfaceIPConfigurationPropertiesFormat{
-			Primary:                 to.Ptr(false),
-			PrivateIPAddressVersion: to.Ptr(network.IPVersionIPv4),
-			PublicIPAddress:         &network.PublicIPAddress{}, // todo
-			Subnet: &network.Subnet{
-				ID: to.Ptr(""), // todo
-			},
-		},
-	}
-
 	needUpdate := false
 
 	// check primary IP & secondary IP
-	var primaryIP, secondaryIP string
+	var primaryIP, secondaryIP, subnetID string
 	if !forceUpdate && wantIPConfig {
 		for _, ipConfig := range nic.Properties.IPConfigurations {
 			if ipConfig == nil || ipConfig.Properties == nil {
@@ -616,11 +603,35 @@ func (r *agentPoolVMs) reconcileNIC(
 				secondaryIP = to.Val(ipConfig.Properties.PrivateIPAddress)
 			} else if to.Val(ipConfig.Properties.Primary) {
 				primaryIP = to.Val(ipConfig.Properties.PrivateIPAddress)
+				subnetID = to.Val(ipConfig.Properties.Subnet.ID) // todo nil checking
 			}
 		}
 		if primaryIP == "" || secondaryIP == "" {
 			forceUpdate = true
 			logger.Info("Force update for missing primary IP and/or secondary IP", "primaryIP", primaryIP, "secondaryIP", secondaryIP)
+		}
+	}
+
+	// expected IPconfig
+	expectedIPConfig := &network.InterfaceIPConfiguration{
+		Name: to.Ptr(ipConfigName),
+		Properties: &network.InterfaceIPConfigurationPropertiesFormat{
+			Primary:                 to.Ptr(false),
+			PrivateIPAddressVersion: to.Ptr(network.IPVersionIPv4),
+			Subnet: &network.Subnet{
+				ID: to.Ptr(subnetID),
+			},
+		},
+	}
+
+	if ipPrefixID != "" {
+		// todo should we check ip version?
+		expectedIPConfig.Properties.PublicIPAddress = &network.PublicIPAddress{
+			Properties: &network.PublicIPAddressPropertiesFormat{
+				PublicIPPrefix: &network.SubResource{
+					ID: to.Ptr(ipPrefixID),
+				},
+			},
 		}
 	}
 
