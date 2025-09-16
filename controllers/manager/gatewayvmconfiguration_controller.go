@@ -5,6 +5,7 @@ package manager
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -560,6 +561,138 @@ func (r *agentPoolVMSS) reconcileVMSS(
 	return privateIPs, nil
 }
 
+func (r *agentPoolVMs) reconcileNIC(
+	ctx context.Context,
+	vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
+	nic *network.Interface,
+	ipPrefixID string,
+	lbBackendpoolID string,
+	wantIPConfig bool,
+) (string, error) {
+	logger := log.FromContext(ctx).WithValues("nic", to.Val(nic.ID), "wantIPConfig", wantIPConfig, "ipPrefixID", ipPrefixID)
+	ctx = log.IntoContext(ctx, logger)
+	ipConfigName := managedSubresourceName(vmConfig)
+
+	b, err := json.Marshal(nic)
+	logger.Info("reconciling NIC", "before", string(b))
+
+	if nic.Properties == nil {
+		return "", fmt.Errorf("nic(%s) has empty properties", to.Val(nic.ID))
+	}
+
+	forceUpdate := false
+	// check ProvisioningState
+	if to.Val(nic.Properties.ProvisioningState) != network.ProvisioningStateSucceeded {
+		logger.Info(fmt.Sprintf("VM ProvisioningState %q", to.Val(nic.Properties.ProvisioningState)))
+		if to.Val(nic.Properties.ProvisioningState) == network.ProvisioningStateFailed {
+			forceUpdate = true
+			logger.Info(fmt.Sprintf("Force update for unexpected NIC ProvisioningState:%q", to.Val(nic.Properties.ProvisioningState)))
+		}
+	}
+
+	// expected IPconfig
+	expectedIPConfig := &network.InterfaceIPConfiguration{
+		Name: to.Ptr(ipConfigName),
+		Properties: &network.InterfaceIPConfigurationPropertiesFormat{
+			Primary:                 to.Ptr(false),
+			PrivateIPAddressVersion: to.Ptr(network.IPVersionIPv4),
+			PublicIPAddress:         &network.PublicIPAddress{}, // todo
+			Subnet: &network.Subnet{
+				ID: to.Ptr(""), // todo
+			},
+		},
+	}
+
+	needUpdate := false
+
+	// check primary IP & secondary IP
+	var primaryIP, secondaryIP string
+	if !forceUpdate && wantIPConfig {
+		for _, ipConfig := range nic.Properties.IPConfigurations {
+			if ipConfig == nil || ipConfig.Properties == nil {
+				continue
+			}
+			if strings.EqualFold(to.Val(ipConfig.Name), ipConfigName) {
+				secondaryIP = to.Val(ipConfig.Properties.PrivateIPAddress)
+			} else if to.Val(ipConfig.Properties.Primary) {
+				primaryIP = to.Val(ipConfig.Properties.PrivateIPAddress)
+			}
+		}
+		if primaryIP == "" || secondaryIP == "" {
+			forceUpdate = true
+			logger.Info("Force update for missing primary IP and/or secondary IP", "primaryIP", primaryIP, "secondaryIP", secondaryIP)
+		}
+	}
+
+	found := false
+	for i, ipConfig := range nic.Properties.IPConfigurations {
+		if ipConfig == nil || ipConfig.Properties == nil {
+			continue
+		}
+
+		if strings.EqualFold(to.Val(ipConfig.Name), ipConfigName) {
+			if !wantIPConfig || differentNIC(ipConfig, expectedIPConfig) {
+				// remove at i
+				nic.Properties.IPConfigurations = append(nic.Properties.IPConfigurations[:i], nic.Properties.IPConfigurations[i+1:]...)
+				continue
+			}
+
+			found = true
+			break
+		}
+	}
+
+	if wantIPConfig && !found {
+		nic.Properties.IPConfigurations = append(nic.Properties.IPConfigurations, expectedIPConfig)
+		needUpdate = true
+	}
+
+	// todo reconcile LB backend pool
+	if needUpdate || forceUpdate {
+		b, _ = json.Marshal(nic)
+		logger.Info("updating nic", "after", string(b))
+		if !needUpdate && forceUpdate {
+			logger.Info("nic update by forceUpdate")
+		}
+		nicID := to.Val(nic.ID)
+		nic, err = r.CreateOrUpdateNetworkInterface(ctx, "", to.Val(nic.Name), to.Val(nic))
+		if err != nil {
+			return "", fmt.Errorf("failed to update nic(%s): %w", nicID, err)
+		}
+	}
+
+	// return earlier if it's deleting event
+	if !wantIPConfig {
+		return "", nil
+	}
+
+	vmprofile := egressgatewayv1alpha1.GatewayVMProfile{
+		NodeName:    to.Val(nic.Name), // is this going to be fine?
+		PrimaryIP:   primaryIP,
+		SecondaryIP: secondaryIP,
+	}
+	if vmConfig.Status == nil {
+		vmConfig.Status = &egressgatewayv1alpha1.GatewayVMConfigurationStatus{}
+	}
+	for i, profile := range vmConfig.Status.GatewayVMProfiles {
+		if profile.NodeName == vmprofile.NodeName {
+			if profile.PrimaryIP != primaryIP || profile.SecondaryIP != secondaryIP {
+				vmConfig.Status.GatewayVMProfiles[i].PrimaryIP = primaryIP
+				vmConfig.Status.GatewayVMProfiles[i].SecondaryIP = secondaryIP
+				logger.Info("GatewayVMConfiguration status updated", "primaryIP", primaryIP, "secondaryIP", secondaryIP)
+				return secondaryIP, nil
+			}
+			logger.Info("GatewayVMConfiguration status not changed", "primaryIP", primaryIP, "secondaryIP", secondaryIP)
+			return secondaryIP, nil
+		}
+	}
+
+	logger.Info("GatewayVMConfiguration status updated for new nodes", "nodeName", vmprofile.NodeName, "primaryIP", primaryIP, "secondaryIP", secondaryIP)
+	vmConfig.Status.GatewayVMProfiles = append(vmConfig.Status.GatewayVMProfiles, vmprofile)
+
+	return secondaryIP, nil
+}
+
 func (r *agentPoolVMSS) reconcileVMSSVM(
 	ctx context.Context,
 	vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
@@ -836,6 +969,45 @@ func (r *agentPoolVMSS) getExpectedIPConfig(
 			},
 		},
 	}
+}
+
+func differentNIC(a, b *network.InterfaceIPConfiguration) bool {
+	if a.Properties == nil && b.Properties == nil {
+		return false
+	}
+	if a.Properties == nil || b.Properties == nil {
+		return true
+	}
+	prop1, prop2 := a.Properties, b.Properties
+	if to.Val(prop1.Primary) != to.Val(prop2.Primary) ||
+		to.Val(prop1.PrivateIPAddressVersion) != to.Val(prop2.PrivateIPAddressVersion) {
+		return true
+	}
+
+	if (prop1.Subnet != nil) != (prop2.Subnet != nil) {
+		return true
+	} else if prop1.Subnet != nil && prop2.Subnet != nil && !strings.EqualFold(to.Val(prop1.Subnet.ID), to.Val(prop2.Subnet.ID)) {
+		return true
+	}
+
+	pip1, pip2 := prop1.PublicIPAddress, prop2.PublicIPAddress
+	if (pip1 == nil) != (pip2 == nil) {
+		return true
+	} else if pip1 != nil && pip2 != nil {
+		if to.Val(pip1.Name) != to.Val(pip2.Name) {
+			return true
+		} else if (pip1.Properties != nil) != (pip2.Properties != nil) {
+			return true
+		} else if pip1.Properties != nil && pip2.Properties != nil {
+			prefix1, prefix2 := pip1.Properties.PublicIPPrefix, pip2.Properties.PublicIPPrefix
+			if (prefix1 != nil) != (prefix2 != nil) {
+				return true
+			} else if prefix1 != nil && prefix2 != nil && !strings.EqualFold(to.Val(prefix1.ID), to.Val(prefix2.ID)) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func different(ipConfig1, ipConfig2 *compute.VirtualMachineScaleSetIPConfiguration) bool {

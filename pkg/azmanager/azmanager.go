@@ -445,6 +445,65 @@ func (az *AzureManager) GetVMSSInterface(ctx context.Context, resourceGroup, vms
 	return nicResp, nil
 }
 
+func (az *AzureManager) ListNetworkInterfaces(ctx context.Context, resourceGroup string) ([]*network.Interface, error) {
+	if resourceGroup == "" {
+		resourceGroup = az.ResourceGroup
+	}
+	logger := log.FromContext(ctx).WithValues("operation", "ListNetworkInterfaces", "resourceGroup", resourceGroup)
+	ctx = log.IntoContext(ctx, logger)
+	var nics []*network.Interface
+	err := wrapRetry(ctx, "ListNetworkInterfaces", func(ctx context.Context) error {
+		var err error
+		nics, err = az.InterfaceClient.List(ctx, resourceGroup)
+		return err
+	}, isRateLimitError)
+	if err != nil {
+		return nil, err
+	}
+	return nics, nil
+}
+
+func (az *AzureManager) GetNetworkInterface(ctx context.Context, interfaceName string) (*network.Interface, error) {
+	resourceGroup := az.ResourceGroup
+	if interfaceName == "" {
+		return nil, fmt.Errorf("interface name is empty")
+	}
+	logger := log.FromContext(ctx).WithValues("operation", "GetVMSSInterface", "resourceGroup", resourceGroup, "interfaceName", interfaceName)
+	ctx = log.IntoContext(ctx, logger)
+	var nicResp *network.Interface
+	err := wrapRetry(ctx, "GetNetworkInterface", func(ctx context.Context) error {
+		var err error
+		nicResp, err = az.InterfaceClient.Get(ctx, resourceGroup, interfaceName, nil)
+		return err
+	}, isRateLimitError)
+	if err != nil {
+		return nil, err
+	}
+	return nicResp, nil
+}
+
+func (az *AzureManager) CreateOrUpdateNetworkInterface(ctx context.Context, resourceGroup, nicName string, networkInterface network.Interface) (*network.Interface, error) {
+	if resourceGroup == "" {
+		resourceGroup = az.ResourceGroup
+	}
+
+	if nicName == "" {
+		return nil, fmt.Errorf("nic name is empty")
+	}
+	logger := log.FromContext(ctx).WithValues("operation", "CreateOrUpdateNetworkInterface", "resourceGroup", resourceGroup, "resourceName", nicName)
+	ctx = log.IntoContext(ctx, logger)
+	var nic *network.Interface
+	err := wrapRetry(ctx, "CreateOrUpdatePublicIPPrefix", func(ctx context.Context) error {
+		var err error
+		nic, err = az.InterfaceClient.CreateOrUpdate(ctx, resourceGroup, nicName, networkInterface)
+		return err
+	}, isRateLimitError)
+	if err != nil {
+		return nil, err
+	}
+	return nic, nil
+}
+
 func (az *AzureManager) GetSubnet(ctx context.Context) (*network.Subnet, error) {
 	logger := log.FromContext(ctx).WithValues("operation", "GetSubnet", "resourceGroup", az.VnetResourceGroup, "resourceName", az.VnetName, "subnetName", az.SubnetName)
 	ctx = log.IntoContext(ctx, logger)
