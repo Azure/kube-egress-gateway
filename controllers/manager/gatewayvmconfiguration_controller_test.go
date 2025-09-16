@@ -45,6 +45,7 @@ const (
 var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 	var (
 		r        *GatewayVMConfigurationReconciler
+		poolVMSS *agentPoolVMSS
 		az       *azmanager.AzureManager
 		recorder = record.NewFakeRecorder(10)
 	)
@@ -174,11 +175,12 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 							c.vmss,
 						}, c.returnedErr)
 					}
-					foundVmss, len, err := r.getGatewayVMSS(context.Background(), vmConfig)
+					ap, len, err := r.loadPool(context.Background(), vmConfig)
+					vmss := ap.(*agentPoolVMSS)
 					if c.expectedErr != nil {
 						Expect(err).To(Equal(c.expectedErr), "TestCase[%d]: %s", i, c.desc)
 					} else {
-						Expect(to.Val(foundVmss)).To(Equal(to.Val(c.vmss)), "TestCase[%d]: %s", i, c.desc)
+						Expect(to.Val(vmss.vmss)).To(Equal(to.Val(c.vmss)), "TestCase[%d]: %s", i, c.desc)
 						Expect(len).To(Equal(int32(31)), "TestCase[%d]: %s", i, c.desc)
 						Expect(err).To(BeNil(), "TestCase[%d]: %s", i, c.desc)
 					}
@@ -506,11 +508,15 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(vmConfig).WithRuntimeObjects(gwConfig, vmConfig).Build()
 				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
+				poolVMSS = &agentPoolVMSS{
+					Client:       cl,
+					AzureManager: az,
+				}
 			})
 
 			It("should return error if vmss does not have properties", func() {
 				existingVMSS := &compute.VirtualMachineScaleSet{}
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(err).To(Equal(fmt.Errorf("vmss has empty network profile")))
 			})
 
@@ -524,7 +530,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						},
 					},
 				}
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(errors.Unwrap(err)).To(Equal(fmt.Errorf("vmss(vm) primary network interface not found")))
 			})
 
@@ -532,7 +538,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				existingVMSS := getEmptyVMSS()
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), vmssRG, vmssName, gomock.Any()).Return(nil, fmt.Errorf("failed"))
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(errors.Unwrap(err)).To(Equal(fmt.Errorf("failed")))
 			})
 
@@ -543,7 +549,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), vmssRG, vmssName, gomock.Any()).Return(expectedVMSS, nil)
 				mockVMSSVMClient := az.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), vmssRG, vmssName).Return(nil, fmt.Errorf("failed"))
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(errors.Unwrap(err)).To(Equal(fmt.Errorf("failed")))
 			})
 
@@ -555,7 +561,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				mockVMSSVMClient := az.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
 				vms := []*compute.VirtualMachineScaleSetVM{{InstanceID: to.Ptr("0")}}
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), vmssRG, vmssName).Return(vms, nil)
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(err).To(Equal(fmt.Errorf("vmss vm(0) has empty network profile")))
 			})
 
@@ -574,7 +580,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					},
 				}}
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), vmssRG, vmssName).Return(vms, nil)
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(err).To(Equal(fmt.Errorf("vmss vm(0) has empty os profile")))
 			})
 
@@ -596,7 +602,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					},
 				}}
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), vmssRG, vmssName).Return(vms, nil)
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(err.Error()).To(ContainSubstring("vmss(vm) primary network interface not found"))
 			})
 
@@ -612,7 +618,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "nic").Return(
 					getNotReadyVMSSVMInterface(), nil)
 				mockVMSSVMClient.EXPECT().Update(gomock.Any(), vmssRG, vmssName, "0", gomock.Any()).Return(nil, fmt.Errorf("failed"))
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(errors.Unwrap(err)).To(Equal(fmt.Errorf("failed")))
 			})
 
@@ -645,7 +651,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					})
 				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "nic").Return(
 					getConfiguredVMSSVMInterface(), nil)
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(err).To(BeNil())
 			})
 
@@ -659,7 +665,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
 				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "nic").Return(
 					getConfiguredVMSSVMInterface(), nil)
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(err).To(BeNil())
 			})
 
@@ -696,7 +702,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					})
 				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "nic").Return(
 					getConfiguredVMSSVMInterface(), nil)
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(err).To(BeNil())
 			})
 
@@ -724,7 +730,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						Expect(vm).To(Equal(to.Val(expectedVM)))
 						return expectedVM, nil
 					})
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", false)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", false)
 				Expect(err).To(BeNil())
 			})
 
@@ -734,7 +740,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				vms := []*compute.VirtualMachineScaleSetVM{existingVM}
 				mockVMSSVMClient := az.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), vmssRG, vmssName).Return(vms, nil)
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", false)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", false)
 				Expect(err).To(BeNil())
 			})
 
@@ -766,7 +772,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					})
 				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "nic").Return(
 					getConfiguredVMSSVMInterface(), nil)
-				privateIPs, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "", true)
+				privateIPs, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "", true)
 				Expect(len(privateIPs)).To(Equal(1))
 				Expect(privateIPs[0]).To(Equal("10.0.0.6"))
 				Expect(err).To(BeNil())
@@ -802,7 +808,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					})
 				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "nic").Return(
 					getConfiguredVMSSVMInterface(), nil)
-				privateIPs, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "", true)
+				privateIPs, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "", true)
 				Expect(len(privateIPs)).To(Equal(1))
 				Expect(privateIPs[0]).To(Equal("10.0.0.6"))
 				Expect(err).To(BeNil())
@@ -834,7 +840,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						Expect(vm).To(Equal(to.Val(expectedVM)))
 						return expectedVM, nil
 					})
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "", false)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "", false)
 				Expect(err).To(BeNil())
 			})
 
@@ -850,7 +856,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
 				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "nic").Return(
 					getConfiguredVMSSVMInterface(), nil)
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(err).To(BeNil())
 			})
 		})

@@ -325,8 +325,35 @@ type agentPoolVMs struct {
 }
 
 func (a *agentPoolVMs) Reconcile(ctx context.Context, vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration, ipPrefixID string, wantIPConfig bool) ([]string, error) {
-	// TODO implement me
-	panic("implement me")
+	backendLBPoolID := a.GetLBBackendAddressPoolID(a.GetUniqueID())
+
+	secondaryIPs := make([]string, 0)
+
+	nics, err := a.ListNetworkInterfaces(ctx, "" /* empty resource group, just use default */)
+	if err != nil {
+		return nil, err
+	}
+
+	gatewayNICs := make([]*network.Interface, 0, len(nics))
+	for i := range nics {
+		if nics[i] == nil {
+			continue
+		}
+
+		if _, ok := nics[i].Tags["static-gateway-nic"]; !ok {
+			continue
+		}
+		gatewayNICs = append(gatewayNICs, nics[i])
+	}
+
+	for i := range gatewayNICs {
+		ip, err := a.reconcileNIC(ctx, vmConfig, nics[i], ipPrefixID, to.Val(backendLBPoolID), wantIPConfig)
+		if err != nil {
+			return nil, err
+		}
+		secondaryIPs = append(secondaryIPs, ip)
+	}
+	return secondaryIPs, nil
 }
 
 func (a *agentPoolVMs) GetUniqueID() string {
