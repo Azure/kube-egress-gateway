@@ -574,6 +574,9 @@ func (r *agentPoolVMs) reconcileNIC(
 	ipConfigName := managedSubresourceName(vmConfig)
 
 	b, err := json.Marshal(nic)
+	if err != nil {
+		logger.Error(err, "failed to marshal nic")
+	}
 	logger.Info("reconciling NIC", "before", string(b))
 
 	if nic.Properties == nil {
@@ -673,8 +676,36 @@ func (r *agentPoolVMs) reconcileNIC(
 		needUpdate = true
 	}
 
-	// todo reconcile LB backend pool
-	if needUpdate || forceUpdate {
+	// todo this doesn't account for delete events
+
+	missingLB := true
+
+	for i := range nic.Properties.IPConfigurations {
+		ipConfig := nic.Properties.IPConfigurations[i]
+		if ipConfig == nil || ipConfig.Properties == nil || !to.Val(ipConfig.Properties.Primary) {
+			continue
+		}
+
+		for j := range ipConfig.Properties.LoadBalancerBackendAddressPools {
+			pool := ipConfig.Properties.LoadBalancerBackendAddressPools[j]
+			if pool == nil {
+				continue
+			}
+			if strings.EqualFold(to.Val(pool.ID), lbBackendpoolID) {
+				missingLB = false
+			}
+		}
+
+		if missingLB {
+			if ipConfig.Properties.LoadBalancerBackendAddressPools == nil {
+				ipConfig.Properties.LoadBalancerBackendAddressPools = make([]*network.BackendAddressPool, 0)
+			}
+
+			ipConfig.Properties.LoadBalancerBackendAddressPools = append(ipConfig.Properties.LoadBalancerBackendAddressPools, &network.BackendAddressPool{ID: to.Ptr(lbBackendpoolID)})
+		}
+	}
+
+	if needUpdate || forceUpdate || missingLB {
 		b, _ = json.Marshal(nic)
 		logger.Info("updating nic", "after", string(b))
 		if !needUpdate && forceUpdate {
