@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient"
 	_ "sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace"
@@ -106,6 +107,7 @@ type AzureManager struct {
 	VmssVMClient         virtualmachinescalesetvmclient.Interface
 	VMClient             virtualmachineclient.Interface
 	PublicIPPrefixClient publicipprefixclient.Interface
+	PublicIPClient       publicipaddressclient.Interface
 	InterfaceClient      interfaceclient.Interface
 	SubnetClient         subnetclient.Interface
 }
@@ -122,6 +124,7 @@ func CreateAzureManager(cloud *config.CloudConfig, factory azclient.ClientFactor
 	az.InterfaceClient = factory.GetInterfaceClient()
 	az.SubnetClient = factory.GetSubnetClient()
 	az.VMClient = factory.GetVirtualMachineClient()
+	az.PublicIPClient = factory.GetPublicIPAddressClient()
 
 	return &az, nil
 }
@@ -416,6 +419,27 @@ func (az *AzureManager) DeletePublicIPPrefix(ctx context.Context, resourceGroup,
 		return isRateLimitError(err) || isInternalServerError(err)
 	}, retrySettings{OverallTimeout: to.Ptr(15 * time.Minute)})
 	return err
+}
+
+func (az *AzureManager) CreateOrUpdatePublicIP(ctx context.Context, resourceGroup, name string, pip network.PublicIPAddress) (*network.PublicIPAddress, error) {
+	if resourceGroup == "" {
+		resourceGroup = az.ResourceGroup
+	}
+	if name == "" {
+		return nil, fmt.Errorf("public ip name is empty")
+	}
+	logger := log.FromContext(ctx).WithValues("operation", "CreateOrUpdatePublicIP", "resourceGroup", resourceGroup, "resourceName", name)
+	ctx = log.IntoContext(ctx, logger)
+	var result *network.PublicIPAddress
+	err := wrapRetry(ctx, "CreateOrUpdatePublicIP", func(ctx context.Context) error {
+		var err error
+		result, err = az.PublicIPClient.CreateOrUpdate(ctx, resourceGroup, name, pip)
+		return err
+	}, isRateLimitError)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (az *AzureManager) GetVMSSInterface(ctx context.Context, resourceGroup, vmssName, instanceID, interfaceName string) (*network.Interface, error) {

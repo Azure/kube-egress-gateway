@@ -625,14 +625,29 @@ func (r *agentPoolVMs) reconcileNIC(
 	}
 
 	if ipPrefixID != "" {
+		// need to get-then-put for pip
 		// todo should we check ip version?
-		expectedIPConfig.Properties.PublicIPAddress = &network.PublicIPAddress{
+		expectedPublicIP := &network.PublicIPAddress{
+			Location: to.Ptr(r.Location()),
+			SKU: &network.PublicIPAddressSKU{
+				// todo these should really match the publicIPPrefix settings instead of hardcoded
+				Name: to.Ptr(network.PublicIPAddressSKUNameStandard),
+				Tier: to.Ptr(network.PublicIPAddressSKUTierRegional),
+			},
 			Properties: &network.PublicIPAddressPropertiesFormat{
+				PublicIPAddressVersion: to.Ptr(network.IPVersionIPv4),
 				PublicIPPrefix: &network.SubResource{
 					ID: to.Ptr(ipPrefixID),
 				},
+				PublicIPAllocationMethod: to.Ptr(network.IPAllocationMethodStatic),
 			},
 		}
+		// todo how do we handle if the publicIPPrefix is out of IPs?
+		pip, err := r.CreateOrUpdatePublicIP(ctx, "", to.Val(nic.Name), *expectedPublicIP)
+		if err != nil {
+			return "", err
+		}
+		expectedIPConfig.Properties.PublicIPAddress = pip
 	}
 
 	found := false
