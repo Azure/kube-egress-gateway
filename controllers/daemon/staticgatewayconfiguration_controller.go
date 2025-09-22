@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -53,12 +54,12 @@ type StaticGatewayConfigurationReconciler struct {
 	WgCtrl        wgctrlwrapper.Interface
 }
 
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations,verbs=get;list;watch
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get
-//+kubebuilder:rbac:groups=core,namespace=kube-egress-gateway-system,resources=secrets,verbs=get;list;watch
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaystatuses,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations,verbs=get;list;watch
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get
+// +kubebuilder:rbac:groups=core,namespace=kube-egress-gateway-system,resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaystatuses,verbs=get;list;watch;create;update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -454,6 +455,13 @@ func (r *StaticGatewayConfigurationReconciler) getVMIP(
 		return "", "", err
 	}
 
+	vmIPs := make([]string, 0)
+	for _, inf := range nodeMeta.Network.Interface {
+		for _, v4Addr := range inf.IPv4.IPAddress {
+			vmIPs = append(vmIPs, v4Addr.PrivateIP)
+		}
+	}
+
 	// this can happen in cleanup process when vmConfig is not ready yet
 	if vmConfig.Status == nil {
 		return "", "", fmt.Errorf("status is nil for GatewayVMConfiguration %s/%s", vmConfig.Namespace, vmConfig.Name)
@@ -461,6 +469,14 @@ func (r *StaticGatewayConfigurationReconciler) getVMIP(
 
 	for _, vmProfile := range vmConfig.Status.GatewayVMProfiles {
 		if vmProfile.NodeName == nodeName {
+			primaryIP = vmProfile.PrimaryIP
+			secondaryIP = vmProfile.SecondaryIP
+			break
+		}
+
+		// this is an inefficient way to handle VM agent pools where the "nodeName" on the vmConfig
+		// will be the name of the NIC.
+		if slices.Contains(vmIPs, vmProfile.PrimaryIP) && slices.Contains(vmIPs, vmProfile.SecondaryIP) {
 			primaryIP = vmProfile.PrimaryIP
 			secondaryIP = vmProfile.SecondaryIP
 			break
