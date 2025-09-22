@@ -326,7 +326,7 @@ func (r *GatewayVMConfigurationReconciler) ensureDeleted(
 func (r *GatewayVMConfigurationReconciler) loadPool(
 	ctx context.Context,
 	vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
-) (AgentPool, int32, error) {
+) (GatewayPool, int32, error) {
 	if vmConfig.Spec.GatewayNodepoolName != "" {
 		vmsList, err := r.ListVMs(ctx)
 		if err != nil {
