@@ -176,7 +176,10 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						}, c.returnedErr)
 					}
 					ap, len, err := r.loadPool(context.Background(), vmConfig)
-					vmss := ap.(*agentPoolVMSS)
+					vmss, ok := ap.(*agentPoolVMSS)
+					if !ok {
+						Expect(err).To(HaveOccurred(), "error should be returned if nil ap")
+					}
 					if c.expectedErr != nil {
 						Expect(err).To(Equal(c.expectedErr), "TestCase[%d]: %s", i, c.desc)
 					} else {
