@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -455,28 +454,29 @@ func (r *StaticGatewayConfigurationReconciler) getVMIP(
 		return "", "", err
 	}
 
-	vmIPs := make([]string, 0)
-	for _, inf := range nodeMeta.Network.Interface {
-		for _, v4Addr := range inf.IPv4.IPAddress {
-			vmIPs = append(vmIPs, v4Addr.PrivateIP)
-		}
-	}
+	log.Info("parsing tags", "tags", nodeMeta.Compute.Tags)
+	tagList := strings.Split(nodeMeta.Compute.Tags, ";")
 
+	nicName := ""
+	for _, tag := range tagList {
+		parts := strings.Split(tag, ":")
+		if len(parts) != 2 {
+			continue
+		}
+		name, val := parts[0], parts[1]
+		if name != consts.AKSNodeNICTagKey {
+			continue
+		}
+		nicName = val
+	}
 	// this can happen in cleanup process when vmConfig is not ready yet
 	if vmConfig.Status == nil {
 		return "", "", fmt.Errorf("status is nil for GatewayVMConfiguration %s/%s", vmConfig.Namespace, vmConfig.Name)
 	}
 
 	for _, vmProfile := range vmConfig.Status.GatewayVMProfiles {
-		if vmProfile.NodeName == nodeName {
-			primaryIP = vmProfile.PrimaryIP
-			secondaryIP = vmProfile.SecondaryIP
-			break
-		}
-
-		// this is an inefficient way to handle VM agent pools where the "nodeName" on the vmConfig
-		// will be the name of the NIC.
-		if slices.Contains(vmIPs, vmProfile.PrimaryIP) && slices.Contains(vmIPs, vmProfile.SecondaryIP) {
+		log.Info("checking vmProfile", "nodeName", vmProfile.NodeName, "primaryIP", vmProfile.PrimaryIP, "secondaryIP", vmProfile.SecondaryIP)
+		if vmProfile.NodeName == nodeName || vmProfile.NodeName == nicName {
 			primaryIP = vmProfile.PrimaryIP
 			secondaryIP = vmProfile.SecondaryIP
 			break
