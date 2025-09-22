@@ -509,7 +509,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(vmConfig).WithRuntimeObjects(gwConfig, vmConfig).Build()
 				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
 				poolVMSS = &agentPoolVMSS{
-					Client:       cl,
+					StatusClient: cl,
 					AzureManager: az,
 				}
 			})
@@ -870,7 +870,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
 			})
 
-			It("should report error when getGatewayVMSS fails", func() {
+			It("should report error when loadPool fails", func() {
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return(nil, fmt.Errorf("failed"))
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
@@ -986,7 +986,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
 			})
 
-			It("should report error when getGatewayVMSS fails", func() {
+			It("should report error when loadPool fails", func() {
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return(nil, fmt.Errorf("failed"))
 				_, reconcileErr = r.Reconcile(context.TODO(), req)

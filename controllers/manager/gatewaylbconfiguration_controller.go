@@ -232,7 +232,7 @@ func (r *GatewayLBConfigurationReconciler) ensureDeleted(
 	return ctrl.Result{}, nil
 }
 
-type AgentPool interface {
+type GatewayPool interface {
 	Reconcile(ctx context.Context,
 		vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
 		ipPrefixID string,
@@ -242,7 +242,7 @@ type AgentPool interface {
 
 func getLBPropertyName(
 	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
-	ap AgentPool,
+	ap GatewayPool,
 ) (*lbPropertyNames, error) {
 	if ap.GetUniqueID() == "" {
 		return nil, fmt.Errorf("gateway node pool does not have UID")
@@ -268,10 +268,10 @@ func (r *GatewayLBConfigurationReconciler) getGatewayLB(ctx context.Context) (*n
 	return nil, err
 }
 
-func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
+func (r *GatewayLBConfigurationReconciler) loadPool(
 	ctx context.Context,
 	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
-) (AgentPool, error) {
+) (GatewayPool, error) {
 	if lbConfig.Spec.GatewayNodepoolName != "" {
 		vmssList, err := r.ListVMSS(ctx)
 		if err != nil {
@@ -307,20 +307,20 @@ func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
 		}
 		return &agentPoolVMSS{vmss: vmss}, nil
 	}
-	return nil, fmt.Errorf("gateway VMSS not found")
+	return nil, fmt.Errorf("gateway agent pool not found")
 }
 
-func NewAgentPoolVM(agentPoolName string, c client.Client, manager *azmanager.AzureManager) *agentPoolVMs {
+func NewAgentPoolVM(agentPoolName string, c client.StatusClient, manager *azmanager.AzureManager) *agentPoolVMs {
 	return &agentPoolVMs{
 		agentPoolName: agentPoolName,
-		Client:        c,
+		StatusClient:  c,
 		AzureManager:  manager,
 	}
 }
 
 type agentPoolVMs struct {
 	agentPoolName string
-	client.Client
+	client.StatusClient
 	*azmanager.AzureManager
 }
 
@@ -360,17 +360,17 @@ func (a *agentPoolVMs) GetUniqueID() string {
 	return uuid.NewMD5(namespaceAgentPool, []byte(a.agentPoolName)).String()
 }
 
-func NewAgentPoolVMSS(vmss *compute.VirtualMachineScaleSet, c client.Client, manager *azmanager.AzureManager) *agentPoolVMSS {
+func NewAgentPoolVMSS(vmss *compute.VirtualMachineScaleSet, c client.StatusClient, manager *azmanager.AzureManager) *agentPoolVMSS {
 	return &agentPoolVMSS{
 		vmss:         vmss,
-		Client:       c,
+		StatusClient: c,
 		AzureManager: manager,
 	}
 }
 
 type agentPoolVMSS struct {
 	vmss *compute.VirtualMachineScaleSet
-	client.Client
+	client.StatusClient
 	*azmanager.AzureManager
 }
 
@@ -422,7 +422,7 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 
 	// get gateway VMSS
 	// we need this because each gateway vmss needs one frontendConfig and one backendpool
-	agentPool, err := r.getGatewayVMSS(ctx, lbConfig)
+	agentPool, err := r.loadPool(ctx, lbConfig)
 	if err != nil {
 		log.Error(err, "failed to get vmss")
 		return "", 0, err
