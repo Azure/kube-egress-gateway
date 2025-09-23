@@ -343,6 +343,9 @@ func (a *agentPoolVMs) Reconcile(ctx context.Context, vmConfig *egressgatewayv1a
 		if _, ok := nics[i].Tags["static-gateway-nic"]; !ok {
 			continue
 		}
+		if val, ok := nics[0].Tags[consts.AKSNodepoolTagKey]; !ok || !strings.EqualFold(vmConfig.Spec.GatewayNodepoolName, to.Val(val)) {
+			continue
+		}
 		gatewayNICs = append(gatewayNICs, nics[i])
 	}
 
