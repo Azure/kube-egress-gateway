@@ -442,6 +442,24 @@ func (az *AzureManager) CreateOrUpdatePublicIP(ctx context.Context, resourceGrou
 	return result, nil
 }
 
+func (az *AzureManager) DeletePublicIP(ctx context.Context, resourceGroup, name string) error {
+	if resourceGroup == "" {
+		resourceGroup = az.ResourceGroup
+	}
+	if name == "" {
+		return fmt.Errorf("public ip name is empty")
+	}
+	logger := log.FromContext(ctx).WithValues("operation", "DeletePublicIP", "resourceGroup", resourceGroup, "resourceName", name)
+	ctx = log.IntoContext(ctx, logger)
+	err := wrapRetry(ctx, "DeletePublicIP", func(ctx context.Context) error {
+		return az.PublicIPClient.Delete(ctx, resourceGroup, name)
+	}, isRateLimitError)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (az *AzureManager) GetVMSSInterface(ctx context.Context, resourceGroup, vmssName, instanceID, interfaceName string) (*network.Interface, error) {
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup

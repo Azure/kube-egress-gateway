@@ -628,7 +628,6 @@ func (r *agentPoolVMs) reconcileNIC(
 	}
 
 	if ipPrefixID != "" {
-		// need to get-then-put for pip
 		// todo should we check ip version?
 		expectedPublicIP := &network.PublicIPAddress{
 			Location: to.Ptr(r.Location()),
@@ -663,6 +662,7 @@ func (r *agentPoolVMs) reconcileNIC(
 			if !wantIPConfig || differentNIC(ipConfig, expectedIPConfig) {
 				// remove at i
 				nic.Properties.IPConfigurations = append(nic.Properties.IPConfigurations[:i], nic.Properties.IPConfigurations[i+1:]...)
+				needUpdate = true
 				continue
 			}
 
@@ -720,6 +720,9 @@ func (r *agentPoolVMs) reconcileNIC(
 
 	// return earlier if it's deleting event
 	if !wantIPConfig {
+		if ipPrefixID != "" {
+			return "", r.DeletePublicIP(ctx, "", to.Val(nic.Name))
+		}
 		return "", nil
 	}
 
