@@ -53,12 +53,12 @@ type StaticGatewayConfigurationReconciler struct {
 	WgCtrl        wgctrlwrapper.Interface
 }
 
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations,verbs=get;list;watch
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get
-//+kubebuilder:rbac:groups=core,namespace=kube-egress-gateway-system,resources=secrets,verbs=get;list;watch
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaystatuses,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations,verbs=get;list;watch
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get
+// +kubebuilder:rbac:groups=core,namespace=kube-egress-gateway-system,resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaystatuses,verbs=get;list;watch;create;update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -454,13 +454,29 @@ func (r *StaticGatewayConfigurationReconciler) getVMIP(
 		return "", "", err
 	}
 
+	log.Info("parsing tags", "tags", nodeMeta.Compute.Tags)
+	tagList := strings.Split(nodeMeta.Compute.Tags, ";")
+
+	nicName := ""
+	for _, tag := range tagList {
+		parts := strings.Split(tag, ":")
+		if len(parts) != 2 {
+			continue
+		}
+		name, val := parts[0], parts[1]
+		if name != consts.AKSNodeNICTagKey {
+			continue
+		}
+		nicName = val
+	}
 	// this can happen in cleanup process when vmConfig is not ready yet
 	if vmConfig.Status == nil {
 		return "", "", fmt.Errorf("status is nil for GatewayVMConfiguration %s/%s", vmConfig.Namespace, vmConfig.Name)
 	}
 
 	for _, vmProfile := range vmConfig.Status.GatewayVMProfiles {
-		if vmProfile.NodeName == nodeName {
+		log.Info("checking vmProfile", "nodeName", vmProfile.NodeName, "primaryIP", vmProfile.PrimaryIP, "secondaryIP", vmProfile.SecondaryIP)
+		if vmProfile.NodeName == nodeName || vmProfile.NodeName == nicName {
 			primaryIP = vmProfile.PrimaryIP
 			secondaryIP = vmProfile.SecondaryIP
 			break

@@ -23,8 +23,10 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient/mock_publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient/mock_subnetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient/mock_virtualmachineclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
 
@@ -134,7 +136,7 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			It("should return error when listing vmss fails", func() {
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return(nil, fmt.Errorf("failed to list vmss"))
-				vmss, err := r.getGatewayVMSS(context.Background(), lbConfig)
+				vmss, err := r.loadPool(context.Background(), lbConfig)
 				Expect(vmss).To(BeNil())
 				Expect(err).To(Equal(fmt.Errorf("failed to list vmss")))
 			})
@@ -144,40 +146,50 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{
 					{ID: to.Ptr("test")},
 				}, nil)
-				vmss, err := r.getGatewayVMSS(context.Background(), lbConfig)
+				vmss, err := r.loadPool(context.Background(), lbConfig)
 				Expect(vmss).To(BeNil())
-				Expect(err).To(Equal(fmt.Errorf("gateway VMSS not found")))
+				Expect(err).To(Equal(fmt.Errorf("gateway agent pool not found")))
 			})
 
 			It("should return expected vmss in list", func() {
-				vmss := &compute.VirtualMachineScaleSet{Tags: map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")}}
+				vmss := &compute.VirtualMachineScaleSet{
+					Tags: map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")},
+					Properties: &compute.VirtualMachineScaleSetProperties{
+						UniqueID: to.Ptr("1234"),
+					},
+				}
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{
 					{ID: to.Ptr("dummy")},
 					vmss,
 				}, nil)
-				foundVMSS, err := r.getGatewayVMSS(context.Background(), lbConfig)
+				foundVMSS, err := r.loadPool(context.Background(), lbConfig)
 				Expect(err).To(BeNil())
-				Expect(to.Val(foundVMSS)).To(Equal(to.Val(vmss)))
+				Expect(foundVMSS.GetUniqueID()).To(Equal(*vmss.Properties.UniqueID))
 			})
 
 			It("should return error when getting vmss fails", func() {
 				lbConfig.Spec.GatewayNodepoolName = ""
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().Get(gomock.Any(), "vmssRG", "vmss", gomock.Any()).Return(nil, fmt.Errorf("vmss not found"))
-				vmss, err := r.getGatewayVMSS(context.Background(), lbConfig)
+				vmss, err := r.loadPool(context.Background(), lbConfig)
 				Expect(vmss).To(BeNil())
 				Expect(err).To(Equal(fmt.Errorf("vmss not found")))
 			})
 
 			It("should return expected vmss from get", func() {
 				lbConfig.Spec.GatewayNodepoolName = ""
-				vmss := &compute.VirtualMachineScaleSet{ID: to.Ptr("test")}
+				vmss := &compute.VirtualMachineScaleSet{
+					ID: to.Ptr("test"),
+					Properties: &compute.VirtualMachineScaleSetProperties{
+						UniqueID: to.Ptr("1234"),
+					},
+				}
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().Get(gomock.Any(), "vmssRG", "vmss", gomock.Any()).Return(vmss, nil)
-				foundVMSS, err := r.getGatewayVMSS(context.Background(), lbConfig)
+				foundVMSS, err := r.loadPool(context.Background(), lbConfig)
 				Expect(err).To(BeNil())
-				Expect(to.Val(foundVMSS)).To(Equal(to.Val(vmss)))
+				Expect(foundVMSS.GetUniqueID()).To(Equal(*vmss.Properties.UniqueID))
 			})
 		})
 
@@ -214,8 +226,8 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
-				Expect(reconcileErr).To(Equal(fmt.Errorf("gateway vmss does not have UID")))
-				assertEqualEvents([]string{"Warning ReconcileGatewayLBConfigurationError gateway vmss does not have UID"}, recorder.Events)
+				Expect(reconcileErr).To(Equal(fmt.Errorf("gateway node pool does not have UID")))
+				assertEqualEvents([]string{"Warning ReconcileGatewayLBConfigurationError gateway node pool does not have UID"}, recorder.Events)
 			})
 
 			It("should report error if lb property is empty", func() {
@@ -794,8 +806,13 @@ func getMockAzureManager(ctrl *gomock.Controller) *azmanager.AzureManager {
 	factory.EXPECT().GetVirtualMachineScaleSetVMClient().Return(mock_virtualmachinescalesetvmclient.NewMockInterface(ctrl))
 	factory.EXPECT().GetPublicIPPrefixClient().Return(mock_publicipprefixclient.NewMockInterface(ctrl))
 	factory.EXPECT().GetInterfaceClient().Return(mock_interfaceclient.NewMockInterface(ctrl))
+	factory.EXPECT().GetVirtualMachineClient().Return(mock_virtualmachineclient.NewMockInterface(ctrl))
+	factory.EXPECT().GetPublicIPAddressClient().Return(mock_publicipaddressclient.NewMockInterface(ctrl))
 	factory.EXPECT().GetSubnetClient().Return(mock_subnetclient.NewMockInterface(ctrl))
+
 	az, _ := azmanager.CreateAzureManager(conf, factory)
+	v := az.VMClient.(*mock_virtualmachineclient.MockInterface)
+	v.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachine{}, nil).AnyTimes()
 	return az
 }
 

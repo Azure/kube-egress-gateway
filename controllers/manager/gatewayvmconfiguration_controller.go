@@ -5,6 +5,7 @@ package manager
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -48,11 +49,11 @@ var (
 	publicIPPrefixRE = regexp.MustCompile(`(?i).*/subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Network/publicIPPrefixes/(.+)`)
 )
 
-//+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
-//+kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/finalizers,verbs=update
+// +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -226,7 +227,7 @@ func (r *GatewayVMConfigurationReconciler) reconcile(
 	existing := &egressgatewayv1alpha1.GatewayVMConfiguration{}
 	vmConfig.DeepCopyInto(existing)
 
-	vmss, ipPrefixLength, err := r.getGatewayVMSS(ctx, vmConfig)
+	pool, ipPrefixLength, err := r.loadPool(ctx, vmConfig)
 	if err != nil {
 		log.Error(err, "failed to get vmss")
 		return ctrl.Result{}, err
@@ -239,7 +240,7 @@ func (r *GatewayVMConfigurationReconciler) reconcile(
 	}
 
 	var privateIPs []string
-	if privateIPs, err = r.reconcileVMSS(ctx, vmConfig, vmss, ipPrefixID, true); err != nil {
+	if privateIPs, err = pool.Reconcile(ctx, vmConfig, ipPrefixID, true); err != nil {
 		log.Error(err, "failed to reconcile VMSS")
 		return ctrl.Result{}, err
 	}
@@ -294,13 +295,13 @@ func (r *GatewayVMConfigurationReconciler) ensureDeleted(
 	succeeded := false
 	defer func() { mc.ObserveControllerReconcileMetrics(succeeded) }()
 
-	vmss, _, err := r.getGatewayVMSS(ctx, vmConfig)
+	pool, _, err := r.loadPool(ctx, vmConfig)
 	if err != nil {
 		log.Error(err, "failed to get vmss")
 		return ctrl.Result{}, err
 	}
 
-	if _, err := r.reconcileVMSS(ctx, vmConfig, vmss, "", false); err != nil {
+	if _, err = pool.Reconcile(ctx, vmConfig, "", false); err != nil {
 		log.Error(err, "failed to reconcile VMSS")
 		return ctrl.Result{}, err
 	}
@@ -322,11 +323,31 @@ func (r *GatewayVMConfigurationReconciler) ensureDeleted(
 	return ctrl.Result{}, nil
 }
 
-func (r *GatewayVMConfigurationReconciler) getGatewayVMSS(
+func (r *GatewayVMConfigurationReconciler) loadPool(
 	ctx context.Context,
 	vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
-) (*compute.VirtualMachineScaleSet, int32, error) {
+) (GatewayPool, int32, error) {
 	if vmConfig.Spec.GatewayNodepoolName != "" {
+		vmsList, err := r.ListVMs(ctx)
+		if err != nil {
+			return nil, 0, err
+		}
+		for i := range vmsList {
+			vm := vmsList[i]
+			if v, ok := vm.Tags[consts.AKSNodepoolTagKey]; ok {
+				if strings.EqualFold(to.Val(v), vmConfig.Spec.GatewayNodepoolName) {
+					if prefixLenStr, ok := vm.Tags[consts.AKSNodepoolIPPrefixSizeTagKey]; ok {
+						if prefixLen, err := strconv.Atoi(to.Val(prefixLenStr)); err == nil && prefixLen > 0 && prefixLen <= math.MaxInt32 {
+							return NewAgentPoolVM(vmConfig.Spec.GatewayNodepoolName, r.Client, r.AzureManager), int32(prefixLen), nil
+						} else {
+							return nil, 0, fmt.Errorf("failed to parse nodepool IP prefix size: %s", to.Val(prefixLenStr))
+						}
+					} else {
+						return nil, 0, fmt.Errorf("nodepool does not have IP prefix size")
+					}
+				}
+			}
+		}
 		vmssList, err := r.ListVMSS(ctx)
 		if err != nil {
 			return nil, 0, err
@@ -337,7 +358,7 @@ func (r *GatewayVMConfigurationReconciler) getGatewayVMSS(
 				if strings.EqualFold(to.Val(v), vmConfig.Spec.GatewayNodepoolName) {
 					if prefixLenStr, ok := vmss.Tags[consts.AKSNodepoolIPPrefixSizeTagKey]; ok {
 						if prefixLen, err := strconv.Atoi(to.Val(prefixLenStr)); err == nil && prefixLen > 0 && prefixLen <= math.MaxInt32 {
-							return vmss, int32(prefixLen), nil
+							return NewAgentPoolVMSS(vmss, r.Client, r.AzureManager), int32(prefixLen), nil
 						} else {
 							return nil, 0, fmt.Errorf("failed to parse nodepool IP prefix size: %s", to.Val(prefixLenStr))
 						}
@@ -352,7 +373,7 @@ func (r *GatewayVMConfigurationReconciler) getGatewayVMSS(
 		if err != nil {
 			return nil, 0, err
 		}
-		return vmss, vmConfig.Spec.PublicIpPrefixSize, nil
+		return NewAgentPoolVMSS(vmss, r.Client, r.AzureManager), vmConfig.Spec.PublicIpPrefixSize, nil
 	}
 	return nil, 0, fmt.Errorf("gateway VMSS not found")
 }
@@ -463,7 +484,7 @@ func (r *GatewayVMConfigurationReconciler) ensurePublicIPPrefixDeleted(
 	}
 }
 
-func (r *GatewayVMConfigurationReconciler) reconcileVMSS(
+func (r *agentPoolVMSS) reconcileVMSS(
 	ctx context.Context,
 	vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
 	vmss *compute.VirtualMachineScaleSet,
@@ -540,7 +561,199 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSS(
 	return privateIPs, nil
 }
 
-func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
+func (r *agentPoolVMs) reconcileNIC(
+	ctx context.Context,
+	vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
+	nic *network.Interface,
+	ipPrefixID string,
+	lbBackendpoolID string,
+	wantIPConfig bool,
+) (string, error) {
+	logger := log.FromContext(ctx).WithValues("nic", to.Val(nic.ID), "wantIPConfig", wantIPConfig, "ipPrefixID", ipPrefixID)
+	ctx = log.IntoContext(ctx, logger)
+	ipConfigName := managedSubresourceName(vmConfig)
+
+	b, err := json.Marshal(nic)
+	if err != nil {
+		logger.Error(err, "failed to marshal nic")
+	}
+	logger.Info("reconciling NIC", "before", string(b))
+
+	if nic.Properties == nil {
+		return "", fmt.Errorf("nic(%s) has empty properties", to.Val(nic.ID))
+	}
+
+	forceUpdate := false
+	// check ProvisioningState
+	if to.Val(nic.Properties.ProvisioningState) != network.ProvisioningStateSucceeded {
+		logger.Info(fmt.Sprintf("VM ProvisioningState %q", to.Val(nic.Properties.ProvisioningState)))
+		if to.Val(nic.Properties.ProvisioningState) == network.ProvisioningStateFailed {
+			forceUpdate = true
+			logger.Info(fmt.Sprintf("Force update for unexpected NIC ProvisioningState:%q", to.Val(nic.Properties.ProvisioningState)))
+		}
+	}
+
+	needUpdate := false
+
+	// check primary IP & secondary IP
+	var primaryIP, secondaryIP, subnetID string
+	if !forceUpdate && wantIPConfig {
+		for _, ipConfig := range nic.Properties.IPConfigurations {
+			if ipConfig == nil || ipConfig.Properties == nil {
+				continue
+			}
+			if strings.EqualFold(to.Val(ipConfig.Name), ipConfigName) {
+				secondaryIP = to.Val(ipConfig.Properties.PrivateIPAddress)
+			} else if to.Val(ipConfig.Properties.Primary) {
+				primaryIP = to.Val(ipConfig.Properties.PrivateIPAddress)
+				subnetID = to.Val(ipConfig.Properties.Subnet.ID) // todo nil checking
+			}
+		}
+		if primaryIP == "" || secondaryIP == "" {
+			forceUpdate = true
+			logger.Info("Force update for missing primary IP and/or secondary IP", "primaryIP", primaryIP, "secondaryIP", secondaryIP)
+		}
+	}
+
+	// expected IPconfig
+	expectedIPConfig := &network.InterfaceIPConfiguration{
+		Name: to.Ptr(ipConfigName),
+		Properties: &network.InterfaceIPConfigurationPropertiesFormat{
+			Primary:                 to.Ptr(false),
+			PrivateIPAddressVersion: to.Ptr(network.IPVersionIPv4),
+			Subnet: &network.Subnet{
+				ID: to.Ptr(subnetID),
+			},
+		},
+	}
+
+	if ipPrefixID != "" {
+		// todo should we check ip version?
+		expectedPublicIP := &network.PublicIPAddress{
+			Location: to.Ptr(r.Location()),
+			SKU: &network.PublicIPAddressSKU{
+				// todo these should really match the publicIPPrefix settings instead of hardcoded
+				Name: to.Ptr(network.PublicIPAddressSKUNameStandard),
+				Tier: to.Ptr(network.PublicIPAddressSKUTierRegional),
+			},
+			Properties: &network.PublicIPAddressPropertiesFormat{
+				PublicIPAddressVersion: to.Ptr(network.IPVersionIPv4),
+				PublicIPPrefix: &network.SubResource{
+					ID: to.Ptr(ipPrefixID),
+				},
+				PublicIPAllocationMethod: to.Ptr(network.IPAllocationMethodStatic),
+			},
+		}
+		// todo how do we handle if the publicIPPrefix is out of IPs?
+		pip, err := r.CreateOrUpdatePublicIP(ctx, "", to.Val(nic.Name), *expectedPublicIP)
+		if err != nil {
+			return "", err
+		}
+		expectedIPConfig.Properties.PublicIPAddress = pip
+	}
+
+	found := false
+	for i, ipConfig := range nic.Properties.IPConfigurations {
+		if ipConfig == nil || ipConfig.Properties == nil {
+			continue
+		}
+
+		if strings.EqualFold(to.Val(ipConfig.Name), ipConfigName) {
+			if !wantIPConfig || differentNIC(ipConfig, expectedIPConfig) {
+				// remove at i
+				nic.Properties.IPConfigurations = append(nic.Properties.IPConfigurations[:i], nic.Properties.IPConfigurations[i+1:]...)
+				needUpdate = true
+				continue
+			}
+
+			found = true
+			break
+		}
+	}
+
+	if wantIPConfig && !found {
+		nic.Properties.IPConfigurations = append(nic.Properties.IPConfigurations, expectedIPConfig)
+		needUpdate = true
+	}
+
+	// todo this doesn't account for delete events
+
+	missingLB := true
+
+	for i := range nic.Properties.IPConfigurations {
+		ipConfig := nic.Properties.IPConfigurations[i]
+		if ipConfig == nil || ipConfig.Properties == nil || !to.Val(ipConfig.Properties.Primary) {
+			continue
+		}
+
+		for j := range ipConfig.Properties.LoadBalancerBackendAddressPools {
+			pool := ipConfig.Properties.LoadBalancerBackendAddressPools[j]
+			if pool == nil {
+				continue
+			}
+			if strings.EqualFold(to.Val(pool.ID), lbBackendpoolID) {
+				missingLB = false
+			}
+		}
+
+		if missingLB {
+			if ipConfig.Properties.LoadBalancerBackendAddressPools == nil {
+				ipConfig.Properties.LoadBalancerBackendAddressPools = make([]*network.BackendAddressPool, 0)
+			}
+
+			ipConfig.Properties.LoadBalancerBackendAddressPools = append(ipConfig.Properties.LoadBalancerBackendAddressPools, &network.BackendAddressPool{ID: to.Ptr(lbBackendpoolID)})
+		}
+	}
+
+	if needUpdate || forceUpdate || missingLB {
+		b, _ = json.Marshal(nic)
+		logger.Info("updating nic", "after", string(b))
+		if !needUpdate && forceUpdate {
+			logger.Info("nic update by forceUpdate")
+		}
+		nicID := to.Val(nic.ID)
+		nic, err = r.CreateOrUpdateNetworkInterface(ctx, "", to.Val(nic.Name), to.Val(nic))
+		if err != nil {
+			return "", fmt.Errorf("failed to update nic(%s): %w", nicID, err)
+		}
+	}
+
+	// return earlier if it's deleting event
+	if !wantIPConfig {
+		if ipPrefixID != "" {
+			return "", r.DeletePublicIP(ctx, "", to.Val(nic.Name))
+		}
+		return "", nil
+	}
+
+	vmprofile := egressgatewayv1alpha1.GatewayVMProfile{
+		NodeName:    to.Val(nic.Name), // is this going to be fine?
+		PrimaryIP:   primaryIP,
+		SecondaryIP: secondaryIP,
+	}
+	if vmConfig.Status == nil {
+		vmConfig.Status = &egressgatewayv1alpha1.GatewayVMConfigurationStatus{}
+	}
+	for i, profile := range vmConfig.Status.GatewayVMProfiles {
+		if profile.NodeName == vmprofile.NodeName {
+			if profile.PrimaryIP != primaryIP || profile.SecondaryIP != secondaryIP {
+				vmConfig.Status.GatewayVMProfiles[i].PrimaryIP = primaryIP
+				vmConfig.Status.GatewayVMProfiles[i].SecondaryIP = secondaryIP
+				logger.Info("GatewayVMConfiguration status updated", "primaryIP", primaryIP, "secondaryIP", secondaryIP)
+				return secondaryIP, nil
+			}
+			logger.Info("GatewayVMConfiguration status not changed", "primaryIP", primaryIP, "secondaryIP", secondaryIP)
+			return secondaryIP, nil
+		}
+	}
+
+	logger.Info("GatewayVMConfiguration status updated for new nodes", "nodeName", vmprofile.NodeName, "primaryIP", primaryIP, "secondaryIP", secondaryIP)
+	vmConfig.Status.GatewayVMProfiles = append(vmConfig.Status.GatewayVMProfiles, vmprofile)
+
+	return secondaryIP, nil
+}
+
+func (r *agentPoolVMSS) reconcileVMSSVM(
 	ctx context.Context,
 	vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
 	vmssName string,
@@ -681,7 +894,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 	return secondaryIP, nil
 }
 
-func (r *GatewayVMConfigurationReconciler) reconcileVMSSNetworkInterface(
+func (r *agentPoolVMSS) reconcileVMSSNetworkInterface(
 	ctx context.Context,
 	ipConfigName string,
 	ipPrefixID string,
@@ -737,7 +950,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSNetworkInterface(
 	return needUpdate, nil
 }
 
-func (r *GatewayVMConfigurationReconciler) reconcileLbBackendPool(
+func (r *agentPoolVMSS) reconcileLbBackendPool(
 	lbBackendpoolID string,
 	primaryNic *compute.VirtualMachineScaleSetNetworkConfiguration,
 ) (needUpdate bool, err error) {
@@ -778,7 +991,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileLbBackendPool(
 	return false, fmt.Errorf("vmss(vm) primary ipConfig not found")
 }
 
-func (r *GatewayVMConfigurationReconciler) getExpectedIPConfig(
+func (r *agentPoolVMSS) getExpectedIPConfig(
 	ipConfigName,
 	ipPrefixID string,
 	interfaces []*compute.VirtualMachineScaleSetNetworkConfiguration,
@@ -816,6 +1029,45 @@ func (r *GatewayVMConfigurationReconciler) getExpectedIPConfig(
 			},
 		},
 	}
+}
+
+func differentNIC(a, b *network.InterfaceIPConfiguration) bool {
+	if a.Properties == nil && b.Properties == nil {
+		return false
+	}
+	if a.Properties == nil || b.Properties == nil {
+		return true
+	}
+	prop1, prop2 := a.Properties, b.Properties
+	if to.Val(prop1.Primary) != to.Val(prop2.Primary) ||
+		to.Val(prop1.PrivateIPAddressVersion) != to.Val(prop2.PrivateIPAddressVersion) {
+		return true
+	}
+
+	if (prop1.Subnet != nil) != (prop2.Subnet != nil) {
+		return true
+	} else if prop1.Subnet != nil && prop2.Subnet != nil && !strings.EqualFold(to.Val(prop1.Subnet.ID), to.Val(prop2.Subnet.ID)) {
+		return true
+	}
+
+	pip1, pip2 := prop1.PublicIPAddress, prop2.PublicIPAddress
+	if (pip1 == nil) != (pip2 == nil) {
+		return true
+	} else if pip1 != nil && pip2 != nil {
+		if to.Val(pip1.Name) != to.Val(pip2.Name) {
+			return true
+		} else if (pip1.Properties != nil) != (pip2.Properties != nil) {
+			return true
+		} else if pip1.Properties != nil && pip2.Properties != nil {
+			prefix1, prefix2 := pip1.Properties.PublicIPPrefix, pip2.Properties.PublicIPPrefix
+			if (prefix1 != nil) != (prefix2 != nil) {
+				return true
+			} else if prefix1 != nil && prefix2 != nil && !strings.EqualFold(to.Val(prefix1.ID), to.Val(prefix2.ID)) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func different(ipConfig1, ipConfig2 *compute.VirtualMachineScaleSetIPConfiguration) bool {

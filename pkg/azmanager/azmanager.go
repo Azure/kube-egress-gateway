@@ -15,9 +15,11 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient"
 	_ "sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -103,7 +105,9 @@ type AzureManager struct {
 	LoadBalancerClient   loadbalancerclient.Interface
 	VmssClient           virtualmachinescalesetclient.Interface
 	VmssVMClient         virtualmachinescalesetvmclient.Interface
+	VMClient             virtualmachineclient.Interface
 	PublicIPPrefixClient publicipprefixclient.Interface
+	PublicIPClient       publicipaddressclient.Interface
 	InterfaceClient      interfaceclient.Interface
 	SubnetClient         subnetclient.Interface
 }
@@ -119,6 +123,8 @@ func CreateAzureManager(cloud *config.CloudConfig, factory azclient.ClientFactor
 	az.VmssVMClient = factory.GetVirtualMachineScaleSetVMClient()
 	az.InterfaceClient = factory.GetInterfaceClient()
 	az.SubnetClient = factory.GetSubnetClient()
+	az.VMClient = factory.GetVirtualMachineClient()
+	az.PublicIPClient = factory.GetPublicIPAddressClient()
 
 	return &az, nil
 }
@@ -226,6 +232,43 @@ func (az *AzureManager) GetVMSS(ctx context.Context, resourceGroup, vmssName str
 		return nil, err
 	}
 	return vmss, nil
+}
+
+func (az *AzureManager) ListVMs(ctx context.Context) ([]*compute.VirtualMachine, error) {
+	logger := log.FromContext(ctx).WithValues("operation", "ListVMs", "resourceGroup", az.LoadBalancerResourceGroup)
+	ctx = log.IntoContext(ctx, logger)
+	var vmsList []*compute.VirtualMachine
+	err := wrapRetry(ctx, "ListVMs", func(ctx context.Context) error {
+		var err error
+		vmsList, err = az.VMClient.List(ctx, az.ResourceGroup)
+		return err
+	}, isRateLimitError)
+	if err != nil {
+		return nil, err
+	}
+	return vmsList, nil
+}
+
+func (az *AzureManager) GetVM(ctx context.Context, resourceGroup, vmName string) (*compute.VirtualMachine, error) {
+	if resourceGroup == "" {
+		resourceGroup = az.ResourceGroup
+	}
+	if vmName == "" {
+		return nil, fmt.Errorf("vm name is empty")
+	}
+	logger := log.FromContext(ctx).WithValues("operation", "GetVM", "resourceGroup", resourceGroup, "resourceName", vmName)
+	ctx = log.IntoContext(ctx, logger)
+
+	var vm *compute.VirtualMachine
+	err := wrapRetry(ctx, "GetVM", func(ctx context.Context) error {
+		var err error
+		vm, err = az.VMClient.Get(ctx, resourceGroup, vmName, nil)
+		return err
+	}, isRateLimitError, retrySettings{OverallTimeout: to.Ptr(5 * time.Minute)})
+	if err != nil {
+		return nil, err
+	}
+	return vm, nil
 }
 
 func (az *AzureManager) CreateOrUpdateVMSS(ctx context.Context, resourceGroup, vmssName string, vmss compute.VirtualMachineScaleSet) (*compute.VirtualMachineScaleSet, error) {
@@ -378,6 +421,45 @@ func (az *AzureManager) DeletePublicIPPrefix(ctx context.Context, resourceGroup,
 	return err
 }
 
+func (az *AzureManager) CreateOrUpdatePublicIP(ctx context.Context, resourceGroup, name string, pip network.PublicIPAddress) (*network.PublicIPAddress, error) {
+	if resourceGroup == "" {
+		resourceGroup = az.ResourceGroup
+	}
+	if name == "" {
+		return nil, fmt.Errorf("public ip name is empty")
+	}
+	logger := log.FromContext(ctx).WithValues("operation", "CreateOrUpdatePublicIP", "resourceGroup", resourceGroup, "resourceName", name)
+	ctx = log.IntoContext(ctx, logger)
+	var result *network.PublicIPAddress
+	err := wrapRetry(ctx, "CreateOrUpdatePublicIP", func(ctx context.Context) error {
+		var err error
+		result, err = az.PublicIPClient.CreateOrUpdate(ctx, resourceGroup, name, pip)
+		return err
+	}, isRateLimitError)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (az *AzureManager) DeletePublicIP(ctx context.Context, resourceGroup, name string) error {
+	if resourceGroup == "" {
+		resourceGroup = az.ResourceGroup
+	}
+	if name == "" {
+		return fmt.Errorf("public ip name is empty")
+	}
+	logger := log.FromContext(ctx).WithValues("operation", "DeletePublicIP", "resourceGroup", resourceGroup, "resourceName", name)
+	ctx = log.IntoContext(ctx, logger)
+	err := wrapRetry(ctx, "DeletePublicIP", func(ctx context.Context) error {
+		return az.PublicIPClient.Delete(ctx, resourceGroup, name)
+	}, isRateLimitError)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (az *AzureManager) GetVMSSInterface(ctx context.Context, resourceGroup, vmssName, instanceID, interfaceName string) (*network.Interface, error) {
 	if resourceGroup == "" {
 		resourceGroup = az.ResourceGroup
@@ -403,6 +485,65 @@ func (az *AzureManager) GetVMSSInterface(ctx context.Context, resourceGroup, vms
 		return nil, err
 	}
 	return nicResp, nil
+}
+
+func (az *AzureManager) ListNetworkInterfaces(ctx context.Context, resourceGroup string) ([]*network.Interface, error) {
+	if resourceGroup == "" {
+		resourceGroup = az.ResourceGroup
+	}
+	logger := log.FromContext(ctx).WithValues("operation", "ListNetworkInterfaces", "resourceGroup", resourceGroup)
+	ctx = log.IntoContext(ctx, logger)
+	var nics []*network.Interface
+	err := wrapRetry(ctx, "ListNetworkInterfaces", func(ctx context.Context) error {
+		var err error
+		nics, err = az.InterfaceClient.List(ctx, resourceGroup)
+		return err
+	}, isRateLimitError)
+	if err != nil {
+		return nil, err
+	}
+	return nics, nil
+}
+
+func (az *AzureManager) GetNetworkInterface(ctx context.Context, interfaceName string) (*network.Interface, error) {
+	resourceGroup := az.ResourceGroup
+	if interfaceName == "" {
+		return nil, fmt.Errorf("interface name is empty")
+	}
+	logger := log.FromContext(ctx).WithValues("operation", "GetVMSSInterface", "resourceGroup", resourceGroup, "interfaceName", interfaceName)
+	ctx = log.IntoContext(ctx, logger)
+	var nicResp *network.Interface
+	err := wrapRetry(ctx, "GetNetworkInterface", func(ctx context.Context) error {
+		var err error
+		nicResp, err = az.InterfaceClient.Get(ctx, resourceGroup, interfaceName, nil)
+		return err
+	}, isRateLimitError)
+	if err != nil {
+		return nil, err
+	}
+	return nicResp, nil
+}
+
+func (az *AzureManager) CreateOrUpdateNetworkInterface(ctx context.Context, resourceGroup, nicName string, networkInterface network.Interface) (*network.Interface, error) {
+	if resourceGroup == "" {
+		resourceGroup = az.ResourceGroup
+	}
+
+	if nicName == "" {
+		return nil, fmt.Errorf("nic name is empty")
+	}
+	logger := log.FromContext(ctx).WithValues("operation", "CreateOrUpdateNetworkInterface", "resourceGroup", resourceGroup, "resourceName", nicName)
+	ctx = log.IntoContext(ctx, logger)
+	var nic *network.Interface
+	err := wrapRetry(ctx, "CreateOrUpdateNetworkInterface", func(ctx context.Context) error {
+		var err error
+		nic, err = az.InterfaceClient.CreateOrUpdate(ctx, resourceGroup, nicName, networkInterface)
+		return err
+	}, isRateLimitError)
+	if err != nil {
+		return nil, err
+	}
+	return nic, nil
 }
 
 func (az *AzureManager) GetSubnet(ctx context.Context) (*network.Subnet, error) {

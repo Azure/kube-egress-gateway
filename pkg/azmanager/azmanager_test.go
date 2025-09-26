@@ -16,8 +16,10 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient/mock_publicipprefixclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/subnetclient/mock_subnetclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient/mock_virtualmachineclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
 
@@ -785,6 +787,8 @@ func getMockFactory(ctrl *gomock.Controller) azclient.ClientFactory {
 	factory.EXPECT().GetLoadBalancerClient().Return(mock_loadbalancerclient.NewMockInterface(ctrl))
 	factory.EXPECT().GetVirtualMachineScaleSetClient().Return(mock_virtualmachinescalesetclient.NewMockInterface(ctrl))
 	factory.EXPECT().GetVirtualMachineScaleSetVMClient().Return(mock_virtualmachinescalesetvmclient.NewMockInterface(ctrl))
+	factory.EXPECT().GetVirtualMachineClient().Return(mock_virtualmachineclient.NewMockInterface(ctrl))
+	factory.EXPECT().GetPublicIPAddressClient().Return(mock_publicipaddressclient.NewMockInterface(ctrl))
 	factory.EXPECT().GetPublicIPPrefixClient().Return(mock_publicipprefixclient.NewMockInterface(ctrl))
 	factory.EXPECT().GetInterfaceClient().Return(mock_interfaceclient.NewMockInterface(ctrl))
 	factory.EXPECT().GetSubnetClient().Return(mock_subnetclient.NewMockInterface(ctrl))
