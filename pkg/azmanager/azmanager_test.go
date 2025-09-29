@@ -782,6 +782,369 @@ func TestIsInternalServerError(t *testing.T) {
 	assert.True(t, isInternalServerError(err))
 }
 
+func TestListVMs(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		desc    string
+		vms     []*compute.VirtualMachine
+		testErr error
+	}{
+		{
+			desc: "ListVMs() should return expected VMs",
+			vms:  []*compute.VirtualMachine{{Name: to.Ptr("testVM1")}, {Name: to.Ptr("testVM2")}},
+		},
+		{
+			desc:    "ListVMs() should return expected error",
+			testErr: fmt.Errorf("failed to list VMs"),
+		},
+	}
+	for i, test := range tests {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		config := getTestCloudConfig()
+		factory := getMockFactory(ctrl)
+		az, _ := CreateAzureManager(config, factory)
+		mockVMClient := az.VMClient.(*mock_virtualmachineclient.MockInterface)
+		mockVMClient.EXPECT().List(gomock.Any(), "testRG").Return(test.vms, test.testErr)
+		vms, err := az.ListVMs(context.Background())
+		assert.Equal(t, test.vms, vms, "TestCase[%d]: %s", i, test.desc)
+		assert.Equal(t, test.testErr, err, "TestCase[%d]: %s", i, test.desc)
+	}
+}
+
+func TestGetVM(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		desc          string
+		resourceGroup string
+		vmName        string
+		vm            *compute.VirtualMachine
+		testErr       error
+		expectedErr   error
+	}{
+		{
+			desc:          "GetVM() should return expected VM",
+			resourceGroup: "testRG",
+			vmName:        "testVM",
+			vm:            &compute.VirtualMachine{Name: to.Ptr("testVM")},
+		},
+		{
+			desc:          "GetVM() should use default resource group when empty",
+			resourceGroup: "",
+			vmName:        "testVM",
+			vm:            &compute.VirtualMachine{Name: to.Ptr("testVM")},
+		},
+		{
+			desc:        "GetVM() should return error when vmName is empty",
+			vmName:      "",
+			expectedErr: fmt.Errorf("vm name is empty"),
+		},
+		{
+			desc:          "GetVM() should return expected error",
+			resourceGroup: "testRG",
+			vmName:        "testVM",
+			testErr:       fmt.Errorf("VM not found"),
+		},
+	}
+	for i, test := range tests {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		config := getTestCloudConfig()
+		factory := getMockFactory(ctrl)
+		az, _ := CreateAzureManager(config, factory)
+
+		if test.expectedErr != nil {
+			vm, err := az.GetVM(context.Background(), test.resourceGroup, test.vmName)
+			assert.Nil(t, vm, "TestCase[%d]: %s", i, test.desc)
+			assert.Equal(t, test.expectedErr, err, "TestCase[%d]: %s", i, test.desc)
+			continue
+		}
+
+		expectedRG := test.resourceGroup
+		if expectedRG == "" {
+			expectedRG = "testRG"
+		}
+		mockVMClient := az.VMClient.(*mock_virtualmachineclient.MockInterface)
+		mockVMClient.EXPECT().Get(gomock.Any(), expectedRG, test.vmName, gomock.Any()).Return(test.vm, test.testErr)
+		vm, err := az.GetVM(context.Background(), test.resourceGroup, test.vmName)
+		assert.Equal(t, test.vm, vm, "TestCase[%d]: %s", i, test.desc)
+		assert.Equal(t, test.testErr, err, "TestCase[%d]: %s", i, test.desc)
+	}
+}
+
+func TestCreateOrUpdatePublicIP(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		desc          string
+		resourceGroup string
+		name          string
+		pip           network.PublicIPAddress
+		result        *network.PublicIPAddress
+		testErr       error
+		expectedErr   error
+	}{
+		{
+			desc:          "CreateOrUpdatePublicIP() should return expected PublicIP",
+			resourceGroup: "testRG",
+			name:          "testPIP",
+			pip:           network.PublicIPAddress{Name: to.Ptr("testPIP")},
+			result:        &network.PublicIPAddress{Name: to.Ptr("testPIP")},
+		},
+		{
+			desc:          "CreateOrUpdatePublicIP() should use default resource group when empty",
+			resourceGroup: "",
+			name:          "testPIP",
+			pip:           network.PublicIPAddress{Name: to.Ptr("testPIP")},
+			result:        &network.PublicIPAddress{Name: to.Ptr("testPIP")},
+		},
+		{
+			desc:        "CreateOrUpdatePublicIP() should return error when name is empty",
+			name:        "",
+			expectedErr: fmt.Errorf("public ip name is empty"),
+		},
+		{
+			desc:          "CreateOrUpdatePublicIP() should return expected error",
+			resourceGroup: "testRG",
+			name:          "testPIP",
+			pip:           network.PublicIPAddress{Name: to.Ptr("testPIP")},
+			testErr:       fmt.Errorf("failed to create public IP"),
+		},
+	}
+	for i, test := range tests {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		config := getTestCloudConfig()
+		factory := getMockFactory(ctrl)
+		az, _ := CreateAzureManager(config, factory)
+
+		if test.expectedErr != nil {
+			result, err := az.CreateOrUpdatePublicIP(context.Background(), test.resourceGroup, test.name, test.pip)
+			assert.Nil(t, result, "TestCase[%d]: %s", i, test.desc)
+			assert.Equal(t, test.expectedErr, err, "TestCase[%d]: %s", i, test.desc)
+			continue
+		}
+
+		expectedRG := test.resourceGroup
+		if expectedRG == "" {
+			expectedRG = "testRG"
+		}
+		mockPublicIPClient := az.PublicIPClient.(*mock_publicipaddressclient.MockInterface)
+		mockPublicIPClient.EXPECT().CreateOrUpdate(gomock.Any(), expectedRG, test.name, test.pip).Return(test.result, test.testErr)
+		result, err := az.CreateOrUpdatePublicIP(context.Background(), test.resourceGroup, test.name, test.pip)
+		assert.Equal(t, test.result, result, "TestCase[%d]: %s", i, test.desc)
+		assert.Equal(t, test.testErr, err, "TestCase[%d]: %s", i, test.desc)
+	}
+}
+
+func TestDeletePublicIP(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		desc          string
+		resourceGroup string
+		name          string
+		testErr       error
+		expectedErr   error
+	}{
+		{
+			desc:          "DeletePublicIP() should run successfully",
+			resourceGroup: "testRG",
+			name:          "testPIP",
+		},
+		{
+			desc:          "DeletePublicIP() should use default resource group when empty",
+			resourceGroup: "",
+			name:          "testPIP",
+		},
+		{
+			desc:        "DeletePublicIP() should return error when name is empty",
+			name:        "",
+			expectedErr: fmt.Errorf("public ip name is empty"),
+		},
+		{
+			desc:          "DeletePublicIP() should return expected error",
+			resourceGroup: "testRG",
+			name:          "testPIP",
+			testErr:       fmt.Errorf("failed to delete public IP"),
+		},
+	}
+	for i, test := range tests {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		config := getTestCloudConfig()
+		factory := getMockFactory(ctrl)
+		az, _ := CreateAzureManager(config, factory)
+
+		if test.expectedErr != nil {
+			err := az.DeletePublicIP(context.Background(), test.resourceGroup, test.name)
+			assert.Equal(t, test.expectedErr, err, "TestCase[%d]: %s", i, test.desc)
+			continue
+		}
+
+		expectedRG := test.resourceGroup
+		if expectedRG == "" {
+			expectedRG = "testRG"
+		}
+		mockPublicIPClient := az.PublicIPClient.(*mock_publicipaddressclient.MockInterface)
+		mockPublicIPClient.EXPECT().Delete(gomock.Any(), expectedRG, test.name).Return(test.testErr)
+		err := az.DeletePublicIP(context.Background(), test.resourceGroup, test.name)
+		assert.Equal(t, test.testErr, err, "TestCase[%d]: %s", i, test.desc)
+	}
+}
+
+func TestListNetworkInterfaces(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		desc          string
+		resourceGroup string
+		nics          []*network.Interface
+		testErr       error
+	}{
+		{
+			desc:          "ListNetworkInterfaces() should return expected NICs",
+			resourceGroup: "testRG",
+			nics:          []*network.Interface{{Name: to.Ptr("testNIC1")}, {Name: to.Ptr("testNIC2")}},
+		},
+		{
+			desc:          "ListNetworkInterfaces() should use default resource group when empty",
+			resourceGroup: "",
+			nics:          []*network.Interface{{Name: to.Ptr("testNIC")}},
+		},
+		{
+			desc:          "ListNetworkInterfaces() should return expected error",
+			resourceGroup: "testRG",
+			testErr:       fmt.Errorf("failed to list network interfaces"),
+		},
+	}
+	for i, test := range tests {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		config := getTestCloudConfig()
+		factory := getMockFactory(ctrl)
+		az, _ := CreateAzureManager(config, factory)
+
+		expectedRG := test.resourceGroup
+		if expectedRG == "" {
+			expectedRG = "testRG"
+		}
+		mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
+		mockInterfaceClient.EXPECT().List(gomock.Any(), expectedRG).Return(test.nics, test.testErr)
+		nics, err := az.ListNetworkInterfaces(context.Background(), test.resourceGroup)
+		assert.Equal(t, test.nics, nics, "TestCase[%d]: %s", i, test.desc)
+		assert.Equal(t, test.testErr, err, "TestCase[%d]: %s", i, test.desc)
+	}
+}
+
+func TestGetNetworkInterface(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		desc        string
+		nicName     string
+		nic         *network.Interface
+		testErr     error
+		expectedErr error
+	}{
+		{
+			desc:    "GetNetworkInterface() should return expected NIC",
+			nicName: "testNIC",
+			nic:     &network.Interface{Name: to.Ptr("testNIC")},
+		},
+		{
+			desc:        "GetNetworkInterface() should return error when nicName is empty",
+			nicName:     "",
+			expectedErr: fmt.Errorf("interface name is empty"),
+		},
+		{
+			desc:    "GetNetworkInterface() should return expected error",
+			nicName: "testNIC",
+			testErr: fmt.Errorf("NIC not found"),
+		},
+	}
+	for i, test := range tests {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		config := getTestCloudConfig()
+		factory := getMockFactory(ctrl)
+		az, _ := CreateAzureManager(config, factory)
+
+		if test.expectedErr != nil {
+			nic, err := az.GetNetworkInterface(context.Background(), test.nicName)
+			assert.Nil(t, nic, "TestCase[%d]: %s", i, test.desc)
+			assert.Equal(t, test.expectedErr, err, "TestCase[%d]: %s", i, test.desc)
+			continue
+		}
+
+		mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
+		mockInterfaceClient.EXPECT().Get(gomock.Any(), "testRG", test.nicName, gomock.Any()).Return(test.nic, test.testErr)
+		nic, err := az.GetNetworkInterface(context.Background(), test.nicName)
+		assert.Equal(t, test.nic, nic, "TestCase[%d]: %s", i, test.desc)
+		assert.Equal(t, test.testErr, err, "TestCase[%d]: %s", i, test.desc)
+	}
+}
+
+func TestCreateOrUpdateNetworkInterface(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		desc          string
+		resourceGroup string
+		nicName       string
+		nic           network.Interface
+		result        *network.Interface
+		testErr       error
+		expectedErr   error
+	}{
+		{
+			desc:          "CreateOrUpdateNetworkInterface() should return expected NIC",
+			resourceGroup: "testRG",
+			nicName:       "testNIC",
+			nic:           network.Interface{Name: to.Ptr("testNIC")},
+			result:        &network.Interface{Name: to.Ptr("testNIC")},
+		},
+		{
+			desc:          "CreateOrUpdateNetworkInterface() should use default resource group when empty",
+			resourceGroup: "",
+			nicName:       "testNIC",
+			nic:           network.Interface{Name: to.Ptr("testNIC")},
+			result:        &network.Interface{Name: to.Ptr("testNIC")},
+		},
+		{
+			desc:        "CreateOrUpdateNetworkInterface() should return error when nicName is empty",
+			nicName:     "",
+			expectedErr: fmt.Errorf("nic name is empty"),
+		},
+		{
+			desc:          "CreateOrUpdateNetworkInterface() should return expected error",
+			resourceGroup: "testRG",
+			nicName:       "testNIC",
+			nic:           network.Interface{Name: to.Ptr("testNIC")},
+			testErr:       fmt.Errorf("failed to create network interface"),
+		},
+	}
+	for i, test := range tests {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		config := getTestCloudConfig()
+		factory := getMockFactory(ctrl)
+		az, _ := CreateAzureManager(config, factory)
+
+		if test.expectedErr != nil {
+			result, err := az.CreateOrUpdateNetworkInterface(context.Background(), test.resourceGroup, test.nicName, test.nic)
+			assert.Nil(t, result, "TestCase[%d]: %s", i, test.desc)
+			assert.Equal(t, test.expectedErr, err, "TestCase[%d]: %s", i, test.desc)
+			continue
+		}
+
+		expectedRG := test.resourceGroup
+		if expectedRG == "" {
+			expectedRG = "testRG"
+		}
+		mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
+		mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), expectedRG, test.nicName, test.nic).Return(test.result, test.testErr)
+		result, err := az.CreateOrUpdateNetworkInterface(context.Background(), test.resourceGroup, test.nicName, test.nic)
+		assert.Equal(t, test.result, result, "TestCase[%d]: %s", i, test.desc)
+		assert.Equal(t, test.testErr, err, "TestCase[%d]: %s", i, test.desc)
+	}
+}
+
 func getMockFactory(ctrl *gomock.Controller) azclient.ClientFactory {
 	factory := mock_azclient.NewMockClientFactory(ctrl)
 	factory.EXPECT().GetLoadBalancerClient().Return(mock_loadbalancerclient.NewMockInterface(ctrl))
