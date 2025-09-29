@@ -1043,6 +1043,61 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				Expect(ips[0]).To(Equal("10.0.0.2"))
 			})
 
+			It("should update target ipconfig if publicIP is missing", func() {
+				backendPoolID := az.GetLBBackendAddressPoolID(poolVMs.GetUniqueID())
+				nics := []*network.Interface{
+					{
+						Name: to.Ptr("gateway-nic"),
+						Tags: map[string]*string{
+							"static-gateway-nic":     to.Ptr("true"),
+							consts.AKSNodepoolTagKey: to.Ptr("testgw"),
+						},
+						Properties: &network.InterfacePropertiesFormat{
+							IPConfigurations: []*network.InterfaceIPConfiguration{
+								{
+									Name: to.Ptr("ipconfig1"),
+									Properties: &network.InterfaceIPConfigurationPropertiesFormat{
+										Primary:          to.Ptr(true),
+										PrivateIPAddress: to.Ptr("10.0.0.1"),
+									},
+								},
+								{
+									Name: to.Ptr("egressgateway-testUID"),
+									Properties: &network.InterfaceIPConfigurationPropertiesFormat{
+										Primary:          to.Ptr(false),
+										PrivateIPAddress: to.Ptr("10.0.0.2"),
+									},
+								},
+							},
+						},
+					},
+				}
+				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
+				mockInterfaceClient.EXPECT().List(gomock.Any(), testRG).Return(nics, nil)
+				mockPublicIPClient := az.PublicIPClient.(*mock_publicipaddressclient.MockInterface)
+				mockPublicIPClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, "gateway-nic", gomock.Any()).Return(&network.PublicIPAddress{
+					Properties: &network.PublicIPAddressPropertiesFormat{
+						IPAddress: to.Ptr("1.2.3.4"),
+					},
+				}, nil)
+				mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, "gateway-nic", gomock.Any()).DoAndReturn(
+					func(ctx context.Context, rg, name string, nic network.Interface) (*network.Interface, error) {
+						// Verify the NIC has secondary IP configuration added
+						Expect(len(nic.Properties.IPConfigurations)).To(Equal(2))
+						Expect(*nic.Properties.IPConfigurations[1].Name).To(Equal("egressgateway-testUID"))
+						Expect(nic.Properties.IPConfigurations[0].Properties.LoadBalancerBackendAddressPools).To(HaveLen(1))
+						Expect(*nic.Properties.IPConfigurations[0].Properties.LoadBalancerBackendAddressPools[0].ID).To(Equal(*backendPoolID))
+						Expect(*nic.Properties.IPConfigurations[1].Properties.PublicIPAddress.Properties.IPAddress).To(Equal("1.2.3.4"))
+
+						nic.Properties.IPConfigurations[1].Properties.PrivateIPAddress = to.Ptr("10.0.0.2")
+						return &nic, nil
+					})
+				ips, err := poolVMs.Reconcile(context.Background(), vmConfig, "prefix", true)
+				Expect(err).To(BeNil())
+				Expect(len(ips)).To(Equal(1))
+				Expect(ips[0]).To(Equal("10.0.0.2"))
+			})
+
 			It("should remove IP configuration when wantIPConfig is false", func() {
 				nics := []*network.Interface{
 					{

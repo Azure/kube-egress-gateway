@@ -14,7 +14,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
-	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,10 +29,6 @@ import (
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/metrics"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
-)
-
-var (
-	namespaceAgentPool = uuid.Must(uuid.Parse("2c96e82c-842f-11f0-8ea5-6bee14278ecd"))
 )
 
 // GatewayLBConfigurationReconciler reconciles a GatewayLBConfiguration object
@@ -310,83 +305,6 @@ func (r *GatewayLBConfigurationReconciler) loadPool(
 		return &agentPoolVMSS{vmss: vmss}, nil
 	}
 	return nil, fmt.Errorf("gateway agent pool not found")
-}
-
-func NewAgentPoolVM(agentPoolName string, c client.StatusClient, manager *azmanager.AzureManager) *agentPoolVMs {
-	return &agentPoolVMs{
-		agentPoolName: agentPoolName,
-		StatusClient:  c,
-		AzureManager:  manager,
-	}
-}
-
-type agentPoolVMs struct {
-	agentPoolName string
-	client.StatusClient
-	*azmanager.AzureManager
-}
-
-func (a *agentPoolVMs) Reconcile(ctx context.Context, vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration, ipPrefixID string, wantIPConfig bool) ([]string, error) {
-	backendLBPoolID := a.GetLBBackendAddressPoolID(a.GetUniqueID())
-
-	secondaryIPs := make([]string, 0)
-
-	nics, err := a.ListNetworkInterfaces(ctx, "" /* empty resource group, just use default */)
-	if err != nil {
-		return nil, err
-	}
-
-	gatewayNICs := make([]*network.Interface, 0, len(nics))
-	for i := range nics {
-		if nics[i] == nil {
-			continue
-		}
-
-		if _, ok := nics[i].Tags["static-gateway-nic"]; !ok {
-			continue
-		}
-		if val, ok := nics[i].Tags[consts.AKSNodepoolTagKey]; !ok || !strings.EqualFold(vmConfig.Spec.GatewayNodepoolName, to.Val(val)) {
-			continue
-		}
-		gatewayNICs = append(gatewayNICs, nics[i])
-	}
-
-	for i := range gatewayNICs {
-		ip, err := a.reconcileNIC(ctx, vmConfig, gatewayNICs[i], ipPrefixID, to.Val(backendLBPoolID), wantIPConfig)
-		if err != nil {
-			return nil, err
-		}
-		secondaryIPs = append(secondaryIPs, ip)
-	}
-	return secondaryIPs, nil
-}
-
-func (a *agentPoolVMs) GetUniqueID() string {
-	return uuid.NewMD5(namespaceAgentPool, []byte(a.agentPoolName)).String()
-}
-
-type gatewayIPConfig struct {
-	primaryIP   string
-	secondaryIP string
-	subnetID    string
-}
-
-func (r *agentPoolVMs) getGatewayIPConfig(nic *network.Interface, name string) gatewayIPConfig {
-	result := gatewayIPConfig{}
-	for _, ipConfig := range nic.Properties.IPConfigurations {
-		if ipConfig == nil || ipConfig.Properties == nil {
-			continue
-		}
-		if strings.EqualFold(to.Val(ipConfig.Name), name) {
-			result.secondaryIP = to.Val(ipConfig.Properties.PrivateIPAddress)
-		} else if to.Val(ipConfig.Properties.Primary) {
-			result.primaryIP = to.Val(ipConfig.Properties.PrivateIPAddress)
-			if ipConfig.Properties.Subnet != nil {
-				result.subnetID = to.Val(ipConfig.Properties.Subnet.ID)
-			}
-		}
-	}
-	return result
 }
 
 func NewAgentPoolVMSS(vmss *compute.VirtualMachineScaleSet, c client.StatusClient, manager *azmanager.AzureManager) *agentPoolVMSS {
