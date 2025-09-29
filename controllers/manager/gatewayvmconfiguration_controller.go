@@ -596,22 +596,12 @@ func (r *agentPoolVMs) reconcileNIC(
 	needUpdate := false
 
 	// check primary IP & secondary IP
-	var primaryIP, secondaryIP, subnetID string
+	var ipCfg gatewayIPConfig
 	if !forceUpdate && wantIPConfig {
-		for _, ipConfig := range nic.Properties.IPConfigurations {
-			if ipConfig == nil || ipConfig.Properties == nil {
-				continue
-			}
-			if strings.EqualFold(to.Val(ipConfig.Name), ipConfigName) {
-				secondaryIP = to.Val(ipConfig.Properties.PrivateIPAddress)
-			} else if to.Val(ipConfig.Properties.Primary) {
-				primaryIP = to.Val(ipConfig.Properties.PrivateIPAddress)
-				subnetID = to.Val(ipConfig.Properties.Subnet.ID) // todo nil checking
-			}
-		}
-		if primaryIP == "" || secondaryIP == "" {
+		ipCfg = r.getGatewayIPConfig(nic, ipConfigName)
+		if ipCfg.primaryIP == "" || ipCfg.secondaryIP == "" {
 			forceUpdate = true
-			logger.Info("Force update for missing primary IP and/or secondary IP", "primaryIP", primaryIP, "secondaryIP", secondaryIP)
+			logger.Info("Force update for missing primary IP and/or secondary IP", "primaryIP", ipCfg.primaryIP, "secondaryIP", ipCfg.secondaryIP)
 		}
 	}
 
@@ -622,12 +612,12 @@ func (r *agentPoolVMs) reconcileNIC(
 			Primary:                 to.Ptr(false),
 			PrivateIPAddressVersion: to.Ptr(network.IPVersionIPv4),
 			Subnet: &network.Subnet{
-				ID: to.Ptr(subnetID),
+				ID: to.Ptr(ipCfg.subnetID),
 			},
 		},
 	}
 
-	if ipPrefixID != "" {
+	if ipPrefixID != "" && wantIPConfig {
 		// todo should we check ip version?
 		expectedPublicIP := &network.PublicIPAddress{
 			Location: to.Ptr(r.Location()),
@@ -653,7 +643,8 @@ func (r *agentPoolVMs) reconcileNIC(
 	}
 
 	found := false
-	for i, ipConfig := range nic.Properties.IPConfigurations {
+	for i := 0; i < len(nic.Properties.IPConfigurations); i++ {
+		ipConfig := nic.Properties.IPConfigurations[i]
 		if ipConfig == nil || ipConfig.Properties == nil {
 			continue
 		}
@@ -663,7 +654,6 @@ func (r *agentPoolVMs) reconcileNIC(
 				// remove at i
 				nic.Properties.IPConfigurations = append(nic.Properties.IPConfigurations[:i], nic.Properties.IPConfigurations[i+1:]...)
 				needUpdate = true
-				continue
 			}
 
 			found = true
@@ -675,8 +665,6 @@ func (r *agentPoolVMs) reconcileNIC(
 		nic.Properties.IPConfigurations = append(nic.Properties.IPConfigurations, expectedIPConfig)
 		needUpdate = true
 	}
-
-	// todo this doesn't account for delete events
 
 	missingLB := true
 
@@ -716,6 +704,7 @@ func (r *agentPoolVMs) reconcileNIC(
 		if err != nil {
 			return "", fmt.Errorf("failed to update nic(%s): %w", nicID, err)
 		}
+		ipCfg = r.getGatewayIPConfig(nic, ipConfigName)
 	}
 
 	// return earlier if it's deleting event
@@ -728,29 +717,29 @@ func (r *agentPoolVMs) reconcileNIC(
 
 	vmprofile := egressgatewayv1alpha1.GatewayVMProfile{
 		NodeName:    to.Val(nic.Name), // is this going to be fine?
-		PrimaryIP:   primaryIP,
-		SecondaryIP: secondaryIP,
+		PrimaryIP:   ipCfg.primaryIP,
+		SecondaryIP: ipCfg.secondaryIP,
 	}
 	if vmConfig.Status == nil {
 		vmConfig.Status = &egressgatewayv1alpha1.GatewayVMConfigurationStatus{}
 	}
 	for i, profile := range vmConfig.Status.GatewayVMProfiles {
 		if profile.NodeName == vmprofile.NodeName {
-			if profile.PrimaryIP != primaryIP || profile.SecondaryIP != secondaryIP {
-				vmConfig.Status.GatewayVMProfiles[i].PrimaryIP = primaryIP
-				vmConfig.Status.GatewayVMProfiles[i].SecondaryIP = secondaryIP
-				logger.Info("GatewayVMConfiguration status updated", "primaryIP", primaryIP, "secondaryIP", secondaryIP)
-				return secondaryIP, nil
+			if profile.PrimaryIP != ipCfg.primaryIP || profile.SecondaryIP != ipCfg.secondaryIP {
+				vmConfig.Status.GatewayVMProfiles[i].PrimaryIP = ipCfg.primaryIP
+				vmConfig.Status.GatewayVMProfiles[i].SecondaryIP = ipCfg.secondaryIP
+				logger.Info("GatewayVMConfiguration status updated", "primaryIP", ipCfg.primaryIP, "secondaryIP", ipCfg.secondaryIP)
+				return ipCfg.secondaryIP, nil
 			}
-			logger.Info("GatewayVMConfiguration status not changed", "primaryIP", primaryIP, "secondaryIP", secondaryIP)
-			return secondaryIP, nil
+			logger.Info("GatewayVMConfiguration status not changed", "primaryIP", ipCfg.primaryIP, "secondaryIP", ipCfg.secondaryIP)
+			return ipCfg.secondaryIP, nil
 		}
 	}
 
-	logger.Info("GatewayVMConfiguration status updated for new nodes", "nodeName", vmprofile.NodeName, "primaryIP", primaryIP, "secondaryIP", secondaryIP)
+	logger.Info("GatewayVMConfiguration status updated for new nodes", "nodeName", vmprofile.NodeName, "primaryIP", ipCfg.primaryIP, "secondaryIP", ipCfg.secondaryIP)
 	vmConfig.Status.GatewayVMProfiles = append(vmConfig.Status.GatewayVMProfiles, vmprofile)
 
-	return secondaryIP, nil
+	return ipCfg.secondaryIP, nil
 }
 
 func (r *agentPoolVMSS) reconcileVMSSVM(

@@ -296,6 +296,8 @@ func (r *GatewayLBConfigurationReconciler) loadPool(
 				if strings.EqualFold(to.Val(v), lbConfig.Spec.GatewayNodepoolName) {
 					return &agentPoolVMs{
 						agentPoolName: lbConfig.Spec.GatewayNodepoolName,
+						StatusClient:  r.Client,
+						AzureManager:  r.AzureManager,
 					}, nil
 				}
 			}
@@ -343,14 +345,14 @@ func (a *agentPoolVMs) Reconcile(ctx context.Context, vmConfig *egressgatewayv1a
 		if _, ok := nics[i].Tags["static-gateway-nic"]; !ok {
 			continue
 		}
-		if val, ok := nics[0].Tags[consts.AKSNodepoolTagKey]; !ok || !strings.EqualFold(vmConfig.Spec.GatewayNodepoolName, to.Val(val)) {
+		if val, ok := nics[i].Tags[consts.AKSNodepoolTagKey]; !ok || !strings.EqualFold(vmConfig.Spec.GatewayNodepoolName, to.Val(val)) {
 			continue
 		}
 		gatewayNICs = append(gatewayNICs, nics[i])
 	}
 
 	for i := range gatewayNICs {
-		ip, err := a.reconcileNIC(ctx, vmConfig, nics[i], ipPrefixID, to.Val(backendLBPoolID), wantIPConfig)
+		ip, err := a.reconcileNIC(ctx, vmConfig, gatewayNICs[i], ipPrefixID, to.Val(backendLBPoolID), wantIPConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -361,6 +363,30 @@ func (a *agentPoolVMs) Reconcile(ctx context.Context, vmConfig *egressgatewayv1a
 
 func (a *agentPoolVMs) GetUniqueID() string {
 	return uuid.NewMD5(namespaceAgentPool, []byte(a.agentPoolName)).String()
+}
+
+type gatewayIPConfig struct {
+	primaryIP   string
+	secondaryIP string
+	subnetID    string
+}
+
+func (r *agentPoolVMs) getGatewayIPConfig(nic *network.Interface, name string) gatewayIPConfig {
+	result := gatewayIPConfig{}
+	for _, ipConfig := range nic.Properties.IPConfigurations {
+		if ipConfig == nil || ipConfig.Properties == nil {
+			continue
+		}
+		if strings.EqualFold(to.Val(ipConfig.Name), name) {
+			result.secondaryIP = to.Val(ipConfig.Properties.PrivateIPAddress)
+		} else if to.Val(ipConfig.Properties.Primary) {
+			result.primaryIP = to.Val(ipConfig.Properties.PrivateIPAddress)
+			if ipConfig.Properties.Subnet != nil {
+				result.subnetID = to.Val(ipConfig.Properties.Subnet.ID)
+			}
+		}
+	}
+	return result
 }
 
 func NewAgentPoolVMSS(vmss *compute.VirtualMachineScaleSet, c client.StatusClient, manager *azmanager.AzureManager) *agentPoolVMSS {

@@ -116,6 +116,8 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 		When("lbConfig is not found", func() {
 			It("should only report error in get", func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
+				v := az.VMClient.(*mock_virtualmachineclient.MockInterface)
+				v.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachine{}, nil).AnyTimes()
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
 				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
@@ -130,6 +132,8 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 		Context("TestGetGatewayVMSS", func() {
 			BeforeEach(func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
+				v := az.VMClient.(*mock_virtualmachineclient.MockInterface)
+				v.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachine{}, nil).AnyTimes()
 				r = &GatewayLBConfigurationReconciler{AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 			})
 
@@ -193,10 +197,59 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			})
 		})
 
+		Context("TestGetGatewayVMs", func() {
+			BeforeEach(func() {
+				az = getMockAzureManager(gomock.NewController(GinkgoT()))
+				r = &GatewayLBConfigurationReconciler{AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
+				lbConfig.Spec.GatewayVmssProfile.VmssResourceGroup = ""
+				lbConfig.Spec.GatewayVmssProfile.VmssName = ""
+			})
+
+			It("should return error when listing VMs fails", func() {
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return(nil, fmt.Errorf("failed to list vms"))
+				pool, err := r.loadPool(context.Background(), lbConfig)
+				Expect(pool).To(BeNil())
+				Expect(err).To(Equal(fmt.Errorf("failed to list vms")))
+			})
+
+			It("should return error when no VM has expected nodepool tag", func() {
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{}, nil)
+
+				mockVMClient := az.VMClient.(*mock_virtualmachineclient.MockInterface)
+				mockVMClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachine{
+					{ID: to.Ptr("test"), Tags: map[string]*string{"other": to.Ptr("tag")}},
+				}, nil)
+				pool, err := r.loadPool(context.Background(), lbConfig)
+				Expect(pool).To(BeNil())
+				Expect(err).To(Equal(fmt.Errorf("gateway agent pool not found")))
+			})
+
+			It("should return agentPoolVMs when VM with expected tag found", func() {
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{
+					{ID: to.Ptr("dummy"), Tags: map[string]*string{"other": to.Ptr("tag")}},
+				}, nil)
+				mockVMClient := az.VMClient.(*mock_virtualmachineclient.MockInterface)
+				mockVMClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachine{
+					{ID: to.Ptr("dummy"), Tags: map[string]*string{"other": to.Ptr("tag")}},
+					{ID: to.Ptr("test"), Tags: map[string]*string{consts.AKSNodepoolTagKey: to.Ptr("testgw")}},
+				}, nil)
+				pool, err := r.loadPool(context.Background(), lbConfig)
+				Expect(err).To(BeNil())
+				Expect(pool).ToNot(BeNil())
+				// Verify the unique ID is generated from the agent pool name
+				Expect(pool.GetUniqueID()).ToNot(BeEmpty())
+			})
+		})
+
 		When("lbConfig has GatewayNodepoolName", func() {
 			BeforeEach(func() {
 				controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
+				v := az.VMClient.(*mock_virtualmachineclient.MockInterface)
+				v.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachine{}, nil).AnyTimes()
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(gwConfig, lbConfig).Build()
 				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 			})
@@ -462,6 +515,8 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 			BeforeEach(func() {
 				controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
+				v := az.VMClient.(*mock_virtualmachineclient.MockInterface)
+				v.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachine{}, nil).AnyTimes()
 				expectedLB := getExpectedLB()
 				mockLoadBalancerClient := az.LoadBalancerClient.(*mock_loadbalancerclient.MockInterface)
 				mockLoadBalancerClient.EXPECT().Get(gomock.Any(), testLBRG, testLBName, gomock.Any()).Return(expectedLB, nil)
@@ -570,6 +625,8 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
 				lbConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
+				v := az.VMClient.(*mock_virtualmachineclient.MockInterface)
+				v.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachine{}, nil).AnyTimes()
 			})
 
 			It("should delete vmConfig before cleaning lb", func() {
@@ -593,6 +650,8 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				controllerutil.AddFinalizer(lbConfig, consts.LBConfigFinalizerName)
 				lbConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
+				v := az.VMClient.(*mock_virtualmachineclient.MockInterface)
+				v.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachine{}, nil).AnyTimes()
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(lbConfig).WithRuntimeObjects(gwConfig, lbConfig).Build()
 				r = &GatewayLBConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder, LBProbePort: lbProbePort}
 				vmss := &compute.VirtualMachineScaleSet{
@@ -811,8 +870,6 @@ func getMockAzureManager(ctrl *gomock.Controller) *azmanager.AzureManager {
 	factory.EXPECT().GetSubnetClient().Return(mock_subnetclient.NewMockInterface(ctrl))
 
 	az, _ := azmanager.CreateAzureManager(conf, factory)
-	v := az.VMClient.(*mock_virtualmachineclient.MockInterface)
-	v.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachine{}, nil).AnyTimes()
 	return az
 }
 
