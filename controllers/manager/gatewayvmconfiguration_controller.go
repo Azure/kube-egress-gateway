@@ -48,11 +48,11 @@ var (
 	publicIPPrefixRE = regexp.MustCompile(`(?i).*/subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Network/publicIPPrefixes/(.+)`)
 )
 
-//+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
-//+kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/finalizers,verbs=update
+// +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -226,7 +226,7 @@ func (r *GatewayVMConfigurationReconciler) reconcile(
 	existing := &egressgatewayv1alpha1.GatewayVMConfiguration{}
 	vmConfig.DeepCopyInto(existing)
 
-	vmss, ipPrefixLength, err := r.getGatewayVMSS(ctx, vmConfig)
+	pool, ipPrefixLength, err := r.loadPool(ctx, vmConfig)
 	if err != nil {
 		log.Error(err, "failed to get vmss")
 		return ctrl.Result{}, err
@@ -239,7 +239,7 @@ func (r *GatewayVMConfigurationReconciler) reconcile(
 	}
 
 	var privateIPs []string
-	if privateIPs, err = r.reconcileVMSS(ctx, vmConfig, vmss, ipPrefixID, true); err != nil {
+	if privateIPs, err = pool.Reconcile(ctx, vmConfig, ipPrefixID, true); err != nil {
 		log.Error(err, "failed to reconcile VMSS")
 		return ctrl.Result{}, err
 	}
@@ -294,13 +294,13 @@ func (r *GatewayVMConfigurationReconciler) ensureDeleted(
 	succeeded := false
 	defer func() { mc.ObserveControllerReconcileMetrics(succeeded) }()
 
-	vmss, _, err := r.getGatewayVMSS(ctx, vmConfig)
+	pool, _, err := r.loadPool(ctx, vmConfig)
 	if err != nil {
-		log.Error(err, "failed to get vmss")
+		log.Error(err, "failed to load node pool for vmConfig %s/%s", vmConfig.Namespace, vmConfig.Name)
 		return ctrl.Result{}, err
 	}
 
-	if _, err := r.reconcileVMSS(ctx, vmConfig, vmss, "", false); err != nil {
+	if _, err = pool.Reconcile(ctx, vmConfig, "", false); err != nil {
 		log.Error(err, "failed to reconcile VMSS")
 		return ctrl.Result{}, err
 	}
@@ -322,11 +322,31 @@ func (r *GatewayVMConfigurationReconciler) ensureDeleted(
 	return ctrl.Result{}, nil
 }
 
-func (r *GatewayVMConfigurationReconciler) getGatewayVMSS(
+func (r *GatewayVMConfigurationReconciler) loadPool(
 	ctx context.Context,
 	vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
-) (*compute.VirtualMachineScaleSet, int32, error) {
+) (GatewayPool, int32, error) {
 	if vmConfig.Spec.GatewayNodepoolName != "" {
+		vmsList, err := r.ListVMs(ctx)
+		if err != nil {
+			return nil, 0, err
+		}
+		for i := range vmsList {
+			vm := vmsList[i]
+			if v, ok := vm.Tags[consts.AKSNodepoolTagKey]; ok {
+				if strings.EqualFold(to.Val(v), vmConfig.Spec.GatewayNodepoolName) {
+					if prefixLenStr, ok := vm.Tags[consts.AKSNodepoolIPPrefixSizeTagKey]; ok {
+						if prefixLen, err := strconv.Atoi(to.Val(prefixLenStr)); err == nil && prefixLen > 0 && prefixLen <= math.MaxInt32 {
+							return NewAgentPoolVM(vmConfig.Spec.GatewayNodepoolName, r.Client, r.AzureManager), int32(prefixLen), nil
+						} else {
+							return nil, 0, fmt.Errorf("failed to parse nodepool IP prefix size: %s", to.Val(prefixLenStr))
+						}
+					} else {
+						return nil, 0, fmt.Errorf("nodepool does not have IP prefix size")
+					}
+				}
+			}
+		}
 		vmssList, err := r.ListVMSS(ctx)
 		if err != nil {
 			return nil, 0, err
@@ -337,7 +357,7 @@ func (r *GatewayVMConfigurationReconciler) getGatewayVMSS(
 				if strings.EqualFold(to.Val(v), vmConfig.Spec.GatewayNodepoolName) {
 					if prefixLenStr, ok := vmss.Tags[consts.AKSNodepoolIPPrefixSizeTagKey]; ok {
 						if prefixLen, err := strconv.Atoi(to.Val(prefixLenStr)); err == nil && prefixLen > 0 && prefixLen <= math.MaxInt32 {
-							return vmss, int32(prefixLen), nil
+							return NewAgentPoolVMSS(vmss, r.Client, r.AzureManager), int32(prefixLen), nil
 						} else {
 							return nil, 0, fmt.Errorf("failed to parse nodepool IP prefix size: %s", to.Val(prefixLenStr))
 						}
@@ -352,7 +372,7 @@ func (r *GatewayVMConfigurationReconciler) getGatewayVMSS(
 		if err != nil {
 			return nil, 0, err
 		}
-		return vmss, vmConfig.Spec.PublicIpPrefixSize, nil
+		return NewAgentPoolVMSS(vmss, r.Client, r.AzureManager), vmConfig.Spec.PublicIpPrefixSize, nil
 	}
 	return nil, 0, fmt.Errorf("gateway VMSS not found")
 }
@@ -463,7 +483,7 @@ func (r *GatewayVMConfigurationReconciler) ensurePublicIPPrefixDeleted(
 	}
 }
 
-func (r *GatewayVMConfigurationReconciler) reconcileVMSS(
+func (r *agentPoolVMSS) reconcileVMSS(
 	ctx context.Context,
 	vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
 	vmss *compute.VirtualMachineScaleSet,
@@ -540,7 +560,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSS(
 	return privateIPs, nil
 }
 
-func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
+func (r *agentPoolVMSS) reconcileVMSSVM(
 	ctx context.Context,
 	vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
 	vmssName string,
@@ -681,7 +701,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSVM(
 	return secondaryIP, nil
 }
 
-func (r *GatewayVMConfigurationReconciler) reconcileVMSSNetworkInterface(
+func (r *agentPoolVMSS) reconcileVMSSNetworkInterface(
 	ctx context.Context,
 	ipConfigName string,
 	ipPrefixID string,
@@ -737,7 +757,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileVMSSNetworkInterface(
 	return needUpdate, nil
 }
 
-func (r *GatewayVMConfigurationReconciler) reconcileLbBackendPool(
+func (r *agentPoolVMSS) reconcileLbBackendPool(
 	lbBackendpoolID string,
 	primaryNic *compute.VirtualMachineScaleSetNetworkConfiguration,
 ) (needUpdate bool, err error) {
@@ -778,7 +798,7 @@ func (r *GatewayVMConfigurationReconciler) reconcileLbBackendPool(
 	return false, fmt.Errorf("vmss(vm) primary ipConfig not found")
 }
 
-func (r *GatewayVMConfigurationReconciler) getExpectedIPConfig(
+func (r *agentPoolVMSS) getExpectedIPConfig(
 	ipConfigName,
 	ipPrefixID string,
 	interfaces []*compute.VirtualMachineScaleSetNetworkConfiguration,

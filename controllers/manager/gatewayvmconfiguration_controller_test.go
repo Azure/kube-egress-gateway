@@ -22,7 +22,9 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipprefixclient/mock_publicipprefixclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient/mock_virtualmachineclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetclient/mock_virtualmachinescalesetclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -45,6 +47,7 @@ const (
 var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 	var (
 		r        *GatewayVMConfigurationReconciler
+		poolVMSS *agentPoolVMSS
 		az       *azmanager.AzureManager
 		recorder = record.NewFakeRecorder(10)
 	)
@@ -95,6 +98,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 		When("vmConfig is not found", func() {
 			It("should only report error in get", func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
+				v := az.VMClient.(*mock_virtualmachineclient.MockInterface)
+				v.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachine{}, nil).AnyTimes()
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
 				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
@@ -163,6 +168,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				}
 				for i, c := range tests {
 					az = getMockAzureManager(gomock.NewController(GinkgoT()))
+					v := az.VMClient.(*mock_virtualmachineclient.MockInterface)
+					v.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachine{}, nil).AnyTimes()
 					r = &GatewayVMConfigurationReconciler{AzureManager: az, Recorder: recorder}
 					mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 					if c.expectGet {
@@ -174,11 +181,15 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 							c.vmss,
 						}, c.returnedErr)
 					}
-					foundVmss, len, err := r.getGatewayVMSS(context.Background(), vmConfig)
+					ap, len, err := r.loadPool(context.Background(), vmConfig)
+					vmss, ok := ap.(*agentPoolVMSS)
+					if !ok {
+						Expect(err).To(HaveOccurred(), "error should be returned if nil ap")
+					}
 					if c.expectedErr != nil {
 						Expect(err).To(Equal(c.expectedErr), "TestCase[%d]: %s", i, c.desc)
 					} else {
-						Expect(to.Val(foundVmss)).To(Equal(to.Val(c.vmss)), "TestCase[%d]: %s", i, c.desc)
+						Expect(to.Val(vmss.vmss)).To(Equal(to.Val(c.vmss)), "TestCase[%d]: %s", i, c.desc)
 						Expect(len).To(Equal(int32(31)), "TestCase[%d]: %s", i, c.desc)
 						Expect(err).To(BeNil(), "TestCase[%d]: %s", i, c.desc)
 					}
@@ -189,6 +200,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 		Context("TestEnsurePublicIPPrefix", func() {
 			BeforeEach(func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
+				v := az.VMClient.(*mock_virtualmachineclient.MockInterface)
+				v.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachine{}, nil).AnyTimes()
 				r = &GatewayVMConfigurationReconciler{AzureManager: az, Recorder: recorder}
 				vmConfig.Spec.PublicIpPrefixId = ""
 			})
@@ -336,6 +349,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 		Context("TestEnsurePublicIPPrefixDeleted", func() {
 			BeforeEach(func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
+				v := az.VMClient.(*mock_virtualmachineclient.MockInterface)
+				v.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachine{}, nil).AnyTimes()
 				r = &GatewayVMConfigurationReconciler{AzureManager: az, Recorder: recorder}
 			})
 
@@ -504,13 +519,19 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 		Context("TestReconcileVMSS", func() {
 			BeforeEach(func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
+				v := az.VMClient.(*mock_virtualmachineclient.MockInterface)
+				v.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachine{}, nil).AnyTimes()
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(vmConfig).WithRuntimeObjects(gwConfig, vmConfig).Build()
 				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
+				poolVMSS = &agentPoolVMSS{
+					StatusClient: cl,
+					AzureManager: az,
+				}
 			})
 
 			It("should return error if vmss does not have properties", func() {
 				existingVMSS := &compute.VirtualMachineScaleSet{}
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(err).To(Equal(fmt.Errorf("vmss has empty network profile")))
 			})
 
@@ -524,7 +545,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						},
 					},
 				}
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(errors.Unwrap(err)).To(Equal(fmt.Errorf("vmss(vm) primary network interface not found")))
 			})
 
@@ -532,7 +553,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				existingVMSS := getEmptyVMSS()
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), vmssRG, vmssName, gomock.Any()).Return(nil, fmt.Errorf("failed"))
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(errors.Unwrap(err)).To(Equal(fmt.Errorf("failed")))
 			})
 
@@ -543,7 +564,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), vmssRG, vmssName, gomock.Any()).Return(expectedVMSS, nil)
 				mockVMSSVMClient := az.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), vmssRG, vmssName).Return(nil, fmt.Errorf("failed"))
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(errors.Unwrap(err)).To(Equal(fmt.Errorf("failed")))
 			})
 
@@ -555,7 +576,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				mockVMSSVMClient := az.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
 				vms := []*compute.VirtualMachineScaleSetVM{{InstanceID: to.Ptr("0")}}
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), vmssRG, vmssName).Return(vms, nil)
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(err).To(Equal(fmt.Errorf("vmss vm(0) has empty network profile")))
 			})
 
@@ -574,7 +595,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					},
 				}}
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), vmssRG, vmssName).Return(vms, nil)
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(err).To(Equal(fmt.Errorf("vmss vm(0) has empty os profile")))
 			})
 
@@ -596,7 +617,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					},
 				}}
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), vmssRG, vmssName).Return(vms, nil)
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(err.Error()).To(ContainSubstring("vmss(vm) primary network interface not found"))
 			})
 
@@ -612,7 +633,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "nic").Return(
 					getNotReadyVMSSVMInterface(), nil)
 				mockVMSSVMClient.EXPECT().Update(gomock.Any(), vmssRG, vmssName, "0", gomock.Any()).Return(nil, fmt.Errorf("failed"))
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(errors.Unwrap(err)).To(Equal(fmt.Errorf("failed")))
 			})
 
@@ -645,7 +666,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					})
 				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "nic").Return(
 					getConfiguredVMSSVMInterface(), nil)
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(err).To(BeNil())
 			})
 
@@ -659,7 +680,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
 				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "nic").Return(
 					getConfiguredVMSSVMInterface(), nil)
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(err).To(BeNil())
 			})
 
@@ -696,7 +717,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					})
 				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "nic").Return(
 					getConfiguredVMSSVMInterface(), nil)
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(err).To(BeNil())
 			})
 
@@ -724,7 +745,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						Expect(vm).To(Equal(to.Val(expectedVM)))
 						return expectedVM, nil
 					})
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", false)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", false)
 				Expect(err).To(BeNil())
 			})
 
@@ -734,7 +755,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				vms := []*compute.VirtualMachineScaleSetVM{existingVM}
 				mockVMSSVMClient := az.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
 				mockVMSSVMClient.EXPECT().List(gomock.Any(), vmssRG, vmssName).Return(vms, nil)
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", false)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", false)
 				Expect(err).To(BeNil())
 			})
 
@@ -766,7 +787,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					})
 				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "nic").Return(
 					getConfiguredVMSSVMInterface(), nil)
-				privateIPs, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "", true)
+				privateIPs, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "", true)
 				Expect(len(privateIPs)).To(Equal(1))
 				Expect(privateIPs[0]).To(Equal("10.0.0.6"))
 				Expect(err).To(BeNil())
@@ -802,7 +823,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					})
 				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "nic").Return(
 					getConfiguredVMSSVMInterface(), nil)
-				privateIPs, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "", true)
+				privateIPs, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "", true)
 				Expect(len(privateIPs)).To(Equal(1))
 				Expect(privateIPs[0]).To(Equal("10.0.0.6"))
 				Expect(err).To(BeNil())
@@ -834,7 +855,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						Expect(vm).To(Equal(to.Val(expectedVM)))
 						return expectedVM, nil
 					})
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "", false)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "", false)
 				Expect(err).To(BeNil())
 			})
 
@@ -850,21 +871,338 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
 				mockInterfaceClient.EXPECT().GetVirtualMachineScaleSetNetworkInterface(gomock.Any(), vmssRG, vmssName, "0", "nic").Return(
 					getConfiguredVMSSVMInterface(), nil)
-				_, err := r.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
+				_, err := poolVMSS.reconcileVMSS(context.TODO(), vmConfig, existingVMSS, "prefix", true)
 				Expect(err).To(BeNil())
+			})
+		})
+
+		Context("TestReconcileVMs", func() {
+			var poolVMs *agentPoolVMs
+
+			BeforeEach(func() {
+				az = getMockAzureManager(gomock.NewController(GinkgoT()))
+				poolVMs = &agentPoolVMs{
+					agentPoolName: "testgw",
+					StatusClient:  nil,
+					AzureManager:  az,
+				}
+			})
+
+			It("should return error when listing network interfaces fails", func() {
+				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
+				mockInterfaceClient.EXPECT().List(gomock.Any(), testRG).Return(nil, fmt.Errorf("failed to list interfaces"))
+				_, err := poolVMs.Reconcile(context.Background(), vmConfig, "prefix", true)
+				Expect(err).To(Equal(fmt.Errorf("failed to list interfaces")))
+			})
+
+			It("should skip NICs without "+consts.AKSStaticGatewayNICTagKey+" tag", func() {
+				nics := []*network.Interface{
+					{
+						Name: to.Ptr("nic1"),
+						Tags: map[string]*string{"other": to.Ptr("tag")},
+					},
+					{
+						Name: to.Ptr("nic2"),
+						Tags: map[string]*string{
+							consts.AKSStaticGatewayNICTagKey: to.Ptr("true"),
+							consts.AKSNodepoolTagKey:         to.Ptr("testgw"),
+						},
+						Properties: &network.InterfacePropertiesFormat{
+							IPConfigurations: []*network.InterfaceIPConfiguration{
+								{
+									Name: to.Ptr("ipconfig1"),
+									Properties: &network.InterfaceIPConfigurationPropertiesFormat{
+										Primary:          to.Ptr(true),
+										PrivateIPAddress: to.Ptr("10.0.0.1"),
+										Subnet: &network.Subnet{
+											ID: to.Ptr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/subnet"),
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
+				mockInterfaceClient.EXPECT().List(gomock.Any(), testRG).Return(nics, nil)
+				mockPublicIPClient := az.PublicIPClient.(*mock_publicipaddressclient.MockInterface)
+				mockPublicIPClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, "nic2", gomock.Any()).Return(&network.PublicIPAddress{
+					Properties: &network.PublicIPAddressPropertiesFormat{
+						IPAddress: to.Ptr("1.2.3.4"),
+					},
+				}, nil)
+				mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, "nic2", gomock.Any()).Return(&network.Interface{
+					Properties: &network.InterfacePropertiesFormat{
+						IPConfigurations: []*network.InterfaceIPConfiguration{
+							{
+								Properties: &network.InterfaceIPConfigurationPropertiesFormat{
+									PrivateIPAddress: to.Ptr("10.0.0.2"),
+								},
+							},
+						},
+					},
+				}, nil)
+				ips, err := poolVMs.Reconcile(context.Background(), vmConfig, "prefix", true)
+				Expect(err).To(BeNil())
+				Expect(len(ips)).To(Equal(1))
+			})
+
+			It("should skip NICs with wrong nodepool tag", func() {
+				nics := []*network.Interface{
+					{
+						Name: to.Ptr("nic1"),
+						Tags: map[string]*string{
+							consts.AKSStaticGatewayNICTagKey: to.Ptr("true"),
+							consts.AKSNodepoolTagKey:         to.Ptr("otherpool"),
+						},
+					},
+					{
+						Name: to.Ptr("nic2"),
+						Tags: map[string]*string{
+							consts.AKSStaticGatewayNICTagKey: to.Ptr("true"),
+							consts.AKSNodepoolTagKey:         to.Ptr("testgw"),
+						},
+						Properties: &network.InterfacePropertiesFormat{
+							IPConfigurations: []*network.InterfaceIPConfiguration{
+								{
+									Name: to.Ptr("ipconfig1"),
+									Properties: &network.InterfaceIPConfigurationPropertiesFormat{
+										Primary:          to.Ptr(true),
+										PrivateIPAddress: to.Ptr("10.0.0.1"),
+										Subnet: &network.Subnet{
+											ID: to.Ptr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/subnet"),
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
+				mockInterfaceClient.EXPECT().List(gomock.Any(), testRG).Return(nics, nil)
+				mockPublicIPClient := az.PublicIPClient.(*mock_publicipaddressclient.MockInterface)
+				mockPublicIPClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, "nic2", gomock.Any()).Return(&network.PublicIPAddress{
+					Properties: &network.PublicIPAddressPropertiesFormat{
+						IPAddress: to.Ptr("1.2.3.4"),
+					},
+				}, nil)
+				mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, "nic2", gomock.Any()).Return(&network.Interface{
+					Properties: &network.InterfacePropertiesFormat{
+						IPConfigurations: []*network.InterfaceIPConfiguration{
+							{
+								Properties: &network.InterfaceIPConfigurationPropertiesFormat{
+									PrivateIPAddress: to.Ptr("10.0.0.2"),
+								},
+							},
+						},
+					},
+				}, nil)
+				ips, err := poolVMs.Reconcile(context.Background(), vmConfig, "prefix", true)
+				Expect(err).To(BeNil())
+				Expect(len(ips)).To(Equal(1))
+			})
+
+			It("should process gateway NICs and update IP configurations", func() {
+				backendPoolID := az.GetLBBackendAddressPoolID(poolVMs.GetUniqueID())
+				nics := []*network.Interface{
+					{
+						Name: to.Ptr("gateway-nic"),
+						Tags: map[string]*string{
+							consts.AKSStaticGatewayNICTagKey: to.Ptr("true"),
+							consts.AKSNodepoolTagKey:         to.Ptr("testgw"),
+						},
+						Properties: &network.InterfacePropertiesFormat{
+							IPConfigurations: []*network.InterfaceIPConfiguration{
+								{
+									Name: to.Ptr("ipconfig1"),
+									Properties: &network.InterfaceIPConfigurationPropertiesFormat{
+										Primary:          to.Ptr(true),
+										PrivateIPAddress: to.Ptr("10.0.0.1"),
+										Subnet: &network.Subnet{
+											ID: to.Ptr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/subnet"),
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
+				mockInterfaceClient.EXPECT().List(gomock.Any(), testRG).Return(nics, nil)
+				mockPublicIPClient := az.PublicIPClient.(*mock_publicipaddressclient.MockInterface)
+				mockPublicIPClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, "gateway-nic", gomock.Any()).Return(&network.PublicIPAddress{
+					Properties: &network.PublicIPAddressPropertiesFormat{
+						IPAddress: to.Ptr("1.2.3.4"),
+					},
+				}, nil)
+				mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, "gateway-nic", gomock.Any()).DoAndReturn(
+					func(ctx context.Context, rg, name string, nic network.Interface) (*network.Interface, error) {
+						// Verify the NIC has secondary IP configuration added
+						Expect(len(nic.Properties.IPConfigurations)).To(Equal(2))
+						Expect(*nic.Properties.IPConfigurations[1].Name).To(Equal("egressgateway-testUID"))
+						Expect(nic.Properties.IPConfigurations[0].Properties.LoadBalancerBackendAddressPools).To(HaveLen(1))
+						Expect(*nic.Properties.IPConfigurations[0].Properties.LoadBalancerBackendAddressPools[0].ID).To(Equal(*backendPoolID))
+						// allocate an IP on the secondary config
+						nic.Properties.IPConfigurations[1].Properties.PrivateIPAddress = to.Ptr("10.0.0.2")
+						return &nic, nil
+					})
+				ips, err := poolVMs.Reconcile(context.Background(), vmConfig, "prefix", true)
+				Expect(err).To(BeNil())
+				Expect(len(ips)).To(Equal(1))
+				Expect(ips[0]).To(Equal("10.0.0.2"))
+			})
+
+			It("should update target ipconfig if publicIP is missing", func() {
+				backendPoolID := az.GetLBBackendAddressPoolID(poolVMs.GetUniqueID())
+				nics := []*network.Interface{
+					{
+						Name: to.Ptr("gateway-nic"),
+						Tags: map[string]*string{
+							consts.AKSStaticGatewayNICTagKey: to.Ptr("true"),
+							consts.AKSNodepoolTagKey:         to.Ptr("testgw"),
+						},
+						Properties: &network.InterfacePropertiesFormat{
+							IPConfigurations: []*network.InterfaceIPConfiguration{
+								{
+									Name: to.Ptr("ipconfig1"),
+									Properties: &network.InterfaceIPConfigurationPropertiesFormat{
+										Primary:          to.Ptr(true),
+										PrivateIPAddress: to.Ptr("10.0.0.1"),
+										Subnet: &network.Subnet{
+											ID: to.Ptr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/subnet"),
+										},
+									},
+								},
+								{
+									Name: to.Ptr("egressgateway-testUID"),
+									Properties: &network.InterfaceIPConfigurationPropertiesFormat{
+										Primary:          to.Ptr(false),
+										PrivateIPAddress: to.Ptr("10.0.0.2"),
+									},
+								},
+							},
+						},
+					},
+				}
+				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
+				mockInterfaceClient.EXPECT().List(gomock.Any(), testRG).Return(nics, nil)
+				mockPublicIPClient := az.PublicIPClient.(*mock_publicipaddressclient.MockInterface)
+				mockPublicIPClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, "gateway-nic", gomock.Any()).Return(&network.PublicIPAddress{
+					Properties: &network.PublicIPAddressPropertiesFormat{
+						IPAddress: to.Ptr("1.2.3.4"),
+					},
+				}, nil)
+				mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, "gateway-nic", gomock.Any()).DoAndReturn(
+					func(ctx context.Context, rg, name string, nic network.Interface) (*network.Interface, error) {
+						// Verify the NIC has secondary IP configuration added
+						Expect(len(nic.Properties.IPConfigurations)).To(Equal(2))
+						Expect(*nic.Properties.IPConfigurations[1].Name).To(Equal("egressgateway-testUID"))
+						Expect(nic.Properties.IPConfigurations[0].Properties.LoadBalancerBackendAddressPools).To(HaveLen(1))
+						Expect(*nic.Properties.IPConfigurations[0].Properties.LoadBalancerBackendAddressPools[0].ID).To(Equal(*backendPoolID))
+						Expect(*nic.Properties.IPConfigurations[1].Properties.PublicIPAddress.Properties.IPAddress).To(Equal("1.2.3.4"))
+
+						nic.Properties.IPConfigurations[1].Properties.PrivateIPAddress = to.Ptr("10.0.0.2")
+						return &nic, nil
+					})
+				ips, err := poolVMs.Reconcile(context.Background(), vmConfig, "prefix", true)
+				Expect(err).To(BeNil())
+				Expect(len(ips)).To(Equal(1))
+				Expect(ips[0]).To(Equal("10.0.0.2"))
+			})
+
+			It("should remove IP configuration when wantIPConfig is false", func() {
+				nics := []*network.Interface{
+					{
+						Name: to.Ptr("gateway-nic"),
+						Tags: map[string]*string{
+							consts.AKSStaticGatewayNICTagKey: to.Ptr("true"),
+							consts.AKSNodepoolTagKey:         to.Ptr("testgw"),
+						},
+						Properties: &network.InterfacePropertiesFormat{
+							IPConfigurations: []*network.InterfaceIPConfiguration{
+								{
+									Name: to.Ptr("ipconfig1"),
+									Properties: &network.InterfaceIPConfigurationPropertiesFormat{
+										Primary:          to.Ptr(true),
+										PrivateIPAddress: to.Ptr("10.0.0.1"),
+										Subnet: &network.Subnet{
+											ID: to.Ptr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/subnet"),
+										},
+									},
+								},
+								{
+									Name: to.Ptr(consts.ManagedResourcePrefix + "testUID"),
+									Properties: &network.InterfaceIPConfigurationPropertiesFormat{
+										Primary:          to.Ptr(false),
+										PrivateIPAddress: to.Ptr("10.0.0.2"),
+										PublicIPAddress:  &network.PublicIPAddress{ID: to.Ptr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip")},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				mockPublicIPClient := az.PublicIPClient.(*mock_publicipaddressclient.MockInterface)
+				mockPublicIPClient.EXPECT().Delete(gomock.Any(), testRG, "gateway-nic").Return(nil)
+
+				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
+				mockInterfaceClient.EXPECT().List(gomock.Any(), testRG).Return(nics, nil)
+				mockInterfaceClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, "gateway-nic", gomock.Any()).DoAndReturn(
+					func(ctx context.Context, rg, name string, nic network.Interface) (*network.Interface, error) {
+						// Verify the secondary IP configuration is removed
+						Expect(len(nic.Properties.IPConfigurations)).To(Equal(1))
+						return &nic, nil
+					})
+				ips, err := poolVMs.Reconcile(context.Background(), vmConfig, "prefix", false)
+				Expect(err).To(BeNil())
+				Expect(len(ips)).To(Equal(1))
+			})
+
+			It("should return error when NIC has no subnet ID", func() {
+				nics := []*network.Interface{
+					{
+						Name: to.Ptr("gateway-nic"),
+						ID:   to.Ptr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/gateway-nic"),
+						Tags: map[string]*string{
+							consts.AKSStaticGatewayNICTagKey: to.Ptr("true"),
+							consts.AKSNodepoolTagKey:         to.Ptr("testgw"),
+						},
+						Properties: &network.InterfacePropertiesFormat{
+							IPConfigurations: []*network.InterfaceIPConfiguration{
+								{
+									Name: to.Ptr("ipconfig1"),
+									Properties: &network.InterfaceIPConfigurationPropertiesFormat{
+										Primary:          to.Ptr(true),
+										PrivateIPAddress: to.Ptr("10.0.0.1"),
+										// Missing Subnet field - this will cause subnetID to be empty
+									},
+								},
+							},
+						},
+					},
+				}
+
+				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
+				mockInterfaceClient.EXPECT().List(gomock.Any(), testRG).Return(nics, nil)
+
+				_, err := poolVMs.Reconcile(context.Background(), vmConfig, "prefix", true)
+				Expect(err).To(MatchError("no subnetID found for NIC(/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/gateway-nic)"))
 			})
 		})
 
 		When("reconciling vmConfig", func() {
 			BeforeEach(func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
+				v := az.VMClient.(*mock_virtualmachineclient.MockInterface)
+				v.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachine{}, nil).AnyTimes()
 				vmConfig.Spec.PublicIpPrefixId = "/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix"
 				vmConfig.Spec.ProvisionPublicIps = true
 				cl = fake.NewClientBuilder().WithScheme(scheme.Scheme).WithStatusSubresource(vmConfig).WithRuntimeObjects(gwConfig, vmConfig).Build()
 				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
 			})
 
-			It("should report error when getGatewayVMSS fails", func() {
+			It("should report error when loadPool fails", func() {
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return(nil, fmt.Errorf("failed"))
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
@@ -973,6 +1311,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 		When("deleting vmConfig with finalizer", func() {
 			BeforeEach(func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
+				v := az.VMClient.(*mock_virtualmachineclient.MockInterface)
+				v.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachine{}, nil).AnyTimes()
 				vmConfig.Spec.PublicIpPrefixId = "/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix"
 				vmConfig.ObjectMeta.DeletionTimestamp = to.Ptr(metav1.Now())
 				controllerutil.AddFinalizer(vmConfig, consts.VMConfigFinalizerName)
@@ -980,7 +1320,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				r = &GatewayVMConfigurationReconciler{Client: cl, AzureManager: az, Recorder: recorder}
 			})
 
-			It("should report error when getGatewayVMSS fails", func() {
+			It("should report error when loadPool fails", func() {
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return(nil, fmt.Errorf("failed"))
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
@@ -1043,6 +1383,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			BeforeEach(func() {
 				req.NamespacedName = types.NamespacedName{Name: "node1", Namespace: ""}
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
+				v := az.VMClient.(*mock_virtualmachineclient.MockInterface)
+				v.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachine{}, nil).AnyTimes()
 				node = &corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "node1",
