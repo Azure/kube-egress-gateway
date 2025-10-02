@@ -240,7 +240,11 @@ func getLBPropertyName(
 	ap GatewayPool,
 ) (*lbPropertyNames, error) {
 	if ap.GetUniqueID() == "" {
-		return nil, fmt.Errorf("gateway node pool does not have UID")
+		return nil, fmt.Errorf("gateway node pool does not have UID. "+
+			"gatewayPoolName=%s, vmssName=%s, vmssResourceGroup=%s",
+			lbConfig.Spec.GatewayNodepoolName,
+			lbConfig.Spec.VmssName,
+			lbConfig.Spec.VmssResourceGroup)
 	}
 	names := &lbPropertyNames{
 		frontendName: ap.GetUniqueID(),
@@ -378,7 +382,7 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 	// get lbPropertyNames
 	names, err := getLBPropertyName(lbConfig, agentPool)
 	if err != nil {
-		log.Error(err, "failed to get LB property names")
+		log.Error(err, "failed to get LB property names for lbConfig %s/%s", lbConfig.Namespace, lbConfig.Name)
 		return "", 0, err
 	}
 

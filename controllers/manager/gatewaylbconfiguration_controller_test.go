@@ -279,8 +279,8 @@ var _ = Describe("GatewayLBConfiguration controller unit tests", func() {
 				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
 				_, reconcileErr = r.Reconcile(context.TODO(), req)
-				Expect(reconcileErr).To(Equal(fmt.Errorf("gateway node pool does not have UID")))
-				assertEqualEvents([]string{"Warning ReconcileGatewayLBConfigurationError gateway node pool does not have UID"}, recorder.Events)
+				Expect(reconcileErr.Error()).To(Equal("gateway node pool does not have UID. gatewayPoolName=testgw, vmssName=vmss, vmssResourceGroup=vmssRG"))
+				assertEqualEvents([]string{"Warning ReconcileGatewayLBConfigurationError gateway node pool does not have UID. gatewayPoolName=testgw, vmssName=vmss, vmssResourceGroup=vmssRG"}, recorder.Events)
 			})
 
 			It("should report error if lb property is empty", func() {
