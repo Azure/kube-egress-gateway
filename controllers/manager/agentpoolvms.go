@@ -60,7 +60,7 @@ func (a *agentPoolVMs) Reconcile(ctx context.Context, vmConfig *egressgatewayv1a
 			continue
 		}
 
-		if _, ok := nics[i].Tags["static-gateway-nic"]; !ok {
+		if _, ok := nics[i].Tags[consts.AKSStaticGatewayNICTagKey]; !ok {
 			continue
 		}
 		if val, ok := nics[i].Tags[consts.AKSNodepoolTagKey]; !ok || !strings.EqualFold(vmConfig.Spec.GatewayNodepoolName, to.Val(val)) {

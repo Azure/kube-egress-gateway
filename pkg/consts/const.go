@@ -39,6 +39,9 @@ const (
 	// AKSNodeNICTagKey tag key for the NIC assigned to a given node
 	AKSNodeNICTagKey = "aks-managed-nic-name"
 
+	// AKSStaticGatewayNICTagKey tag key for static gateway NICs managed by AKS
+	AKSStaticGatewayNICTagKey = "aks-managed-static-gateway-nic"
+
 	// nodepool name label key in aks clusters
 	AKSNodepoolNameLabel = "kubernetes.azure.com/agentpool"
 

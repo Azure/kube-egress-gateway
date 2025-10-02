@@ -895,7 +895,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				Expect(err).To(Equal(fmt.Errorf("failed to list interfaces")))
 			})
 
-			It("should skip NICs without static-gateway-nic tag", func() {
+			It("should skip NICs without "+consts.AKSStaticGatewayNICTagKey+" tag", func() {
 				nics := []*network.Interface{
 					{
 						Name: to.Ptr("nic1"),
@@ -904,8 +904,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					{
 						Name: to.Ptr("nic2"),
 						Tags: map[string]*string{
-							"static-gateway-nic":     to.Ptr("true"),
-							consts.AKSNodepoolTagKey: to.Ptr("testgw"),
+							consts.AKSStaticGatewayNICTagKey: to.Ptr("true"),
+							consts.AKSNodepoolTagKey:         to.Ptr("testgw"),
 						},
 						Properties: &network.InterfacePropertiesFormat{
 							IPConfigurations: []*network.InterfaceIPConfiguration{
@@ -949,15 +949,15 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					{
 						Name: to.Ptr("nic1"),
 						Tags: map[string]*string{
-							"static-gateway-nic":     to.Ptr("true"),
-							consts.AKSNodepoolTagKey: to.Ptr("otherpool"),
+							consts.AKSStaticGatewayNICTagKey: to.Ptr("true"),
+							consts.AKSNodepoolTagKey:         to.Ptr("otherpool"),
 						},
 					},
 					{
 						Name: to.Ptr("nic2"),
 						Tags: map[string]*string{
-							"static-gateway-nic":     to.Ptr("true"),
-							consts.AKSNodepoolTagKey: to.Ptr("testgw"),
+							consts.AKSStaticGatewayNICTagKey: to.Ptr("true"),
+							consts.AKSNodepoolTagKey:         to.Ptr("testgw"),
 						},
 						Properties: &network.InterfacePropertiesFormat{
 							IPConfigurations: []*network.InterfaceIPConfiguration{
@@ -1002,8 +1002,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					{
 						Name: to.Ptr("gateway-nic"),
 						Tags: map[string]*string{
-							"static-gateway-nic":     to.Ptr("true"),
-							consts.AKSNodepoolTagKey: to.Ptr("testgw"),
+							consts.AKSStaticGatewayNICTagKey: to.Ptr("true"),
+							consts.AKSNodepoolTagKey:         to.Ptr("testgw"),
 						},
 						Properties: &network.InterfacePropertiesFormat{
 							IPConfigurations: []*network.InterfaceIPConfiguration{
@@ -1049,8 +1049,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					{
 						Name: to.Ptr("gateway-nic"),
 						Tags: map[string]*string{
-							"static-gateway-nic":     to.Ptr("true"),
-							consts.AKSNodepoolTagKey: to.Ptr("testgw"),
+							consts.AKSStaticGatewayNICTagKey: to.Ptr("true"),
+							consts.AKSNodepoolTagKey:         to.Ptr("testgw"),
 						},
 						Properties: &network.InterfacePropertiesFormat{
 							IPConfigurations: []*network.InterfaceIPConfiguration{
@@ -1103,8 +1103,8 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 					{
 						Name: to.Ptr("gateway-nic"),
 						Tags: map[string]*string{
-							"static-gateway-nic":     to.Ptr("true"),
-							consts.AKSNodepoolTagKey: to.Ptr("testgw"),
+							consts.AKSStaticGatewayNICTagKey: to.Ptr("true"),
+							consts.AKSNodepoolTagKey:         to.Ptr("testgw"),
 						},
 						Properties: &network.InterfacePropertiesFormat{
 							IPConfigurations: []*network.InterfaceIPConfiguration{

@@ -296,7 +296,7 @@ func (r *GatewayVMConfigurationReconciler) ensureDeleted(
 
 	pool, _, err := r.loadPool(ctx, vmConfig)
 	if err != nil {
-		log.Error(err, "failed to get vmss")
+		log.Error(err, "failed to load node pool for vmConfig %s/%s", vmConfig.Namespace, vmConfig.Name)
 		return ctrl.Result{}, err
 	}
 

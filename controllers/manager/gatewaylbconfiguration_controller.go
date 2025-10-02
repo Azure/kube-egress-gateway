@@ -367,11 +367,11 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 		}
 	}
 
-	// get gateway VMSS
-	// we need this because each gateway vmss needs one frontendConfig and one backendpool
+	// get gateway node pool
+	// we need this because each gateway pool needs one frontendConfig and one backendpool
 	agentPool, err := r.loadPool(ctx, lbConfig)
 	if err != nil {
-		log.Error(err, "failed to get vmss")
+		log.Error(err, "failed to load node pool for lbConfig %s/%s", lbConfig.Namespace, lbConfig.Name)
 		return "", 0, err
 	}
 
