@@ -914,6 +914,9 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 									Properties: &network.InterfaceIPConfigurationPropertiesFormat{
 										Primary:          to.Ptr(true),
 										PrivateIPAddress: to.Ptr("10.0.0.1"),
+										Subnet: &network.Subnet{
+											ID: to.Ptr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/subnet"),
+										},
 									},
 								},
 							},
@@ -966,6 +969,9 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 									Properties: &network.InterfaceIPConfigurationPropertiesFormat{
 										Primary:          to.Ptr(true),
 										PrivateIPAddress: to.Ptr("10.0.0.1"),
+										Subnet: &network.Subnet{
+											ID: to.Ptr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/subnet"),
+										},
 									},
 								},
 							},
@@ -1012,6 +1018,9 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 									Properties: &network.InterfaceIPConfigurationPropertiesFormat{
 										Primary:          to.Ptr(true),
 										PrivateIPAddress: to.Ptr("10.0.0.1"),
+										Subnet: &network.Subnet{
+											ID: to.Ptr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/subnet"),
+										},
 									},
 								},
 							},
@@ -1059,6 +1068,9 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 									Properties: &network.InterfaceIPConfigurationPropertiesFormat{
 										Primary:          to.Ptr(true),
 										PrivateIPAddress: to.Ptr("10.0.0.1"),
+										Subnet: &network.Subnet{
+											ID: to.Ptr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/subnet"),
+										},
 									},
 								},
 								{
@@ -1113,6 +1125,9 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 									Properties: &network.InterfaceIPConfigurationPropertiesFormat{
 										Primary:          to.Ptr(true),
 										PrivateIPAddress: to.Ptr("10.0.0.1"),
+										Subnet: &network.Subnet{
+											ID: to.Ptr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet/subnets/subnet"),
+										},
 									},
 								},
 								{
@@ -1142,6 +1157,37 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				ips, err := poolVMs.Reconcile(context.Background(), vmConfig, "prefix", false)
 				Expect(err).To(BeNil())
 				Expect(len(ips)).To(Equal(1))
+			})
+
+			It("should return error when NIC has no subnet ID", func() {
+				nics := []*network.Interface{
+					{
+						Name: to.Ptr("gateway-nic"),
+						ID:   to.Ptr("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/gateway-nic"),
+						Tags: map[string]*string{
+							consts.AKSStaticGatewayNICTagKey: to.Ptr("true"),
+							consts.AKSNodepoolTagKey:         to.Ptr("testgw"),
+						},
+						Properties: &network.InterfacePropertiesFormat{
+							IPConfigurations: []*network.InterfaceIPConfiguration{
+								{
+									Name: to.Ptr("ipconfig1"),
+									Properties: &network.InterfaceIPConfigurationPropertiesFormat{
+										Primary:          to.Ptr(true),
+										PrivateIPAddress: to.Ptr("10.0.0.1"),
+										// Missing Subnet field - this will cause subnetID to be empty
+									},
+								},
+							},
+						},
+					},
+				}
+
+				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
+				mockInterfaceClient.EXPECT().List(gomock.Any(), testRG).Return(nics, nil)
+
+				_, err := poolVMs.Reconcile(context.Background(), vmConfig, "prefix", true)
+				Expect(err).To(MatchError("no subnetID found for NIC(/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/gateway-nic)"))
 			})
 		})
 

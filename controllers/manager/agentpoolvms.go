@@ -59,7 +59,6 @@ func (a *agentPoolVMs) Reconcile(ctx context.Context, vmConfig *egressgatewayv1a
 		if nics[i] == nil {
 			continue
 		}
-
 		if _, ok := nics[i].Tags[consts.AKSStaticGatewayNICTagKey]; !ok {
 			continue
 		}
@@ -136,13 +135,14 @@ func (r *agentPoolVMs) reconcileNIC(
 	needUpdate := false
 
 	// check primary IP & secondary IP
-	var ipCfg gatewayIPConfig
-	if !forceUpdate && wantIPConfig {
-		ipCfg = r.getGatewayIPConfig(nic, ipConfigName)
-		if ipCfg.primaryIP == "" || ipCfg.secondaryIP == "" {
-			forceUpdate = true
-			logger.Info("Force update for missing primary IP and/or secondary IP", "primaryIP", ipCfg.primaryIP, "secondaryIP", ipCfg.secondaryIP)
-		}
+	ipCfg := r.getGatewayIPConfig(nic, ipConfigName)
+	if !forceUpdate && wantIPConfig && (ipCfg.primaryIP == "" || ipCfg.secondaryIP == "") {
+		forceUpdate = true
+		logger.Info("Force update for missing primary IP and/or secondary IP", "primaryIP", ipCfg.primaryIP, "secondaryIP", ipCfg.secondaryIP)
+	}
+
+	if ipCfg.subnetID == "" {
+		return "", fmt.Errorf("no subnetID found for NIC(%s)", to.Val(nic.ID))
 	}
 
 	// expected IPconfig
@@ -251,7 +251,7 @@ func (r *agentPoolVMs) reconcileNIC(
 	// return earlier if it's deleting event
 	if !wantIPConfig {
 		if ipPrefixID != "" {
-			return "", r.DeletePublicIP(ctx, "", to.Val(nic.Name))
+			return "", r.DeletePublicIP(ctx, "", to.Val(nic.Name)) // todo does this error on not found?
 		}
 		return "", nil
 	}
