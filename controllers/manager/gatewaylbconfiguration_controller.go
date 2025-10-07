@@ -46,12 +46,12 @@ type lbPropertyNames struct {
 	probeName    string
 }
 
-//+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations/finalizers,verbs=update
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaylbconfigurations/finalizers,verbs=update
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get;update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -227,16 +227,28 @@ func (r *GatewayLBConfigurationReconciler) ensureDeleted(
 	return ctrl.Result{}, nil
 }
 
+type GatewayPool interface {
+	Reconcile(ctx context.Context,
+		vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration,
+		ipPrefixID string,
+		wantIPConfig bool) ([]string, error) // todo refactor to some config struct
+	GetUniqueID() string
+}
+
 func getLBPropertyName(
 	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
-	vmss *compute.VirtualMachineScaleSet,
+	ap GatewayPool,
 ) (*lbPropertyNames, error) {
-	if vmss.Properties == nil || vmss.Properties.UniqueID == nil {
-		return nil, fmt.Errorf("gateway vmss does not have UID")
+	if ap.GetUniqueID() == "" {
+		return nil, fmt.Errorf("gateway node pool does not have UID. "+
+			"gatewayPoolName=%s, vmssName=%s, vmssResourceGroup=%s",
+			lbConfig.Spec.GatewayNodepoolName,
+			lbConfig.Spec.VmssName,
+			lbConfig.Spec.VmssResourceGroup)
 	}
 	names := &lbPropertyNames{
-		frontendName: *vmss.Properties.UniqueID,
-		backendName:  *vmss.Properties.UniqueID,
+		frontendName: ap.GetUniqueID(),
+		backendName:  ap.GetUniqueID(),
 		lbRuleName:   string(lbConfig.GetUID()),
 		probeName:    string(lbConfig.GetUID()),
 	}
@@ -255,10 +267,10 @@ func (r *GatewayLBConfigurationReconciler) getGatewayLB(ctx context.Context) (*n
 	return nil, err
 }
 
-func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
+func (r *GatewayLBConfigurationReconciler) loadPool(
 	ctx context.Context,
 	lbConfig *egressgatewayv1alpha1.GatewayLBConfiguration,
-) (*compute.VirtualMachineScaleSet, error) {
+) (GatewayPool, error) {
 	if lbConfig.Spec.GatewayNodepoolName != "" {
 		vmssList, err := r.ListVMSS(ctx)
 		if err != nil {
@@ -268,7 +280,24 @@ func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
 			vmss := vmssList[i]
 			if v, ok := vmss.Tags[consts.AKSNodepoolTagKey]; ok {
 				if strings.EqualFold(to.Val(v), lbConfig.Spec.GatewayNodepoolName) {
-					return vmss, nil
+					return &agentPoolVMSS{vmss: vmss}, nil
+				}
+			}
+		}
+
+		vmsList, err := r.ListVMs(ctx) // this will be expensive, can we page here?
+		if err != nil {
+			return nil, err
+		}
+		for i := range vmsList {
+			vm := vmsList[i]
+			if v, ok := vm.Tags[consts.AKSNodepoolTagKey]; ok {
+				if strings.EqualFold(to.Val(v), lbConfig.Spec.GatewayNodepoolName) {
+					return &agentPoolVMs{
+						agentPoolName: lbConfig.Spec.GatewayNodepoolName,
+						StatusClient:  r.Client,
+						AzureManager:  r.AzureManager,
+					}, nil
 				}
 			}
 		}
@@ -277,9 +306,34 @@ func (r *GatewayLBConfigurationReconciler) getGatewayVMSS(
 		if err != nil {
 			return nil, err
 		}
-		return vmss, nil
+		return &agentPoolVMSS{vmss: vmss}, nil
 	}
-	return nil, fmt.Errorf("gateway VMSS not found")
+	return nil, fmt.Errorf("gateway agent pool not found")
+}
+
+func NewAgentPoolVMSS(vmss *compute.VirtualMachineScaleSet, c client.StatusClient, manager *azmanager.AzureManager) *agentPoolVMSS {
+	return &agentPoolVMSS{
+		vmss:         vmss,
+		StatusClient: c,
+		AzureManager: manager,
+	}
+}
+
+type agentPoolVMSS struct {
+	vmss *compute.VirtualMachineScaleSet
+	client.StatusClient
+	*azmanager.AzureManager
+}
+
+func (r *agentPoolVMSS) Reconcile(ctx context.Context, vmConfig *egressgatewayv1alpha1.GatewayVMConfiguration, ipPrefixID string, wantIPConfig bool) ([]string, error) {
+	return r.reconcileVMSS(ctx, vmConfig, r.vmss, ipPrefixID, wantIPConfig)
+}
+
+func (r *agentPoolVMSS) GetUniqueID() string {
+	if r.vmss == nil || r.vmss.Properties == nil || r.vmss.Properties.UniqueID == nil {
+		return ""
+	}
+	return *r.vmss.Properties.UniqueID
 }
 
 func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
@@ -317,18 +371,18 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 		}
 	}
 
-	// get gateway VMSS
-	// we need this because each gateway vmss needs one frontendConfig and one backendpool
-	vmss, err := r.getGatewayVMSS(ctx, lbConfig)
+	// get gateway node pool
+	// we need this because each gateway pool needs one frontendConfig and one backendpool
+	agentPool, err := r.loadPool(ctx, lbConfig)
 	if err != nil {
-		log.Error(err, "failed to get vmss")
+		log.Error(err, "failed to load node pool for lbConfig %s/%s", lbConfig.Namespace, lbConfig.Name)
 		return "", 0, err
 	}
 
 	// get lbPropertyNames
-	names, err := getLBPropertyName(lbConfig, vmss)
+	names, err := getLBPropertyName(lbConfig, agentPool)
 	if err != nil {
-		log.Error(err, "failed to get LB property names")
+		log.Error(err, "failed to get LB property names for lbConfig %s/%s", lbConfig.Namespace, lbConfig.Name)
 		return "", 0, err
 	}
 
