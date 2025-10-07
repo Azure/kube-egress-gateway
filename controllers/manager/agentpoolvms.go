@@ -250,9 +250,6 @@ func (r *agentPoolVMs) reconcileNIC(
 
 	// return earlier if it's deleting event
 	if !wantIPConfig {
-		if ipPrefixID != "" {
-			return "", r.DeletePublicIP(ctx, "", to.Val(nic.Name)) // todo does this error on not found?
-		}
 		return "", nil
 	}
 
