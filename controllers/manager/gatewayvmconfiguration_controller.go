@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	corev1 "k8s.io/api/core/v1"
@@ -466,21 +467,40 @@ func (r *GatewayVMConfigurationReconciler) ensurePublicIPPrefixDeleted(
 	log := log.FromContext(ctx)
 	// only ensure managed public prefix ip is deleted
 	publicIpPrefixName := managedSubresourceName(vmConfig)
-	_, err := r.GetPublicIPPrefix(ctx, "", publicIpPrefixName)
+	prefix, err := r.GetPublicIPPrefix(ctx, "", publicIpPrefixName)
 	if err != nil {
 		if isErrorNotFound(err) {
 			// resource does not exist, directly return
 			return nil
-		} else {
-			return fmt.Errorf("failed to get public ip prefix(%s): %w", publicIpPrefixName, err)
 		}
-	} else {
-		log.Info("Deleting managed public ip prefix", "public ip prefix name", publicIpPrefixName)
-		if err := r.DeletePublicIPPrefix(ctx, "", publicIpPrefixName); err != nil {
-			return fmt.Errorf("failed to delete public ip prefix(%s): %w", publicIpPrefixName, err)
-		}
-		return nil
+		return fmt.Errorf("failed to get public ip prefix(%s): %w", publicIpPrefixName, err)
 	}
+
+	if prefix.Properties != nil {
+		// in VM agent pools, the individual public IPs associated to the prefix are not
+		// managed for us when the ipConfig is deleted. Before being able to delete the prefix,
+		// we have to ensure the public IPs are deleted otherwise ARM will return a InUsePublicIpPrefixCannotBeDeleted error
+		for _, pip := range prefix.Properties.PublicIPAddresses {
+			if pip == nil || pip.ID == nil {
+				continue
+			}
+			pipID := to.Val(pip.ID)
+			log.Info("deleting associated managed public IP", "public_ip", pipID)
+			resource, err := arm.ParseResourceID(pipID)
+			if err != nil {
+				return fmt.Errorf("failed to parse managed public ip prefix(%s): %w", pipID, err)
+			}
+			if err = r.DeletePublicIP(ctx, "", resource.Name); err != nil && !isErrorNotFound(err) {
+				return fmt.Errorf("failed to delete managed public ip prefix(%s): %w", pipID, err)
+			}
+		}
+	}
+
+	log.Info("Deleting managed public ip prefix", "public ip prefix name", publicIpPrefixName)
+	if err := r.DeletePublicIPPrefix(ctx, "", publicIpPrefixName); err != nil {
+		return fmt.Errorf("failed to delete public ip prefix(%s): %w", publicIpPrefixName, err)
+	}
+	return nil
 }
 
 func (r *agentPoolVMSS) reconcileVMSS(

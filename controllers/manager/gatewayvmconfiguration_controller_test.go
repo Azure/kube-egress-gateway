@@ -40,8 +40,9 @@ import (
 )
 
 const (
-	vmssName = "vmss"
-	vmssRG   = "vmssRG"
+	vmssName                 = "vmss"
+	vmssRG                   = "vmssRG"
+	publicIPPrefixResourceID = "/subscriptions/516f20a4-a489-11f0-ac7f-8f4e0bcfbc5d/resourceGroups/MC_testcluster/providers/Microsoft.Network/publicIPPrefixes/publicipprefix-n"
 )
 
 var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
@@ -382,6 +383,95 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				mockPublicIPPrefixClient.EXPECT().Delete(gomock.Any(), testRG, "egressgateway-testUID").Return(nil)
 				err := r.ensurePublicIPPrefixDeleted(context.TODO(), vmConfig)
 				Expect(err).To(BeNil())
+			})
+
+			It("should delete associated public IPs before deleting the prefix", func() {
+				prefix := &network.PublicIPPrefix{
+					Properties: &network.PublicIPPrefixPropertiesFormat{
+						PublicIPAddresses: []*network.ReferencedPublicIPAddress{
+							{
+								ID: to.Ptr("/subscriptions/testSub/resourceGroups/testRG/providers/Microsoft.Network/publicIPAddresses/pip1"),
+							},
+							{
+								ID: to.Ptr("/subscriptions/testSub/resourceGroups/testRG/providers/Microsoft.Network/publicIPAddresses/pip2"),
+							},
+						},
+					},
+				}
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), testRG, "egressgateway-testUID", gomock.Any()).Return(prefix, nil)
+
+				mockPublicIPClient := az.PublicIPClient.(*mock_publicipaddressclient.MockInterface)
+				mockPublicIPClient.EXPECT().Delete(gomock.Any(), testRG, "pip1").Return(nil)
+				mockPublicIPClient.EXPECT().Delete(gomock.Any(), testRG, "pip2").Return(nil)
+
+				mockPublicIPPrefixClient.EXPECT().Delete(gomock.Any(), testRG, "egressgateway-testUID").Return(nil)
+
+				err := r.ensurePublicIPPrefixDeleted(context.TODO(), vmConfig)
+				Expect(err).To(BeNil())
+			})
+
+			It("should return error when deleting associated public IP fails", func() {
+				prefix := &network.PublicIPPrefix{
+					Properties: &network.PublicIPPrefixPropertiesFormat{
+						PublicIPAddresses: []*network.ReferencedPublicIPAddress{
+							{
+								ID: to.Ptr("/subscriptions/testSub/resourceGroups/testRG/providers/Microsoft.Network/publicIPAddresses/pip1"),
+							},
+						},
+					},
+				}
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), testRG, "egressgateway-testUID", gomock.Any()).Return(prefix, nil)
+
+				mockPublicIPClient := az.PublicIPClient.(*mock_publicipaddressclient.MockInterface)
+				mockPublicIPClient.EXPECT().Delete(gomock.Any(), testRG, "pip1").Return(fmt.Errorf("delete failed"))
+
+				err := r.ensurePublicIPPrefixDeleted(context.TODO(), vmConfig)
+				Expect(errors.Unwrap(err)).To(Equal(fmt.Errorf("delete failed")))
+			})
+
+			It("should skip public IPs that are not found when deleting associated public IPs", func() {
+				prefix := &network.PublicIPPrefix{
+					Properties: &network.PublicIPPrefixPropertiesFormat{
+						PublicIPAddresses: []*network.ReferencedPublicIPAddress{
+							{
+								ID: to.Ptr("/subscriptions/testSub/resourceGroups/testRG/providers/Microsoft.Network/publicIPAddresses/pip1"),
+							},
+							{
+								ID: to.Ptr("/subscriptions/testSub/resourceGroups/testRG/providers/Microsoft.Network/publicIPAddresses/pip2"),
+							},
+						},
+					},
+				}
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), testRG, "egressgateway-testUID", gomock.Any()).Return(prefix, nil)
+
+				mockPublicIPClient := az.PublicIPClient.(*mock_publicipaddressclient.MockInterface)
+				mockPublicIPClient.EXPECT().Delete(gomock.Any(), testRG, "pip1").Return(&azcore.ResponseError{StatusCode: http.StatusNotFound})
+				mockPublicIPClient.EXPECT().Delete(gomock.Any(), testRG, "pip2").Return(nil)
+
+				mockPublicIPPrefixClient.EXPECT().Delete(gomock.Any(), testRG, "egressgateway-testUID").Return(nil)
+
+				err := r.ensurePublicIPPrefixDeleted(context.TODO(), vmConfig)
+				Expect(err).To(BeNil())
+			})
+
+			It("should return error when public IP resource ID cannot be parsed", func() {
+				prefix := &network.PublicIPPrefix{
+					Properties: &network.PublicIPPrefixPropertiesFormat{
+						PublicIPAddresses: []*network.ReferencedPublicIPAddress{
+							{
+								ID: to.Ptr("invalid-resource-id"),
+							},
+						},
+					},
+				}
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), testRG, "egressgateway-testUID", gomock.Any()).Return(prefix, nil)
+
+				err := r.ensurePublicIPPrefixDeleted(context.TODO(), vmConfig)
+				Expect(err.Error()).To(ContainSubstring("failed to parse managed public ip prefix"))
 			})
 		})
 
@@ -926,7 +1016,10 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
 				mockInterfaceClient.EXPECT().List(gomock.Any(), testRG).Return(nics, nil)
 				mockPublicIPClient := az.PublicIPClient.(*mock_publicipaddressclient.MockInterface)
-				mockPublicIPClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, "nic2", gomock.Any()).Return(&network.PublicIPAddress{
+				pipName, err := poolVMs.buildPublicIPName(publicIPPrefixResourceID, *nics[1].Name)
+				Expect(err).NotTo(HaveOccurred())
+
+				mockPublicIPClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, pipName, gomock.Any()).Return(&network.PublicIPAddress{
 					Properties: &network.PublicIPAddressPropertiesFormat{
 						IPAddress: to.Ptr("1.2.3.4"),
 					},
@@ -942,7 +1035,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						},
 					},
 				}, nil)
-				ips, err := poolVMs.Reconcile(context.Background(), vmConfig, "prefix", true)
+				ips, err := poolVMs.Reconcile(context.Background(), vmConfig, publicIPPrefixResourceID, true)
 				Expect(err).To(BeNil())
 				Expect(len(ips)).To(Equal(1))
 			})
@@ -981,7 +1074,10 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
 				mockInterfaceClient.EXPECT().List(gomock.Any(), testRG).Return(nics, nil)
 				mockPublicIPClient := az.PublicIPClient.(*mock_publicipaddressclient.MockInterface)
-				mockPublicIPClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, "nic2", gomock.Any()).Return(&network.PublicIPAddress{
+				pipName, err := poolVMs.buildPublicIPName(publicIPPrefixResourceID, *nics[1].Name)
+				Expect(err).NotTo(HaveOccurred())
+
+				mockPublicIPClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, pipName, gomock.Any()).Return(&network.PublicIPAddress{
 					Properties: &network.PublicIPAddressPropertiesFormat{
 						IPAddress: to.Ptr("1.2.3.4"),
 					},
@@ -997,7 +1093,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						},
 					},
 				}, nil)
-				ips, err := poolVMs.Reconcile(context.Background(), vmConfig, "prefix", true)
+				ips, err := poolVMs.Reconcile(context.Background(), vmConfig, publicIPPrefixResourceID, true)
 				Expect(err).To(BeNil())
 				Expect(len(ips)).To(Equal(1))
 			})
@@ -1030,7 +1126,10 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
 				mockInterfaceClient.EXPECT().List(gomock.Any(), testRG).Return(nics, nil)
 				mockPublicIPClient := az.PublicIPClient.(*mock_publicipaddressclient.MockInterface)
-				mockPublicIPClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, "gateway-nic", gomock.Any()).Return(&network.PublicIPAddress{
+				pipName, err := poolVMs.buildPublicIPName(publicIPPrefixResourceID, *nics[0].Name)
+				Expect(err).NotTo(HaveOccurred())
+
+				mockPublicIPClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, pipName, gomock.Any()).Return(&network.PublicIPAddress{
 					Properties: &network.PublicIPAddressPropertiesFormat{
 						IPAddress: to.Ptr("1.2.3.4"),
 					},
@@ -1046,7 +1145,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						nic.Properties.IPConfigurations[1].Properties.PrivateIPAddress = to.Ptr("10.0.0.2")
 						return &nic, nil
 					})
-				ips, err := poolVMs.Reconcile(context.Background(), vmConfig, "prefix", true)
+				ips, err := poolVMs.Reconcile(context.Background(), vmConfig, publicIPPrefixResourceID, true)
 				Expect(err).To(BeNil())
 				Expect(len(ips)).To(Equal(1))
 				Expect(ips[0]).To(Equal("10.0.0.2"))
@@ -1087,7 +1186,10 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
 				mockInterfaceClient.EXPECT().List(gomock.Any(), testRG).Return(nics, nil)
 				mockPublicIPClient := az.PublicIPClient.(*mock_publicipaddressclient.MockInterface)
-				mockPublicIPClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, "gateway-nic", gomock.Any()).Return(&network.PublicIPAddress{
+				pipName, err := poolVMs.buildPublicIPName(publicIPPrefixResourceID, *nics[0].Name)
+				Expect(err).NotTo(HaveOccurred())
+
+				mockPublicIPClient.EXPECT().CreateOrUpdate(gomock.Any(), testRG, pipName, gomock.Any()).Return(&network.PublicIPAddress{
 					Properties: &network.PublicIPAddressPropertiesFormat{
 						IPAddress: to.Ptr("1.2.3.4"),
 					},
@@ -1104,7 +1206,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						nic.Properties.IPConfigurations[1].Properties.PrivateIPAddress = to.Ptr("10.0.0.2")
 						return &nic, nil
 					})
-				ips, err := poolVMs.Reconcile(context.Background(), vmConfig, "prefix", true)
+				ips, err := poolVMs.Reconcile(context.Background(), vmConfig, publicIPPrefixResourceID, true)
 				Expect(err).To(BeNil())
 				Expect(len(ips)).To(Equal(1))
 				Expect(ips[0]).To(Equal("10.0.0.2"))
@@ -1142,9 +1244,6 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 						},
 					},
 				}
-
-				mockPublicIPClient := az.PublicIPClient.(*mock_publicipaddressclient.MockInterface)
-				mockPublicIPClient.EXPECT().Delete(gomock.Any(), testRG, "gateway-nic").Return(nil)
 
 				mockInterfaceClient := az.InterfaceClient.(*mock_interfaceclient.MockInterface)
 				mockInterfaceClient.EXPECT().List(gomock.Any(), testRG).Return(nics, nil)
