@@ -7,8 +7,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
 	"github.com/google/uuid"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -174,8 +176,13 @@ func (r *agentPoolVMs) reconcileNIC(
 				PublicIPAllocationMethod: to.Ptr(network.IPAllocationMethodStatic),
 			},
 		}
+		pipName, err := r.buildPublicIPName(ipPrefixID, to.Val(nic.Name))
+		if err != nil {
+			return "", err
+		}
+
 		// todo how do we handle if the publicIPPrefix is out of IPs?
-		pip, err := r.CreateOrUpdatePublicIP(ctx, "", to.Val(nic.Name), *expectedPublicIP)
+		pip, err := r.CreateOrUpdatePublicIP(ctx, "", pipName, *expectedPublicIP)
 		if err != nil {
 			return "", err
 		}
@@ -250,9 +257,6 @@ func (r *agentPoolVMs) reconcileNIC(
 
 	// return earlier if it's deleting event
 	if !wantIPConfig {
-		if ipPrefixID != "" {
-			return "", r.DeletePublicIP(ctx, "", to.Val(nic.Name)) // todo does this error on not found?
-		}
 		return "", nil
 	}
 
@@ -281,6 +285,19 @@ func (r *agentPoolVMs) reconcileNIC(
 	vmConfig.Status.GatewayVMProfiles = append(vmConfig.Status.GatewayVMProfiles, vmprofile)
 
 	return ipCfg.secondaryIP, nil
+}
+
+func (a *agentPoolVMs) buildPublicIPName(id string, val string) (string, error) {
+	ipPrefix, err := arm.ParseResourceID(id)
+	if err != nil {
+		return "", err
+	}
+	h := fnv.New64a()
+	_, err = h.Write([]byte(val))
+	if err != nil {
+		return "", err
+	}
+	return ipPrefix.Name + fmt.Sprintf("-%x", h.Sum64()), nil
 }
 
 func differentNIC(a, b *network.InterfaceIPConfiguration) bool {
