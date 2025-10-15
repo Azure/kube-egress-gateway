@@ -349,6 +349,64 @@ var _ = Describe("Test staticGatewayConfiguration deployment", func() {
 		By("Checking pod egress IP DOES NOT belong to egress gateway outbound IP range")
 		Expect(egressIPs).ShouldNot(ContainElement(podEgressIP))
 	})
+
+	It("should support private egress through static gateway", func() {
+		rg, vmss, _, prefixLen, err := utils.GetGatewayVmssProfile(k8sClient)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Creating a StaticGatewayConfiguration for private egress")
+		sgw := &v1alpha1.StaticGatewayConfiguration{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "private-sgw",
+				Namespace: testns,
+			},
+			Spec: v1alpha1.StaticGatewayConfigurationSpec{
+				GatewayVmssProfile: v1alpha1.GatewayVmssProfile{
+					VmssResourceGroup:  rg,
+					VmssName:           vmss,
+					PublicIpPrefixSize: prefixLen,
+				},
+				ProvisionPublicIps: false,
+				DefaultRoute:       "azureNetworking",
+			},
+		}
+		err = utils.CreateK8sObject(sgw, k8sClient)
+		Expect(err).NotTo(HaveOccurred())
+		egressPrefix, err := utils.WaitStaticGatewayProvision(sgw, k8sClient)
+		Expect(err).NotTo(HaveOccurred())
+		utils.Logf("Got private egress gateway prefix: %s", egressPrefix)
+
+		By("Creating an agnhost target pod for private connectivity test")
+		agnhostPod := utils.CreateAgnhostTargetPod(testns)
+		err = utils.CreateK8sObject(agnhostPod, k8sClient)
+		Expect(err).NotTo(HaveOccurred())
+		agnhostIP, err := utils.WaitGetPodIP(agnhostPod, podLogClient)
+		Expect(err).NotTo(HaveOccurred())
+		utils.Logf("Agnhost target pod IP: %s", agnhostIP)
+
+		By("Creating a test pod using the private gateway to reach agnhost")
+		testPod := utils.CreateCurlPodManifest(testns, "private-sgw", agnhostIP+":8080/clientip")
+		err = utils.CreateK8sObject(testPod, k8sClient)
+		Expect(err).NotTo(HaveOccurred())
+		clientIP, err := utils.GetExpectedPodLog(testPod, podLogClient, podIPRE)
+		Expect(err).NotTo(HaveOccurred())
+		utils.Logf("Client IP seen by agnhost: %s", clientIP)
+
+		By("Validating that the client IP is a private IP (from gateway)")
+		Expect(strings.HasPrefix(clientIP, "10.") || strings.HasPrefix(clientIP, "172.") || strings.HasPrefix(clientIP, "192.168.")).To(BeTrue())
+		utils.Logf("Private egress validation successful - agnhost received private IP: %s", clientIP)
+
+		By("Verifying StaticGatewayConfiguration status indicates private mode")
+		// The egress prefix should contain private IPs, not public ones
+		egressIPs := strings.Split(egressPrefix, ",")
+		Expect(len(egressIPs)).To(BeNumerically(">", 0))
+		for _, ip := range egressIPs {
+			ip = strings.TrimSpace(ip)
+			utils.Logf("Checking egress IP: %s", ip)
+			// In private mode, these should be private IPs from the gateway nodes
+			Expect(strings.HasPrefix(ip, "10.") || strings.HasPrefix(ip, "172.") || strings.HasPrefix(ip, "192.168.")).To(BeTrue())
+		}
+	})
 })
 
 func genTestNamespace() string {

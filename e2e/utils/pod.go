@@ -137,3 +137,32 @@ func WaitGetPodIP(pod *corev1.Pod, c clientset.Interface) (string, error) {
 	})
 	return podIP, err
 }
+
+func CreateAgnhostTargetPod(nsName string) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "agnhost-target-" + string(uuid.NewUUID())[0:4],
+			Namespace: nsName,
+			Labels: map[string]string{
+				"app": "agnhost-target",
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:            "agnhost",
+					Image:           "registry.k8s.io/e2e-test-images/agnhost:2.36",
+					ImagePullPolicy: corev1.PullIfNotPresent,
+					Args:            []string{"netexec"},
+					Ports: []corev1.ContainerPort{
+						{
+							ContainerPort: 8080,
+							Protocol:      corev1.ProtocolTCP,
+						},
+					},
+				},
+			},
+			RestartPolicy: corev1.RestartPolicyAlways,
+		},
+	}
+}

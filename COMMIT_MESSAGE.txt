@@ -1,0 +1,16 @@
+Update GatewayLBConfigurationReconciler for Go 1.25.0
+
+This commit updates the GatewayLBConfigurationReconciler to use the new compatibility
+layer for Go 1.25.0. The changes include:
+
+1. Added a compatibility layer in pkg/compat that wraps the controller-runtime client
+2. Updated the GatewayLBConfigurationReconciler to use this compatibility layer
+3. Created a migration guide for updating other controllers
+
+This is the first controller to be migrated to the Go 1.25.0 compatibility layer. 
+The remaining controllers will be migrated in separate commits.
+
+The compatibility layer addresses type parameter changes in Go 1.25.0 that affect
+how controller-runtime's client API works with Kubernetes resources.
+
+Signed-off-by: Carlos Dossa <cdossa@example.com>

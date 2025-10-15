@@ -1,0 +1,6 @@
+build-simple: ## Build manager binaries without linting
+	CGO_ENABLED=0 go build -o bin/manager ./cmd/kube-egress-gateway-controller/main.go
+	CGO_ENABLED=0 go build -o bin/daemon ./cmd/kube-egress-gateway-daemon/main.go
+	CGO_ENABLED=0 go build -o bin/cni ./cmd/kube-egress-cni/main.go
+	CGO_ENABLED=0 go build -o bin/cni-ipam ./cmd/kube-egress-cni-ipam/main.go
+	CGO_ENABLED=0 go build -o bin/cnimanager ./cmd/kube-egress-gateway-cnimanager/main.go
