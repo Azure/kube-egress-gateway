@@ -26,7 +26,27 @@ status:
     Port: 6000
   egressIpPrefix: 1.2.3.4/31 # egress public IP prefix
 ```
-The controller creates a secret storing the gateway side wireguard private key with the same namespace and name as your `StaticGatewayConfiguration`. This information is displayed in `.status.gatewayServerProfile.PrivateKeySecretRef` field. `PublicKey` is base64 encoded wireguard public key used by the gateway. `Ip` is the gateway ILB frontend IP. This IP comes from the subnet provided in Azure cloud config. `Port` is LoadBalancing rule frontend and backend port. All `StaticGatewayConfiguration`s deployed to the same gateway VMSS share the same ILB frontend and backend but have separate LoadBalancing rules with different ports. And most importantly, `egressIpPrefix` is the egress source IPNet of the pods using this gateway. If you see any of these not showing in status, you can describe the CR objects and see if there are error events:
+
+The controller creates a secret storing the gateway side wireguard private key with the same namespace and name as your `StaticGatewayConfiguration`. This information is displayed in `.status.gatewayServerProfile.PrivateKeySecretRef` field. `PublicKey` is base64 encoded wireguard public key used by the gateway. `Ip` is the gateway ILB frontend IP. This IP comes from the subnet provided in Azure cloud config. `Port` is LoadBalancing rule frontend and backend port. All `StaticGatewayConfiguration`s deployed to the same gateway nodepool share the same ILB frontend and backend but have separate LoadBalancing rules with different ports.
+
+**Understanding `egressIpPrefix`:**
+
+The `egressIpPrefix` field shows the egress source IP(s) that pods using this gateway will use:
+
+* **For public IP mode** (`provisionPublicIps: true`): Shows the public IP prefix in CIDR notation (e.g., `1.2.3.4/31`)
+* **For private IP only mode** (`provisionPublicIps: false`, VM gateway pools only): Shows a list of private IPs assigned to the gateway nodes (e.g., `10.0.1.8,10.0.1.9`)
+
+For private IP mode, these IPs are secondary private IPs pinned to the pre-created NICs of the gateway VMs and remain stable across node restarts and upgrades.
+
+**Verifying IP assignment:**
+
+You can quickly check the assigned egress IPs using:
+
+```bash
+kubectl get staticgatewayconfigurations -n <your namespace> <your sgw name> -o jsonpath='{.status.egressIpPrefix}'
+```
+
+If you see any of these status fields not populated, you can describe the CR objects to see if there are error events:
 ```bash
 $ kubectl describe staticcgatewayconfiguration -n <your namespace> <your sgw name>
 ```

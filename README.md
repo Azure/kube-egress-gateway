@@ -69,11 +69,67 @@ spec:
 status:
   egressIpPrefix: 1.2.3.4/31 # example public IP prefix output, this will be pods' egress IPNet
 ```
-If `provisionPublicIps` is false, `egressIpPrefix` will be a list of private IPs configured on the corresponding gateway VMSS instance secondary ipConfigurations, e.g. `10.0.1.8,10.0.1.9`.
 
-### Deploy a Pod using Static Egress Gateway
+#### Using Private IPs for Egress (VM Gateway Pools Only)
 
-Constructing a pod to use a static egress gateway is simple: just add pod annotation `kubernetes.azure.com/static-gateway-configuration: <StaticGatewayConfiguration name>`. Only name is required here because kube-egress-gateway CNI plugin always assume the gateway is in the same namespace as the pod. Note that existing pods must be recreated to enable egress gateway because CNI plugin can only take effect when pod is being created. See sample pod [here](docs/samples/sample_pod.yaml).
+For scenarios where pods only need to access private endpoints, you can configure the static egress gateway to use only private IPs by setting `provisionPublicIps: false`.
+
+**Requirements:**
+* **VM-based gateway nodepool** (`gatewayNodepoolName`) is **required** - VMSS-based gateways (`gatewayVmssProfile`) do not support private IP only mode
+* **Kubernetes version ≥ 1.34** is required for VM gateway pool support
+* Properly sized gateway subnet (see subnet requirements below)
+
+> **Why VM gateway pools instead of VMSS?**
+>
+> Private static IP egress requires stable, deterministic IP assignment that persists across node scale operations and upgrades. VM-based gateway pools achieve this by:
+> * **Pre-creating NICs** up to the pool's maximum size, allowing the controller to assign and preserve secondary private IPs deterministically
+> * **Avoiding IP churn** during scale in/out or rolling upgrades - the same secondary IP stays with each node across restarts
+> * **Enabling predictable IP state** - critical for allowlisting scenarios and "IP unchanged after upgrade" validation
+>
+> VMSS-based pools were originally designed for dynamic ipConfigs tied to public IP prefixes, which don't provide the same IP stability guarantees needed for private static egress scenarios.
+
+**Configuration example:**
+
+```yaml
+apiVersion: egressgateway.kubernetes.azure.com/v1alpha1
+kind: StaticGatewayConfiguration
+metadata:
+  name: myPrivateEgressGateway
+  namespace: myNamespace
+spec:
+  # Use gatewayNodepoolName for VM-based gateway (required for private IP mode)
+  gatewayNodepoolName: myGatewayNodepool
+  
+  # Set to false to skip public IP provisioning and use only private IPs for egress
+  provisionPublicIps: false
+  defaultRoute: staticEgressGateway
+  excludeCidrs:
+    - 10.244.0.0/16
+    - 10.245.0.0/16
+```
+
+**How private IPs are assigned:**
+
+When you create or update a StaticGatewayConfiguration with `provisionPublicIps: false`, the controller:
+1. Checks/creates the internal load balancer (ILB) and backend pool
+2. Ensures each selected gateway node has a secondary private IP in its NIC `ipConfigurations[]`
+3. Updates the StaticGatewayConfiguration status with the assigned private IP addresses
+
+These secondary IPs are pinned to the pre-created NICs and remain stable across node restarts and rolling operations.
+
+**Verifying IP assignment:**
+
+After creating the StaticGatewayConfiguration, check the status to verify private IP assignment:
+
+```bash
+kubectl get staticgatewayconfigurations -n <namespace> <name> -o jsonpath='{.status.egressIpPrefix}'
+```
+
+The output will show a comma-separated list of private IPs (e.g., `10.0.1.8,10.0.1.9`). These are the source IPs that pods using this gateway will egress with.
+
+**When to use private IP only mode:**
+
+* Accessing private endpoints or when public IP resources are not needed.
 
 ## Troubleshooting
 
