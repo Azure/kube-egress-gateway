@@ -61,4 +61,83 @@ kube-egress-gateway components communicates with Azure Resource Manager (ARM) to
     ```
 
 ## Install kube-egress-gateway as Helm Chart
-See details [here](../helm/kube-egress-gateway/README.md). 
+See details [here](../helm/kube-egress-gateway/README.md).
+
+## Configuration Options
+
+### Public IP vs Private IP Egress
+
+kube-egress-gateway always provisions private IPs on virtual machines gateway nodes as secondary IP configurations. The `provisionPublicIps` setting controls whether *additional* public IP prefix resources are created and associated with these private IPs. This gives you flexibility in how pods egress:
+
+#### Public IP Mode (Default)
+
+In this mode (`provisionPublicIps: true`), public IP prefix resources are created and associated with the gateway nodes, enabling pods to access the Internet with fixed public egress IPs.
+
+**Use cases:**
+* Pods need to access external Internet services
+* External systems require allowlisting specific public IP addresses
+* Outbound Internet connectivity with a fixed, predictable source IP is required
+
+**Configuration:**
+```yaml
+spec:
+  gatewayVmssProfile:
+    vmssResourceGroup: myResourceGroup
+    vmssName: myGatewayVMSS
+    publicIpPrefixSize: 31
+  provisionPublicIps: true  # Default value
+  publicIpPrefixId: /subscriptions/.../publicIPPrefixes/myPIPPrefix  # Optional BYO
+```
+
+#### Private IP Only Mode
+
+In this mode (`provisionPublicIps: false`), no public IP prefix resources are created. Pods egress using only the private IPs that are allocated on the gateway nodes.
+
+**Requirements:**
+* **VM-based gateway nodepool** (`gatewayNodepoolName`) is **required** - This mode is NOT supported with VMSS-based gateways (`gatewayVmssProfile`)
+* **Kubernetes version ≥ 1.34** is required for VM gateway pool support
+* Properly sized gateway subnet (see subnet requirements below)
+
+> **Why VM gateway pools for private IP mode?**
+>
+> Private static IP egress requires deterministic IP assignment that remains stable across node scale operations and upgrades. VM-based gateway pools achieve this through:
+> * **Pre-created NICs**: NICs are created upfront (up to the pool's max size), allowing the controller to write secondary `ipConfigurations[]` that pin private IPs to specific nodes
+> * **IP stability**: Secondary IPs stick with each node across restarts and are preserved through rolling operations, avoiding source IP drift
+> * **Predictable state**: This design enables validation that secondary IPs remain unchanged after upgrades, critical for allowlisting scenarios
+>
+> In contrast, VMSS-based pools were designed for dynamic ipConfigs tied to public IP prefixes and don't provide the same IP stability guarantees.
+
+
+**Configuration:**
+```yaml
+spec:
+  # VM-based gateway nodepool required for private IP only mode
+  gatewayNodepoolName: myGatewayNodepool
+  
+  # Set to false to skip public IP provisioning
+  provisionPublicIps: false
+```
+
+**Provisioning process:**
+
+When you create or update a StaticGatewayConfiguration with `provisionPublicIps: false`, the controller:
+
+1. Checks/creates the internal load balancer (ILB) and backend pool
+2. Ensures each selected gateway node has the secondary private IP in its NIC `ipConfigurations[]`
+3. Updates the StaticGatewayConfiguration status with assigned private IP addresses
+
+**Verifying IP assignment:**
+
+After deployment, verify the assigned private IPs in the StaticGatewayConfiguration status:
+
+```bash
+kubectl get staticgatewayconfigurations -n <namespace> <name> -o jsonpath='{.status.egressIpPrefix}'
+```
+
+The `egressIpPrefix` field will show a comma-separated list of private IPs (e.g., `10.0.1.8,10.0.1.9`). These IPs remain stable across node operations.
+
+**Important considerations:**
+* When using `gatewayNodepoolName` (VM-based gateway nodepools), you have the flexibility to set `provisionPublicIps` to false
+* Ensure your network configuration (ExpressRoute, VPN, Private Link, VNet peering) is properly set up to route traffic to the intended private destinations
+* No public IP prefix resources will be created
+* The `publicIpPrefixId` field cannot be used when `provisionPublicIps` is false 
