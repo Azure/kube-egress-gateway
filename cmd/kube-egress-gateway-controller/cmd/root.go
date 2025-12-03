@@ -224,7 +224,11 @@ func getClientFactoryFromConfig(cloud *config.CloudConfig) (azclient.ClientFacto
 			CloudProviderRateLimitConfig: rateLimitConf,
 			SubscriptionID:               cloud.SubscriptionID,
 		},
-		&azclient.ARMClientConfig{Cloud: cloud.Cloud, UserAgent: cloud.UserAgent},
+		&azclient.ARMClientConfig{
+			Cloud:                  cloud.Cloud,
+			UserAgent:              cloud.UserAgent,
+			DisableAzureStackCloud: cloud.DisableAzureStackCloud,
+		},
 		clientOps.Cloud,
 		authProvider.GetAzIdentity(),
 	)

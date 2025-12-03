@@ -3,10 +3,22 @@
 package config
 
 import (
+	"context"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 	"testing"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 )
+
+func TestConfigLoad(t *testing.T) {
+	cfg, err := configloader.Load[CloudConfig](context.Background(), nil, &configloader.FileLoaderConfig{FilePath: "testdata/azureconfig.json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.DisableAzureStackCloud {
+		t.Error("DisableAzureStackCloud should be false")
+	}
+}
 
 func TestTrimSpace(t *testing.T) {
 	t.Run("test spaces are trimmed", func(t *testing.T) {
