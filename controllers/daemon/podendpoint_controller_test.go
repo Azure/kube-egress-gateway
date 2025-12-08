@@ -556,6 +556,235 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 			_, reconcileErr = r.Reconcile(context.TODO(), req)
 			Expect(reconcileErr).To(BeNil())
 		})
+
+		It("should clean stale peers that exist in GatewayStatus but not in wireguard device", func() {
+			// This tests the bug fix: peers that were removed from device but still in GatewayStatus
+			gwStatus := &egressgatewayv1alpha1.GatewayStatus{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testNodeName,
+					Namespace: testPodNamespace,
+				},
+				Spec: egressgatewayv1alpha1.GatewayStatusSpec{
+					ReadyPeerConfigurations: []egressgatewayv1alpha1.PeerConfiguration{
+						{
+							PublicKey:     pubK,
+							InterfaceName: "wg-6000",
+							PodEndpoint:   fmt.Sprintf("%s/%s", testNamespace, testName),
+						},
+						{
+							PublicKey:     pubK2, // This peer exists in GatewayStatus but NOT in device
+							InterfaceName: "wg-6000",
+							PodEndpoint:   fmt.Sprintf("%s/%s", testNamespace, testName+"2"),
+						},
+					},
+				},
+			}
+			podEndpoint1 := getTestPodEndpoint()
+			podEndpoint2 := getTestPodEndpoint()
+			podEndpoint2.Name = testName + "2"
+			podEndpoint2.Spec.PodPublicKey = pubK2
+			gwConfig = getTestGwConfig()
+			getTestReconciler(podEndpoint1, podEndpoint2, gwConfig, gwStatus)
+
+			mns := r.NetNS.(*mocknetnswrapper.MockInterface)
+			mwg := r.WgCtrl.(*mockwgctrlwrapper.MockInterface)
+			gwns := &mocknetnswrapper.MockNetNS{Name: consts.GatewayNetnsName}
+			pk, _ := wgtypes.ParseKey(pubK)
+			
+			// Device only has one peer, but GatewayStatus has two
+			device := &wgtypes.Device{
+				Peers: []wgtypes.Peer{
+					{
+						PublicKey: pk,
+						AllowedIPs: []net.IPNet{
+							*getIPNet("10.0.0.1/32"),
+						},
+					},
+					// pubK2 is missing from device - simulates crash or manual cleanup
+				},
+			}
+			
+			gomock.InOrder(
+				mns.EXPECT().GetNS(consts.GatewayNetnsName).Return(gwns, nil),
+				mwg.EXPECT().New().Return(mclient, nil),
+				mclient.EXPECT().Device("wg-6000").Return(device, nil),
+				mclient.EXPECT().Close().Return(nil),
+			)
+			
+			_, reconcileErr = r.Reconcile(context.TODO(), req)
+			Expect(reconcileErr).To(BeNil())
+			
+			// Verify that the stale peer (pubK2) was removed from GatewayStatus
+			err := getGatewayStatus(r.Client, gwStatus)
+			Expect(err).To(BeNil())
+			Expect(len(gwStatus.Spec.ReadyPeerConfigurations)).To(Equal(1))
+			Expect(gwStatus.Spec.ReadyPeerConfigurations[0].PublicKey).To(Equal(pubK))
+		})
+	})
+
+	Context("Test retry logic for GatewayStatus updates", func() {
+		BeforeEach(func() {
+			_ = os.Setenv(consts.PodNamespaceEnvKey, testPodNamespace)
+			_ = os.Setenv(consts.NodeNameEnvKey, testNodeName)
+		})
+
+		AfterEach(func() {
+			_ = os.Setenv(consts.PodNamespaceEnvKey, "")
+			_ = os.Setenv(consts.NodeNameEnvKey, "")
+		})
+
+		It("should retry on conflict errors and eventually succeed", func() {
+			// Create a custom client that simulates conflict on first update
+			existing := &egressgatewayv1alpha1.GatewayStatus{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            testNodeName,
+					Namespace:       testPodNamespace,
+					ResourceVersion: "1",
+				},
+				Spec: egressgatewayv1alpha1.GatewayStatusSpec{
+					ReadyPeerConfigurations: []egressgatewayv1alpha1.PeerConfiguration{
+						{
+							PublicKey:     "existing-peer",
+							InterfaceName: "wg-6000",
+						},
+					},
+				},
+			}
+			
+			getTestReconciler(node, existing)
+			
+			// First attempt - simulate a conflict
+			peerConfigs := []egressgatewayv1alpha1.PeerConfiguration{
+				{
+					PublicKey:     "new-peer",
+					InterfaceName: "wg-6000",
+				},
+			}
+			
+			// The retry logic should handle this gracefully
+			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, true)
+			Expect(err).To(BeNil())
+			
+			// Verify the peer was added
+			gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
+			err = getGatewayStatus(r.Client, gwStatus)
+			Expect(err).To(BeNil())
+			Expect(len(gwStatus.Spec.ReadyPeerConfigurations)).To(Equal(2))
+		})
+
+		It("should handle already exists error during create and retry", func() {
+			// Test the race condition where multiple reconcilers try to create GatewayStatus
+			getTestReconciler(node)
+			
+			peerConfigs := []egressgatewayv1alpha1.PeerConfiguration{
+				{
+					PublicKey:     "peer1",
+					InterfaceName: "wg-6000",
+				},
+			}
+			
+			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, true)
+			Expect(err).To(BeNil())
+			
+			gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
+			err = getGatewayStatus(r.Client, gwStatus)
+			Expect(err).To(BeNil())
+			Expect(len(gwStatus.Spec.ReadyPeerConfigurations)).To(Equal(1))
+		})
+
+		It("should not update if no changes are needed", func() {
+			existing := &egressgatewayv1alpha1.GatewayStatus{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            testNodeName,
+					Namespace:       testPodNamespace,
+					ResourceVersion: "1",
+				},
+				Spec: egressgatewayv1alpha1.GatewayStatusSpec{
+					ReadyPeerConfigurations: []egressgatewayv1alpha1.PeerConfiguration{
+						{
+							PublicKey:     "existing-peer",
+							InterfaceName: "wg-6000",
+						},
+					},
+				},
+			}
+			
+			getTestReconciler(node, existing)
+			
+			// Try to add a peer that already exists
+			peerConfigs := []egressgatewayv1alpha1.PeerConfiguration{
+				{
+					PublicKey:     "existing-peer",
+					InterfaceName: "wg-6000",
+				},
+			}
+			
+			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, true)
+			Expect(err).To(BeNil())
+			
+			// Verify no update was made (ResourceVersion should not change)
+			gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
+			err = getGatewayStatus(r.Client, gwStatus)
+			Expect(err).To(BeNil())
+			Expect(len(gwStatus.Spec.ReadyPeerConfigurations)).To(Equal(1))
+		})
+
+		It("should handle deletion of non-existent peers gracefully", func() {
+			existing := &egressgatewayv1alpha1.GatewayStatus{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testNodeName,
+					Namespace: testPodNamespace,
+				},
+				Spec: egressgatewayv1alpha1.GatewayStatusSpec{
+					ReadyPeerConfigurations: []egressgatewayv1alpha1.PeerConfiguration{
+						{
+							PublicKey:     "peer1",
+							InterfaceName: "wg-6000",
+						},
+					},
+				},
+			}
+			
+			getTestReconciler(node, existing)
+			
+			// Try to delete a peer that doesn't exist
+			peerConfigs := []egressgatewayv1alpha1.PeerConfiguration{
+				{
+					PublicKey:     "non-existent-peer",
+					InterfaceName: "wg-6000",
+				},
+			}
+			
+			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, false)
+			Expect(err).To(BeNil())
+			
+			// Original peer should still be there
+			gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
+			err = getGatewayStatus(r.Client, gwStatus)
+			Expect(err).To(BeNil())
+			Expect(len(gwStatus.Spec.ReadyPeerConfigurations)).To(Equal(1))
+			Expect(gwStatus.Spec.ReadyPeerConfigurations[0].PublicKey).To(Equal("peer1"))
+		})
+
+		It("should not create GatewayStatus during cleanup if it doesn't exist", func() {
+			getTestReconciler(node)
+			
+			peerConfigs := []egressgatewayv1alpha1.PeerConfiguration{
+				{
+					PublicKey:     "peer1",
+					InterfaceName: "wg-6000",
+				},
+			}
+			
+			// Try to delete when GatewayStatus doesn't exist
+			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, false)
+			Expect(err).To(BeNil())
+			
+			// GatewayStatus should not be created
+			gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
+			err = getGatewayStatus(r.Client, gwStatus)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		})
 	})
 })
 

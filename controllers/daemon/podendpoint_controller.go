@@ -249,6 +249,9 @@ func (r *PodEndpointReconciler) cleanUpWgLink(
 	}
 	defer func() { _ = gwns.Close() }()
 
+	// Track peers that exist in wireguard device
+	devicePeerKeys := make(map[string]struct{})
+
 	if err := gwns.Do(func(nn ns.NetNS) error {
 		wgClient, err := r.WgCtrl.New()
 		if err != nil {
@@ -264,7 +267,10 @@ func (r *PodEndpointReconciler) cleanUpWgLink(
 		wgConfig := wgtypes.Config{}
 		podIPToDel := make(map[string]bool)
 		for i := range device.Peers {
-			if _, ok := peerMap[wglinkName][device.Peers[i].PublicKey.String()]; !ok {
+			peerKey := device.Peers[i].PublicKey.String()
+			devicePeerKeys[peerKey] = struct{}{}
+
+			if _, ok := peerMap[wglinkName][peerKey]; !ok {
 				wgConfig.Peers = append(wgConfig.Peers, wgtypes.PeerConfig{
 					PublicKey: device.Peers[i].PublicKey,
 					Remove:    true,
@@ -272,7 +278,8 @@ func (r *PodEndpointReconciler) cleanUpWgLink(
 				for _, ipNet := range device.Peers[i].AllowedIPs {
 					podIPToDel[ipNet.IP.String()] = true
 				}
-				log.Info(fmt.Sprintf("Removing peer %s from wgLink %s", device.Peers[i].PublicKey.String(), wglinkName))
+				log.Info(fmt.Sprintf("Removing peer %s from wgLink %s", peerKey, wglinkName))
+				peersToDelete = append(peersToDelete, egressgatewayv1alpha1.PeerConfiguration{PublicKey: peerKey})
 			}
 		}
 		if len(wgConfig.Peers) > 0 {
@@ -283,15 +290,21 @@ func (r *PodEndpointReconciler) cleanUpWgLink(
 			if err := wgClient.ConfigureDevice(wglinkName, wgConfig); err != nil {
 				return fmt.Errorf("failed to remove peers from wireguard device %s: %w", wglinkName, err)
 			}
-
-			for _, peer := range wgConfig.Peers {
-				peersToDelete = append(peersToDelete, egressgatewayv1alpha1.PeerConfiguration{PublicKey: peer.PublicKey.String()})
-			}
 		}
 		return nil
 	}); err != nil {
 		return nil, err
 	}
+
+	// Identify stale peers: those that should exist (in peerMap) but don't exist in device
+	// These are orphaned entries that need to be removed from GatewayStatus
+	for peerKey := range peerMap[wglinkName] {
+		if _, existsInDevice := devicePeerKeys[peerKey]; !existsInDevice {
+			log.Info(fmt.Sprintf("Found stale peer %s for wgLink %s (not in device but in GatewayStatus)", peerKey, wglinkName))
+			peersToDelete = append(peersToDelete, egressgatewayv1alpha1.PeerConfiguration{PublicKey: peerKey})
+		}
+	}
+
 	return peersToDelete, nil
 }
 
@@ -358,19 +371,25 @@ func (r *PodEndpointReconciler) updateGatewayNodeStatus(
 		Name:      os.Getenv(consts.NodeNameEnvKey),
 	}
 
-	gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
-	if err := r.Get(ctx, gwStatusKey, gwStatus); err != nil {
-		if !apierrors.IsNotFound(err) {
-			log.Error(err, "failed to get existing gateway status object %s/%s", gwStatusKey.Namespace, gwStatusKey.Name)
-			return err
-		} else {
+	// Retry logic with exponential backoff for handling conflicts
+	maxRetries := 5
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
+		err := r.Get(ctx, gwStatusKey, gwStatus)
+
+		if err != nil {
+			if !apierrors.IsNotFound(err) {
+				log.Error(err, "failed to get existing gateway status object", "namespace", gwStatusKey.Namespace, "name", gwStatusKey.Name)
+				return err
+			}
+
+			// gwStatus does not exist, create a new one
 			if !add {
 				// ignore creating object during cleanup
 				return nil
 			}
 
-			// gwStatus does not exist, create a new one
-			log.Info(fmt.Sprintf("Creating new gateway status(%s/%s)", gwStatusKey.Namespace, gwStatusKey.Name))
+			log.Info("Creating new gateway status", "namespace", gwStatusKey.Namespace, "name", gwStatusKey.Name)
 
 			node := &corev1.Node{}
 			if err := r.Get(ctx, types.NamespacedName{Name: os.Getenv(consts.NodeNameEnvKey)}, node); err != nil {
@@ -389,12 +408,19 @@ func (r *PodEndpointReconciler) updateGatewayNodeStatus(
 			if err := controllerutil.SetOwnerReference(node, gwStatus, r.Client.Scheme()); err != nil {
 				return fmt.Errorf("failed to set gwStatus owner reference to node: %w", err)
 			}
-			log.Info("Creating new gateway status object")
+
 			if err := r.Create(ctx, gwStatus); err != nil {
+				if apierrors.IsAlreadyExists(err) && attempt < maxRetries-1 {
+					log.Info("Gateway status already exists, retrying", "attempt", attempt+1)
+					continue
+				}
 				return fmt.Errorf("failed to create gwStatus object: %w", err)
 			}
+			log.Info("Gateway status created successfully")
+			return nil
 		}
-	} else {
+
+		// Update existing GatewayStatus
 		changed := false
 		peerMap := make(map[string]*egressgatewayv1alpha1.PeerConfiguration)
 		for _, peerConfig := range gwStatus.Spec.ReadyPeerConfigurations {
@@ -414,17 +440,30 @@ func (r *PodEndpointReconciler) updateGatewayNodeStatus(
 				}
 			}
 		}
-		if changed {
-			var peers []egressgatewayv1alpha1.PeerConfiguration
-			for _, peerConfig := range peerMap {
-				peers = append(peers, *peerConfig)
-			}
-			gwStatus.Spec.ReadyPeerConfigurations = peers
-			log.Info("Updating gateway status object")
-			if err := r.Update(ctx, gwStatus); err != nil {
-				return fmt.Errorf("failed to update gwStatus object: %w", err)
-			}
+
+		if !changed {
+			// No changes needed
+			return nil
 		}
+
+		var peers []egressgatewayv1alpha1.PeerConfiguration
+		for _, peerConfig := range peerMap {
+			peers = append(peers, *peerConfig)
+		}
+		gwStatus.Spec.ReadyPeerConfigurations = peers
+
+		log.Info("Updating gateway status", "peerCount", len(peers), "attempt", attempt+1)
+		if err := r.Update(ctx, gwStatus); err != nil {
+			if apierrors.IsConflict(err) && attempt < maxRetries-1 {
+				log.Info("Conflict updating gateway status, retrying", "attempt", attempt+1)
+				continue
+			}
+			return fmt.Errorf("failed to update gwStatus object: %w", err)
+		}
+
+		log.Info("Gateway status updated successfully", "peerCount", len(peers))
+		return nil
 	}
-	return nil
+
+	return fmt.Errorf("failed to update gateway status after %d attempts", maxRetries)
 }
