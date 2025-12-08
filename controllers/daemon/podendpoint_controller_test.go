@@ -297,7 +297,7 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 
 		It("should create new gateway status object if not exist", func() {
 			getTestReconciler(node)
-			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, true)
+			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs)
 			Expect(err).To(BeNil())
 			gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
 			err = getGatewayStatus(r.Client, gwStatus)
@@ -325,7 +325,11 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 				},
 			}
 			getTestReconciler(node, existing)
-			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, true)
+			// With peersToKeep approach, pass all peers that should exist
+			allPeers := append(peerConfigs,
+				egressgatewayv1alpha1.PeerConfiguration{PublicKey: "pubk1", InterfaceName: "wg-6000"},
+				egressgatewayv1alpha1.PeerConfiguration{PublicKey: "pubk3", InterfaceName: "wg-6002"})
+			err := r.updateGatewayNodeStatus(context.TODO(), allPeers)
 			Expect(err).To(BeNil())
 			gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
 			err = getGatewayStatus(r.Client, gwStatus)
@@ -358,7 +362,11 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 				},
 			}
 			getTestReconciler(node, existing)
-			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, false)
+			// With peersToKeep, to "delete" pubk1 and keep pubk3, only pass pubk3
+			peersToKeep := []egressgatewayv1alpha1.PeerConfiguration{
+				{PublicKey: "pubk3", InterfaceName: "ns3"},
+			}
+			err := r.updateGatewayNodeStatus(context.TODO(), peersToKeep)
 			Expect(err).To(BeNil())
 			gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
 			err = getGatewayStatus(r.Client, gwStatus)
@@ -656,13 +664,17 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 			// First attempt - simulate a conflict
 			peerConfigs := []egressgatewayv1alpha1.PeerConfiguration{
 				{
+					PublicKey:     "existing-peer",
+					InterfaceName: "wg-6000",
+				},
+				{
 					PublicKey:     "new-peer",
 					InterfaceName: "wg-6000",
 				},
 			}
 			
 			// The retry logic should handle this gracefully
-			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, true)
+			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs)
 			Expect(err).To(BeNil())
 			
 			// Verify the peer was added
@@ -683,7 +695,7 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 				},
 			}
 			
-			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, true)
+			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs)
 			Expect(err).To(BeNil())
 			
 			gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
@@ -711,7 +723,7 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 			
 			getTestReconciler(node, existing)
 			
-			// Try to add a peer that already exists
+			// Try to set same peer that already exists
 			peerConfigs := []egressgatewayv1alpha1.PeerConfiguration{
 				{
 					PublicKey:     "existing-peer",
@@ -719,7 +731,7 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 				},
 			}
 			
-			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, true)
+			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs)
 			Expect(err).To(BeNil())
 			
 			// Verify no update was made (ResourceVersion should not change)
@@ -747,15 +759,16 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 			
 			getTestReconciler(node, existing)
 			
-			// Try to delete a peer that doesn't exist
+			// To "delete" peer1 implicitly, we'd pass empty list or only other peers
+			// But in this test, we want to keep peer1, so pass it in peersToKeep
 			peerConfigs := []egressgatewayv1alpha1.PeerConfiguration{
 				{
-					PublicKey:     "non-existent-peer",
+					PublicKey:     "peer1",
 					InterfaceName: "wg-6000",
 				},
 			}
 			
-			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, false)
+			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs)
 			Expect(err).To(BeNil())
 			
 			// Original peer should still be there
@@ -769,15 +782,10 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 		It("should not create GatewayStatus during cleanup if it doesn't exist", func() {
 			getTestReconciler(node)
 			
-			peerConfigs := []egressgatewayv1alpha1.PeerConfiguration{
-				{
-					PublicKey:     "peer1",
-					InterfaceName: "wg-6000",
-				},
-			}
+			// Pass empty peersToKeep - should not create GatewayStatus
+			peerConfigs := []egressgatewayv1alpha1.PeerConfiguration{}
 			
-			// Try to delete when GatewayStatus doesn't exist
-			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, false)
+			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs)
 			Expect(err).To(BeNil())
 			
 			// GatewayStatus should not be created
