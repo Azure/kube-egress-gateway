@@ -415,42 +415,46 @@ func (r *PodEndpointReconciler) updateGatewayNodeStatus(
 				return err
 			}
 
-			// gwStatus does not exist, create a new one with peersToKeep
-			if len(peersToKeep) == 0 {
-				// No peers to keep, no need to create empty GatewayStatus
-				return nil
-			}
-
-			log.Info("Creating new gateway status", "namespace", gwStatusKey.Namespace, "name", gwStatusKey.Name)
-
-			node := &corev1.Node{}
-			if err := r.Get(ctx, types.NamespacedName{Name: os.Getenv(consts.NodeNameEnvKey)}, node); err != nil {
-				return fmt.Errorf("failed to get current node: %w", err)
-			}
-
-			gwStatus := &egressgatewayv1alpha1.GatewayStatus{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      gwStatusKey.Name,
-					Namespace: gwStatusKey.Namespace,
-				},
-				Spec: egressgatewayv1alpha1.GatewayStatusSpec{
-					ReadyPeerConfigurations: peersToKeep,
-				},
-			}
-			if err := controllerutil.SetOwnerReference(node, gwStatus, r.Client.Scheme()); err != nil {
-				return fmt.Errorf("failed to set gwStatus owner reference to node: %w", err)
-			}
-
-			if err := r.Create(ctx, gwStatus); err != nil {
-				if apierrors.IsAlreadyExists(err) && attempt < maxRetries-1 {
-					log.Info("Gateway status already exists, retrying", "attempt", attempt+1)
-					continue
-				}
-				return fmt.Errorf("failed to create gwStatus object: %w", err)
-			}
-			log.Info("Gateway status created successfully")
+		// gwStatus does not exist, create a new one with peersToKeep
+		if len(peersToKeep) == 0 {
+			// No peers to keep, no need to create empty GatewayStatus
+			log.V(2).Info("No peers to keep and GatewayStatus doesn't exist, skipping creation")
 			return nil
 		}
+
+		log.Info("Creating new gateway status", "namespace", gwStatusKey.Namespace, "name", gwStatusKey.Name)
+
+		gwStatus := &egressgatewayv1alpha1.GatewayStatus{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      gwStatusKey.Name,
+				Namespace: gwStatusKey.Namespace,
+			},
+			Spec: egressgatewayv1alpha1.GatewayStatusSpec{
+				ReadyPeerConfigurations: peersToKeep,
+			},
+		}
+		
+		// Try to set owner reference to Node if it exists
+		node := &corev1.Node{}
+		if err := r.Get(ctx, types.NamespacedName{Name: os.Getenv(consts.NodeNameEnvKey)}, node); err == nil {
+			if err := controllerutil.SetOwnerReference(node, gwStatus, r.Client.Scheme()); err != nil {
+				log.Error(err, "failed to set gwStatus owner reference to node, proceeding without owner reference")
+			}
+		} else if !apierrors.IsNotFound(err) {
+			log.Error(err, "failed to get current node, proceeding without owner reference")
+		}
+		// If node is not found, proceed without owner reference
+		
+		if err := r.Create(ctx, gwStatus); err != nil {
+			if apierrors.IsAlreadyExists(err) && attempt < maxRetries-1 {
+				log.Info("Gateway status already exists, retrying", "attempt", attempt+1)
+				continue
+			}
+			return fmt.Errorf("failed to create gwStatus object: %w", err)
+		}
+		log.Info("Gateway status created successfully")
+		return nil
+	}
 
 		// Update existing GatewayStatus - replace with only peers in keepMap
 		changed := false
