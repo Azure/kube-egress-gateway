@@ -297,7 +297,7 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 
 		It("should create new gateway status object if not exist", func() {
 			getTestReconciler(node)
-			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs)
+			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, true)
 			Expect(err).To(BeNil())
 			gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
 			err = getGatewayStatus(r.Client, gwStatus)
@@ -329,7 +329,7 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 			allPeers := append(peerConfigs,
 				egressgatewayv1alpha1.PeerConfiguration{PublicKey: "pubk1", InterfaceName: "wg-6000"},
 				egressgatewayv1alpha1.PeerConfiguration{PublicKey: "pubk3", InterfaceName: "wg-6002"})
-			err := r.updateGatewayNodeStatus(context.TODO(), allPeers)
+			err := r.updateGatewayNodeStatus(context.TODO(), allPeers, false)
 			Expect(err).To(BeNil())
 			gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
 			err = getGatewayStatus(r.Client, gwStatus)
@@ -366,7 +366,7 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 			peersToKeep := []egressgatewayv1alpha1.PeerConfiguration{
 				{PublicKey: "pubk3", InterfaceName: "ns3"},
 			}
-			err := r.updateGatewayNodeStatus(context.TODO(), peersToKeep)
+			err := r.updateGatewayNodeStatus(context.TODO(), peersToKeep, false)
 			Expect(err).To(BeNil())
 			gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
 			err = getGatewayStatus(r.Client, gwStatus)
@@ -674,7 +674,7 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 			}
 			
 			// The retry logic should handle this gracefully
-			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs)
+			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, false)
 			Expect(err).To(BeNil())
 			
 			// Verify the peer was added
@@ -695,7 +695,7 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 				},
 			}
 			
-			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs)
+			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, true)
 			Expect(err).To(BeNil())
 			
 			gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
@@ -731,7 +731,7 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 				},
 			}
 			
-			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs)
+			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, false)
 			Expect(err).To(BeNil())
 			
 			// Verify no update was made (ResourceVersion should not change)
@@ -768,7 +768,7 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 				},
 			}
 			
-			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs)
+			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, false)
 			Expect(err).To(BeNil())
 			
 			// Original peer should still be there
@@ -785,7 +785,7 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 			// Pass empty peersToKeep - should not create GatewayStatus
 			peerConfigs := []egressgatewayv1alpha1.PeerConfiguration{}
 			
-			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs)
+			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, false)
 			Expect(err).To(BeNil())
 			
 			// GatewayStatus should not be created

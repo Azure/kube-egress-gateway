@@ -178,28 +178,7 @@ func (r *PodEndpointReconciler) reconcile(
 		},
 	}
 	
-	// With peersToKeep approach, we need to add this peer to existing ones
-	// Get current GatewayStatus to preserve other peers
-	gwStatusKey := types.NamespacedName{
-		Namespace: os.Getenv(consts.PodNamespaceEnvKey),
-		Name:      os.Getenv(consts.NodeNameEnvKey),
-	}
-	gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
-	err = r.Get(ctx, gwStatusKey, gwStatus)
-	if err == nil {
-		// GatewayStatus exists, include existing peers in the keep list
-		for _, existing := range gwStatus.Spec.ReadyPeerConfigurations {
-			// Skip if this peer is already in the list
-			if existing.PublicKey == podEndpoint.Spec.PodPublicKey {
-				continue
-			}
-			peerConfigs = append(peerConfigs, existing)
-		}
-	} else if !apierrors.IsNotFound(err) {
-		return ctrl.Result{}, err
-	}
-	
-	if err := r.updateGatewayNodeStatus(ctx, peerConfigs); err != nil {
+	if err := r.updateGatewayNodeStatus(ctx, peerConfigs, true); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -249,7 +228,8 @@ func (r *PodEndpointReconciler) cleanUp(ctx context.Context) error {
 		peersToKeep = append(peersToKeep, peers...)
 	}
 
-	if err := r.updateGatewayNodeStatus(ctx, peersToKeep); err != nil {
+	// Pass add=false to indicate these are peers to KEEP (not delete)
+	if err := r.updateGatewayNodeStatus(ctx, peersToKeep, false); err != nil {
 		return fmt.Errorf("failed to update gateway node status: %w", err)
 	}
 	log.Info("Wireguard peer cleanup completed")
@@ -389,7 +369,8 @@ func (r *PodEndpointReconciler) deleteWireguardPeerRoutes(
 
 func (r *PodEndpointReconciler) updateGatewayNodeStatus(
 	ctx context.Context,
-	peersToKeep []egressgatewayv1alpha1.PeerConfiguration,
+	peerConfigs []egressgatewayv1alpha1.PeerConfiguration,
+	add bool,
 ) error {
 	log := log.FromContext(ctx)
 	gwStatusKey := types.NamespacedName{
@@ -397,10 +378,10 @@ func (r *PodEndpointReconciler) updateGatewayNodeStatus(
 		Name:      os.Getenv(consts.NodeNameEnvKey),
 	}
 
-	// Build a map of peers to keep for quick lookup
-	keepMap := make(map[string]*egressgatewayv1alpha1.PeerConfiguration)
-	for i := range peersToKeep {
-		keepMap[peersToKeep[i].PublicKey] = &peersToKeep[i]
+	// Build a map of input peers for quick lookup
+	peerMap := make(map[string]*egressgatewayv1alpha1.PeerConfiguration)
+	for i := range peerConfigs {
+		peerMap[peerConfigs[i].PublicKey] = &peerConfigs[i]
 	}
 
 	// Retry logic for handling conflicts
@@ -415,10 +396,10 @@ func (r *PodEndpointReconciler) updateGatewayNodeStatus(
 				return err
 			}
 
-		// gwStatus does not exist, create a new one with peersToKeep
-		if len(peersToKeep) == 0 {
-			// No peers to keep, no need to create empty GatewayStatus
-			log.V(2).Info("No peers to keep and GatewayStatus doesn't exist, skipping creation")
+		// gwStatus does not exist, create a new one
+		if len(peerConfigs) == 0 {
+			// No peers to add/keep, no need to create empty GatewayStatus
+			log.V(2).Info("No peers and GatewayStatus doesn't exist, skipping creation")
 			return nil
 		}
 
@@ -430,7 +411,7 @@ func (r *PodEndpointReconciler) updateGatewayNodeStatus(
 				Namespace: gwStatusKey.Namespace,
 			},
 			Spec: egressgatewayv1alpha1.GatewayStatusSpec{
-				ReadyPeerConfigurations: peersToKeep,
+				ReadyPeerConfigurations: peerConfigs,
 			},
 		}
 		
@@ -456,27 +437,45 @@ func (r *PodEndpointReconciler) updateGatewayNodeStatus(
 		return nil
 	}
 
-		// Update existing GatewayStatus - replace with only peers in keepMap
+		// Update existing GatewayStatus
 		changed := false
 		newPeers := []egressgatewayv1alpha1.PeerConfiguration{}
 		existingPeers := make(map[string]bool)
 
-		// Check existing peers - only keep those in keepMap
-		for _, peerConfig := range gwStatus.Spec.ReadyPeerConfigurations {
-			if keepPeer, shouldKeep := keepMap[peerConfig.PublicKey]; shouldKeep {
-				newPeers = append(newPeers, *keepPeer)
+		if add {
+			// add=true: Add new peers to existing ones
+			// Keep all existing peers
+			for _, peerConfig := range gwStatus.Spec.ReadyPeerConfigurations {
+				newPeers = append(newPeers, peerConfig)
 				existingPeers[peerConfig.PublicKey] = true
-			} else {
-				// Peer exists in GatewayStatus but not in keepMap - will be deleted
-				changed = true
 			}
-		}
 
-		// Add any peers from keepMap that weren't in existing GatewayStatus
-		for pubKey, peerConfig := range keepMap {
-			if !existingPeers[pubKey] {
-				newPeers = append(newPeers, *peerConfig)
-				changed = true
+			// Add any new peers from peerConfigs that weren't in existing GatewayStatus
+			for pubKey, peerConfig := range peerMap {
+				if !existingPeers[pubKey] {
+					newPeers = append(newPeers, *peerConfig)
+					changed = true
+				}
+			}
+		} else {
+			// add=false: Replace with only peers in peerMap ("keep only these")
+			// Check existing peers - only keep those in peerMap
+			for _, peerConfig := range gwStatus.Spec.ReadyPeerConfigurations {
+				if keepPeer, shouldKeep := peerMap[peerConfig.PublicKey]; shouldKeep {
+					newPeers = append(newPeers, *keepPeer)
+					existingPeers[peerConfig.PublicKey] = true
+				} else {
+					// Peer exists in GatewayStatus but not in peerMap - will be deleted
+					changed = true
+				}
+			}
+
+			// Add any peers from peerMap that weren't in existing GatewayStatus
+			for pubKey, peerConfig := range peerMap {
+				if !existingPeers[pubKey] {
+					newPeers = append(newPeers, *peerConfig)
+					changed = true
+				}
 			}
 		}
 
