@@ -35,7 +35,7 @@ jobs:
         uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
       - name: Docker meta
         id: daemon # you'll use this in the next step
-        uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893 # v5.9.0
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -45,7 +45,7 @@ jobs:
           bake-target: daemon-tags
       - name: Docker meta
         id: daemoninit # you'll use this in the next step
-        uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893 # v5.9.0
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -55,7 +55,7 @@ jobs:
           bake-target: daemoninit-tags
       - name: Docker meta
         id: controller # you'll use this in the next step
-        uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893 # v5.9.0
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -65,7 +65,7 @@ jobs:
           bake-target: controller-tags
       - name: Docker meta
         id: cnimanager # you'll use this in the next step
-        uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893 # v5.9.0
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -75,7 +75,7 @@ jobs:
           bake-target: cnimanager-tags
       - name: Docker meta
         id: cniplugin # you'll use this in the next step
-        uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893 # v5.9.0
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -85,7 +85,7 @@ jobs:
           bake-target: cni-tags
       - name: Docker meta
         id: cniipamplugin # you'll use this in the next step
-        uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893 # v5.9.0
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           # list of Docker images to use as base name for tags
           images: |
