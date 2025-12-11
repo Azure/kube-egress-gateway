@@ -1,17 +1,28 @@
 # Design Doc
 
-kube-egress-gateway routes egress traffic from pods on regular kubernetes worker nodes to dedicated gateway nodes, which are configured with secondary ipConfigs and public IP prefixes, and thus uses different, configurable egress source IPs other than the default kubernetes cluster egress IP, usually via the outbound load balancer or natGateway. This document provides details about how it works.
+kube-egress-gateway routes egress traffic from pods on regular kubernetes worker nodes to dedicated gateway nodes, which are configured with secondary ipConfigs and either public IP prefixes or private IPs, and thus uses different, configurable egress source IPs other than the default kubernetes cluster egress IP, usually via the outbound load balancer or natGateway. This document provides details about how it works.
 
 ## Prerequisite
 
-kube-egress-gateway needs at least two of dedicated kubernetes nodes backed by Azure virtual machine scale set (VMSS) as egress gateway to work. In Azure Kubernetes Service (AKS, managed kubernetes service on Azure) terminology, this is called a "nodepool". We use "nodepool" in this document for simplicity but it's not limited to AKS only. Users with self-managed kubernetes clusters can still use this feature, just by deploying a dedicated Azure VMSS and adding them to the cluster. There are some requirements for the nodepool:
-* It will be configured with additional secondary IP configurations on its NIC by kube-egress-gateway operator, and each secondary IP configuration is associated with a public IP prefix as outbound IP.
-* It has a fixed maximum node size (public ip prefix size), and should have cluster auto-scaler disabled.
+kube-egress-gateway needs at least two dedicated kubernetes nodes as egress gateway to work. These nodes can be backed by either Azure Virtual Machine Scale Set (VMSS) or standard Azure VMs (in Availability Set mode). In Azure Kubernetes Service (AKS, managed kubernetes service on Azure) terminology, this is called a "nodepool". We use "nodepool" in this document for simplicity but it's not limited to AKS only. Users with self-managed kubernetes clusters can still use this feature, just by deploying a dedicated Azure VMSS or VM set and adding them to the cluster. 
+
+### Gateway Node Pool Types
+
+**VMSS Node Pools (Default for Public IP)**: Traditional gateway node pools use Virtual Machine Scale Sets. This mode is the original implementation and is suitable when using public IP prefixes for egress.
+
+**VM Node Pools (Required for Private IP)**: When using private IP egress (preview feature, requires AKS 1.34+), the gateway node pool uses standard Azure VMs in an Availability Set. This architecture ensures stable private IP assignment because:
+- Private IPs are pre-allocated and reserved for the maximum pool size by pre-creating NICs
+- IPs remain static even when VMs are replaced or scaled
+- Each gateway node maintains a dedicated, unchanging private IP for reliable egress
+
+There are some requirements for the nodepool:
+* It will be configured with additional secondary IP configurations on its NIC by kube-egress-gateway operator. For **public IP mode**, each secondary IP configuration is associated with a public IP prefix as outbound IP. For **private IP mode** (preview), secondary IP configurations use private addresses from the cluster's VNet subnet.
+* It has a fixed maximum node size. For **public IP mode**, this is limited by the public IP prefix size. For **private IP mode**, the pool size is pre-determined and requires sufficient subnet IP space. Cluster auto-scaler should be disabled.
 * It should be tainted (`kubeegressgateway.azure.com/mode=true:NoSchedule`) permanently so that no normal workload would land on it. 
 * It also has label `kubeegressgateway.azure.com/mode: true` for nodeSelector.
-* The nodepool VMSS instances should be linux only.
+* The nodepool instances should be linux only.
 * The cluster cannot use [Azure CNI with Dynamic IP allocation](https://learn.microsoft.com/en-us/azure/aks/configure-azure-cni-dynamic-ip-allocation) as CNI plugin due to known issue.
-* Deploying multiple gateway nodepools (multiple VMSSes) is supported. But single nodepool cannot contain multiple VMSSes.
+* Deploying multiple gateway nodepools (multiple VMSSes or VM sets) is supported. But single nodepool cannot contain multiple VMSSes or VM sets.
 
 > Note: AKS managed kube-egress-gateway addon and gateway nodepool are not supported, **yet**. Please refer to [TODO](TODO) for an example to provision a self-managed cluster and gateway nodepool with [Cluster API Provider for Azure](https://capz.sigs.k8s.io/).
 
@@ -19,17 +30,36 @@ kube-egress-gateway needs at least two of dedicated kubernetes nodes backed by A
 
 When the gateway nodepool is created, there is no gateway to use. A user should create a namespaced `StaticGatewayConfiguration` CRD object to create an egress gateway configuration, specifying the target gateway nodepool, and optional BYO public IP prefix. Users can then annotate the pod (`kubernetes.azure.com/static-gateway-configuration: <gateway config name, e.g. aks-static-gw-001>`) to claim a static gateway configuration as egress.
 
-The kube-egress-gateway operator watches for `StaticGatewayConfiguration` CR. It first deploys an internal load balancer (ILB) in front of the gateway nodepool if not already existing. Then it creates a secondary ipConfig on the gateway vmss associating either user-provided BYO public ip prefix or a system managed one. On each gateway node, there is a gateway daemon deployed as a kubernetes DaemonSet, which watches for these changes and configures the gateway node, creating network namespace, setting routes and iptables rules.
+The kube-egress-gateway operator watches for `StaticGatewayConfiguration` CR. It first deploys an internal load balancer (ILB) in front of the gateway nodepool if not already existing. Then it creates a secondary ipConfig on the gateway VMSS or VM set, associating either:
+- **Public IP mode**: user-provided BYO public IP prefix or a system-managed one
+- **Private IP mode (preview)**: private IP addresses from the cluster's VNet subnet (no public IP prefix is attached)
+
+On each gateway node, there is a gateway daemon deployed as a kubernetes DaemonSet, which watches for these changes and configures the gateway node, creating network namespace, setting routes and iptables rules.
+
+### Public IP Mode
 
 In below image, the gateway nodepool has two nodes. We usually deploy multiple nodes for high availability. User creates a `StaticGatewayConfiguration` called `gw001` with specified public ip prefix "20.125.23.24/31". The operator places an ILB in front of the nodes so pod traffic can be sent to either node. The operator also creates a secondary ipConfiguration on each node. The ipConfiguration attaches the public ip prefix and has private IP 10.243.0.7/10.243.0.8 respectively. Thus when a packet is sent out from the gateway node with one of these private IPs, the packet will have one of the public IPs from the public ip prefix "20.125.23.24/31" on the Internet. This step is done by Azure Networking Stack. The gateway daemon on each node creates a new network namespace called `gw001` in the image. Each namespace has a `wg0` interface. Node wireguard daemon routes traffic from wireguard tunnel to this interface. The daemon also creates a veth pair between node's host and gateway network namespace (`host0` in the image). `host0` interface has node's secondary ipConfiguration private IP configured. The daemon creates routes to direct traffic from `wg0` to `host0` and masquades the packets with `host0`'s IP. Detailed traffic flow will be shown in next image.
 
 ![Static Egress Gateway Provision](images/gateway_provision.png)
 
+### Private IP Mode (Preview)
+
+When `provisionPublicIps: false` is set in the `StaticGatewayConfiguration`, the gateway operates in private IP mode. This mode requires AKS 1.34+ and is designed for scenarios where egress traffic should remain on private networks (e.g., through Azure Firewall, ExpressRoute to on-premises, or within VNet boundaries).
+
+**Key differences from public IP mode:**
+
+- **No public IP prefix**: Gateway nodes use only private IP addresses from the cluster's VNet subnet
+- **VM-based node pools**: To ensure stable private IP assignment, gateway node pools use standard Azure VMs (Availability Set) rather than VMSS. This architecture pre-allocates and reserves IPs for the maximum pool size by pre-creating NICs, ensuring addresses don't change even when VMs are replaced or scaled
+- **Network routing required**: Outbound connectivity requires proper network configuration (User-Defined Routes to Azure Firewall/NVA, or ExpressRoute) as Azure does not provide automatic internet access without public IPs
+- **Status reporting**: The `egressIpPrefix` field in status will show a comma-separated list of private IPs (e.g., "10.0.1.8,10.0.1.9") instead of a public IP prefix
+
+The traffic flow is similar to public IP mode, except that external systems see the gateway node's private IP as the source. This private IP must be routed appropriately by your network infrastructure (firewall, NAT gateway, or on-premises gateway) to reach external destinations.
+
 ## Pod Egress Provisioning
 
 Users can then annotate the pod (`kubernetes.azure.com/static-gateway-configuration: <gateway config name, e.g. gw001>`) to claim a static gateway configuration as egress. kube-egress-gateway CNI plugin, working as a chained CNI plugin, configures a WireGuard interface and routes in the pod namespace so that pod default traffic can be forwarded to the gateway nodepool.
 
-Out-of-cluster packets from pod containers are sent via the pod's `wg0` interface, encrypted and encapped by the wireguard daemon in host namespace and then sent out from the node, with the node IP as source and the wireguard endpoint IP (in this case the ILB frontend IP) as destination. The packets are directed to one of the gateway nodes by ILB. The node receives them from its `eth0` interface in the host network namespace. The wireguard daemon listening in the host namespace decrypts the packets and sends them into the corresponding network namespace via `wg0` interface. The packets are routed to `host0` interface and then masqueraded with the VMSS instance's secondary interface private IP belonging to that configuration, sent through the veth pair to the host namespace and then out from the `eth0` interface in node's host network namespace. Internet will see these packets with source IP as one of the gateway configuration's public ip prefix. Reverse traffic is handled automatically by conntrack. Below image displays the traffic flow.
+Out-of-cluster packets from pod containers are sent via the pod's `wg0` interface, encrypted and encapped by the wireguard daemon in host namespace and then sent out from the node, with the node IP as source and the wireguard endpoint IP (in this case the ILB frontend IP) as destination. The packets are directed to one of the gateway nodes by ILB. The node receives them from its `eth0` interface in the host network namespace. The wireguard daemon listening in the host namespace decrypts the packets and sends them into the corresponding network namespace via `wg0` interface. The packets are routed to `host0` interface and then masqueraded with the gateway node's secondary interface private IP belonging to that configuration, sent through the veth pair to the host namespace and then out from the `eth0` interface in node's host network namespace. In **public IP mode**, the Internet will see these packets with source IP as one of the gateway configuration's public IP prefix. In **private IP mode**, external systems see the private IP, which must be routed by your network infrastructure. Reverse traffic is handled automatically by conntrack. Below image displays the traffic flow.
 
 ![Pod Egress Provision](images/pod_provision.png)
 
