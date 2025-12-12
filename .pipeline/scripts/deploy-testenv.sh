@@ -68,7 +68,7 @@ echo "Performing post-deployment configurations"
 
 # this has to be done manually because aks-managed tags are not allowed through aks-rp
 VMSS=$(az vmss list -g ${NODE_RESOURCE_GROUP} | jq --arg GW_NODE_POOL_NAME "${GW_NODE_POOL_NAME}" -r '.[] | select(.tags["aks-managed-poolName"] == $GW_NODE_POOL_NAME) | .name')
-az vmss update --name ${VMSS} -g ${NODE_RESOURCE_GROUP} --set "tags.aks-managed-gatewayIPPrefixSize=31" > /dev/null
+az vmss update --name ${VMSS} -g ${NODE_RESOURCE_GROUP} --set 'tags.aks-managed-gatewayIPPrefixSize="31"' > /dev/null
 
 # Generate azure configuration file for the controllers
 echo "Generating azure configuration file: $(pwd)/azure.json"
