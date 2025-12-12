@@ -61,7 +61,7 @@ echo "Extracting deployment outputs"
 NODE_RESOURCE_GROUP=$(echo ${DEPLOYMENT_OUTPUT} | jq -r '.properties.outputs.nodeResourceGroup.value')
 KUBELET_PRINCIPAL_ID=$(echo ${DEPLOYMENT_OUTPUT} | jq -r '.properties.outputs.kubeletPrincipalId.value')
 KUBELET_CLIENT_ID=$(echo ${DEPLOYMENT_OUTPUT} | jq -r '.properties.outputs.kubeletClientId.value')
-AZURE_CONFIG=$(echo ${DEPLOYMENT_OUTPUT} | jq -c '.properties.outputs.azureConfig.value | walk(if type == "number" then tostring else . end)')
+AZURE_CONFIG=$(echo ${DEPLOYMENT_OUTPUT} | jq '.properties.outputs.azureConfig.value')
 
 # Post-deployment: Add VMSS tag
 echo "Performing post-deployment configurations"
