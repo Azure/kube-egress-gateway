@@ -53,21 +53,20 @@ spec:
 For private IP egress (requires VM-based node pools and proper network routing):
 
 ```yaml
+
 apiVersion: egressgateway.kubernetes.azure.com/v1alpha1
 kind: StaticGatewayConfiguration
 metadata:
-  name: myPrivateEgressGateway
-  namespace: myNamespace
+  name: <gateway-config-name>
+  namespace: <namespace>
 spec:
-  gatewayVmssProfile:
-    vmssResourceGroup: myResourceGroup
-    vmssName: myGatewayVMAvailabilitySet
-    publicIpPrefixSize: 31  # Max gateway nodes
-  provisionPublicIps: false  # Use private IPs only
-  defaultRoute: staticEgressGateway
-  excludeCidrs:
-    - 10.244.0.0/16
-    - 10.245.0.0/16
+  gatewayNodepoolName: <nodepool-name>
+  # publicIpPrefixId: <resource ID of Public IP Prefix>   (optional)
+  provisionPublicIps: <true|false>
+  excludeCidrs:            # (Optional) CIDRs to exclude from routing through gateway
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 169.254.169.254/32
 ```
 
 **Note**: Private IP mode requires User-Defined Routes or ExpressRoute for internet connectivity. See the [comparison guide](docs/static-egress-comparison.md) for details.
@@ -76,16 +75,16 @@ spec:
 
 StaticGatewayConfiguration is a namespaced resource, meaning a static egress gateway can only be used by pods in the same namespace. There are two **required** configurations:
 
-* `gatewayVmssProfile`: gateway nodepool information:
-  * `vmssName`: Name of the Azure VirtualMachineScaleSet (VMSS) or Availability Set to be used as gateway nodepool.
-  * `vmssResourceGroup`: Azure resource group of gateway nodepool.
+* `gatewayNodepoolName`: gateway nodepool information:
+  * `nodepoolName`: Name of the Azure VirtualMachineScaleSet (VMSS) or Availability Set to be used as gateway nodepool.
+  * `nodepoolResourceGroup`: Azure resource group of gateway nodepool.
   * `publicIpPrefixSize`: Length of the public IP prefix to be installed on the gateway nodepool as egress (only applicable when `provisionPublicIps: true`). In above example, 31 means a `/31` pip prefix, which contains 2 public IPs, will be installed. Note that gateway nodepool instance count cannot exceed this size. The gateway nodepool can only have 1 or 2 instances if public IP prefix size is 31. Likewise, at most 4 instances are allowed if public IP prefix size is 30. Otherwise, kube-egress-gateway operator will report error. At the time of writing, [Azure](https://learn.microsoft.com/en-us/azure/virtual-network/ip-services/public-ip-address-prefix#prefix-sizes) only supports prefix sizes `/28-/31`. For private IP mode, this field determines the maximum number of gateway nodes by pre-allocating that many private IPs.
 * `provisionPublicIps`: Determines the egress mode:
   * `true` (default): **Public IP mode** - A public IP prefix will be associated with the gateway nodepool secondary IPConfiguration. Egress traffic uses public IPs directly to reach the internet.
-  * `false` (preview, AKS 1.34+): **Private IP mode** - Gateway nodes use private IP addresses from the cluster's VNet subnet. Requires proper network routing (User-Defined Routes, Azure Firewall, or ExpressRoute) for outbound connectivity. Gateway nodepool must use VM-based nodes (Availability Set) for stable private IP assignment.
+  * `false`: **Private IP mode** - Gateway nodes use private IP addresses from the cluster's VNet subnet. Requires proper network routing (User-Defined Routes, Azure Firewall, or ExpressRoute) for outbound connectivity. Gateway nodepool must use VM-based nodes (Availability Set) for stable private IP assignment.
 
 Three **optional** configurations:
-* `publicIpPrefixId`: BYO public IP prefix is supported. Users can provide Azure resource ID of their own public IP prefix in this field. Make sure kube-egress-gateway operator has access to the prefix. If not provided, a system generated prefix will be provisioned. Only applicable when `provisionPublicIps: true`.
+* `publicIpPrefixId`: BYO public IP prefix is supported. Users can provide Azure resource ID of their own public IP prefix in this field. Make sure kube-egress-gateway operator has access to the prefix. If not provided and provisionPublicIps is set to true, a system generated prefix will be provisioned.
 * `defaultRoute`: Enum, either `staticEgressGateway` or `azureNetworking`. Set it to be `staticEgressGateway` if traffic by default should be routed to the egress gateway or `azureNetworking` if traffic should be routed to pods' `eth0` by default like regular pods. Default value is `staticEgressGateway`.
 * `excludeCidrs`: List of destination network CIDRs that should bypass the default route and flow via the other network interface. That is, if `defaultRoute` is `staticEgressGateway`, cidrs set in `excludeCidrs` will be routed via pod's `eth0` interface. For example, traffic within the cluster like pod-pod traffic and pod-service traffic should not be routed to the egress gateway and can be set here. On the other hand, if `defaultRoute` is `azureNetworking`, then only cidrs set in `excludeCidrs` will be routed to the egress gateway.
 

@@ -6,7 +6,7 @@
 * [Helm 3](https://helm.sh/docs/intro/install/)
 * A Kubernetes cluster on Azure with a dedicated nodepool for gateway nodes with at least one node.
   * **For public IP egress (default)**: Nodepool backed by Azure Virtual Machine Scale Set (VMSS)
-  * **For private IP egress (preview, AKS 1.34+)**: Nodepool backed by standard Azure VMs (Availability Set mode) for stable private IP assignment
+  * **For private IP egress (preview, AKS 1.34+)**: Nodepool must be of type VirtualMachines and is only supported as a [managed Gateway node pool](https://learn.microsoft.com/azure/aks/kube-egress-gateway)
   * The nodes should be tainted with `kubeegressgateway.azure.com/mode=true:NoSchedule` so that no other workload can land on.
   * The nodes should be labeled with `kubeegressgateway.azure.com/mode: true` so that kube-egress-gateway DaemonSets NodeSelector can identify these.
   * The nodes should be linux only.
@@ -32,10 +32,6 @@ kube-egress-gateway components communicates with Azure Resource Manager (ARM) to
     networkResourceGroup="<network resource group>"
     gatewayResourceGroup="<gateway nodepool resource group>"
     networkRGID="/subscriptions/<your subscriptionID>/resourceGroups/$networkResourceGroup"
-    gatewayRGID="/subscriptions/<your subscriptionID>/resourceGroups/$gatewayResourceGroup"
-    gatewayID="/subscriptions/<your subscriptionID>/resourceGroups/$gatewayResourceGroup/providers/Microsoft.Compute/virtualMachineScaleSets/<your gateway vmss>"
-    # OR for VM-based nodepools (private IP mode):
-    # gatewayID="/subscriptions/<your subscriptionID>/resourceGroups/$gatewayResourceGroup/providers/Microsoft.Compute/availabilitySets/<your gateway availabilitySet>"
 
     # assign Network Contributor role on scope networkResourceGroup and gatewayResourceGroup to the identity
     az role assignment create --role "Network Contributor" --assignee $identityClientId --scope $networkRGID

@@ -49,9 +49,33 @@ When `provisionPublicIps: false` is set in the `StaticGatewayConfiguration`, the
 **Key differences from public IP mode:**
 
 - **No public IP prefix**: Gateway nodes use only private IP addresses from the cluster's VNet subnet
-- **VM-based node pools**: To ensure stable private IP assignment, gateway node pools use standard Azure VMs (Availability Set) rather than VMSS. This architecture pre-allocates and reserves IPs for the maximum pool size by pre-creating NICs, ensuring addresses don't change even when VMs are replaced or scaled
+- **VM-based node pools**: To ensure stable private IP assignment, gateway node pools use standard Azure VMs rather than VMSS. This architecture pre-allocates and reserves IPs for the maximum pool size by pre-creating NICs, ensuring addresses don't change even when VMs are replaced or scaled
 - **Network routing required**: Outbound connectivity requires proper network configuration (User-Defined Routes to Azure Firewall/NVA, or ExpressRoute) as Azure does not provide automatic internet access without public IPs
 - **Status reporting**: The `egressIpPrefix` field in status will show a comma-separated list of private IPs (e.g., "10.0.1.8,10.0.1.9") instead of a public IP prefix
+
+> **Note**: Even when using `provisionPublicIps: true` (public IP mode), gateway nodes are assigned both static public IPs and static private IPs. The public IPs are displayed in the `StaticGatewayConfiguration` status as `egressIpPrefix` (e.g., "20.65.41.84/30"). The corresponding private IPs are the secondary IP addresses allocated to each gateway node, which can be found in the associated `GatewayVMConfiguration` resource under `status.gatewayVMProfiles[].secondaryIP`. In the example below, the static public IPs are 20.65.41.84/30 and the static private IPs are 10.224.0.10-13 (the seconary IPs).
+
+```yaml
+  spec:
+    gatewayNodepoolName: gatewaypool
+    gatewayVmssProfile: {}
+    provisionPublicIps: true
+  status:
+    egressIpPrefix: 20.65.41.84/30
+    gatewayVMProfiles:
+    - nodeName: aks-gatewaypool-38077839-vmsnic-1
+      primaryIP: 10.224.0.4
+      secondaryIP: 10.224.0.10
+    - nodeName: aks-gatewaypool-38077839-vmsnic-2
+      primaryIP: 10.224.0.6
+      secondaryIP: 10.224.0.11
+    - nodeName: aks-gatewaypool-38077839-vmsnic-3
+      primaryIP: 10.224.0.7
+      secondaryIP: 10.224.0.12
+    - nodeName: aks-gatewaypool-38077839-vmsnic-4
+      primaryIP: 10.224.0.8
+      secondaryIP: 10.224.0.13
+```
 
 The traffic flow is similar to public IP mode, except that external systems see the gateway node's private IP as the source. This private IP must be routed appropriately by your network infrastructure (firewall, NAT gateway, or on-premises gateway) to reach external destinations.
 
