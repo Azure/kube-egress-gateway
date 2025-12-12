@@ -11,8 +11,7 @@ Compared with existing methods, for example, creating dedicated kubernetes nodes
 
 ## Design
 
-* [Design doc](docs/design.md) provides details about how kube-egress-gateway works.
-* [Public IP vs Private IP Comparison](docs/static-egress-comparison.md) provides a comprehensive comparison between the two static egress modes.
+* [Design doc](docs/design.md) provides details about how kube-egress-gateway works. 
 
 ## Installation
 
