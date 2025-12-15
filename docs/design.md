@@ -53,7 +53,7 @@ When `provisionPublicIps: false` is set in the `StaticGatewayConfiguration`, the
 - **Network routing required**: Outbound connectivity requires proper network configuration (User-Defined Routes to Azure Firewall/NVA, or ExpressRoute) as Azure does not provide automatic internet access without public IPs
 - **Status reporting**: The `egressIpPrefix` field in status will show a comma-separated list of private IPs (e.g., "10.0.1.8,10.0.1.9") instead of a public IP prefix
 
-> **Note**: Even when using `provisionPublicIps: true` (public IP mode), gateway nodes are assigned both static public IPs and static private IPs. The public IPs are displayed in the `StaticGatewayConfiguration` status as `egressIpPrefix` (e.g., "20.65.41.84/30"). The corresponding private IPs are the secondary IP addresses allocated to each gateway node, which can be found in the associated `GatewayVMConfiguration` resource under `status.gatewayVMProfiles[].secondaryIP`. In the example below, the static public IPs are 20.65.41.84/30 and the static private IPs are 10.224.0.10-13 (the seconary IPs).
+> **Note**: Even when using `provisionPublicIps: true` (public IP mode), gateway nodes are assigned both static public IPs and static private IPs. The public IPs are displayed in the `StaticGatewayConfiguration` status as `egressIpPrefix` (e.g., "20.65.41.84/30"). The corresponding private IPs are the secondary IP addresses allocated to each gateway node, which can be found in the associated `GatewayVMConfiguration` resource under `status.gatewayVMProfiles[].secondaryIP`. In the example below, the static public IPs are 20.65.41.84/30 and the static private IPs are 10.224.0.10-13 (the secondary IPs).
 
 ```yaml
   spec:
