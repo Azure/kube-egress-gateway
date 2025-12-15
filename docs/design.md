@@ -4,13 +4,13 @@ kube-egress-gateway routes egress traffic from pods on regular kubernetes worker
 
 ## Prerequisite
 
-kube-egress-gateway needs at least two dedicated kubernetes nodes as egress gateway to work. These nodes can be backed by either Azure Virtual Machine Scale Set (VMSS) or standard Azure VMs (in Availability Set mode). In Azure Kubernetes Service (AKS, managed kubernetes service on Azure) terminology, this is called a "nodepool". We use "nodepool" in this document for simplicity but it's not limited to AKS only. Users with self-managed kubernetes clusters can still use this feature, just by deploying a dedicated Azure VMSS or VM set and adding them to the cluster. 
+kube-egress-gateway needs at least two dedicated kubernetes nodes as egress gateway to work. These nodes can be backed by either Azure Virtual Machine Scale Set (VMSS) or standard Azure VMs. In Azure Kubernetes Service (AKS, managed kubernetes service on Azure) terminology, this is called a "nodepool". We use "nodepool" in this document for simplicity but it's not limited to AKS only. Users with self-managed kubernetes clusters can still use this feature, just by deploying a dedicated Azure VMSS or VM set and adding them to the cluster. 
 
 ### Gateway Node Pool Types
 
 **VMSS Node Pools (Default for Public IP)**: Traditional gateway node pools use Virtual Machine Scale Sets. This mode is the original implementation and is suitable when using public IP prefixes for egress.
 
-**VM Node Pools (Required for Private IP)**: When using private IP egress (preview feature, requires AKS 1.34+), the gateway node pool uses standard Azure VMs in an Availability Set. This architecture ensures stable private IP assignment because:
+**VM Node Pools (Required for Private IP)**: When using private IP egress (preview feature, requires AKS 1.34+), the gateway node pool uses standard Azure VMs. This architecture ensures stable private IP assignment because:
 - Private IPs are pre-allocated and reserved for the maximum pool size by pre-creating NICs
 - IPs remain static even when VMs are replaced or scaled
 - Each gateway node maintains a dedicated, unchanging private IP for reliable egress
