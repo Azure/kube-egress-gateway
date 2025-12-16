@@ -56,7 +56,7 @@ const (
 	privK               = "GHuMwljFfqd2a7cs6BaUOmHflK23zME8VNvC5B37S3k="
 	pubK                = "aPxGwq8zERHQ3Q1cOZFdJ+cvJX5Ka4mLN38AyYKYF10="
 	ilbIP               = "10.0.0.4"
-	ilbIPCidr           = "10.0.0.4/31"
+	ilbIPCidr           = "10.0.0.4/32"
 	natBuiltinChains    = `*nat
 :PREROUTING - [0:0]
 :INPUT - [0:0]
