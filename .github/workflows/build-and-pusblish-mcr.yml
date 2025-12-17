@@ -25,12 +25,12 @@ jobs:
     steps:
       # Get the repository's code
       - name: Harden Runner
-        uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2 # v2.13.2
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
         with:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@ff7abcd0c3c05ccf6adc123a8cd1fd4fb30fb493 # v5.0.0
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.0
       # https://github.com/docker/setup-qemu-action
       - name: Set up QEMU
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
@@ -44,7 +44,7 @@ jobs:
           az acr login -n ${{ secrets.AZURE_REGISTRY }}
       - name: Docker meta
         id: daemon # you'll use this in the next step
-        uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893 # v5.9.0
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -54,7 +54,7 @@ jobs:
           bake-target: daemon-tags
       - name: Docker meta
         id: daemoninit # you'll use this in the next step
-        uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893 # v5.9.0
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -64,7 +64,7 @@ jobs:
           bake-target: daemoninit-tags
       - name: Docker meta
         id: controller # you'll use this in the next step
-        uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893 # v5.9.0
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -74,7 +74,7 @@ jobs:
           bake-target: controller-tags
       - name: Docker meta
         id: cnimanager # you'll use this in the next step
-        uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893 # v5.9.0
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -84,7 +84,7 @@ jobs:
           bake-target: cnimanager-tags
       - name: Docker meta
         id: cniplugin # you'll use this in the next step
-        uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893 # v5.9.0
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -94,7 +94,7 @@ jobs:
           bake-target: cni-tags
       - name: Docker meta
         id: cniipamplugin # you'll use this in the next step
-        uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893 # v5.9.0
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -106,7 +106,7 @@ jobs:
         run: |
           echo "TARGET_PLATFORMS=linux/amd64,linux/arm64,linux/arm" >> $GITHUB_ENV
       - name: Build and push
-        uses: docker/bake-action@3acf805d94d93a86cce4ca44798a76464a75b88c # v6.9.0
+        uses: docker/bake-action@5be5f02ff8819ecd3092ea6b2e6261c31774f2b4 # v6.10.0
         env:
           PLATFORMS: ${{env.TARGET_PLATFORMS}}
         with:
