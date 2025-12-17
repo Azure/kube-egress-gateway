@@ -532,10 +532,6 @@ func (r *StaticGatewayConfigurationReconciler) reconcileIlbIPOnHost(ctx context.
 	if len(nodeMeta.Network.Interface) == 0 || len(nodeMeta.Network.Interface[0].IPv4.Subnet) == 0 {
 		return fmt.Errorf("imds does not provide subnet information about the node")
 	}
-	prefix, err := strconv.Atoi(nodeMeta.Network.Interface[0].IPv4.Subnet[0].Prefix)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve and parse prefix: %w", err)
-	}
 
 	addresses, err := r.Netlink.AddrList(eth0, nl.FAMILY_ALL)
 	if err != nil {
@@ -555,7 +551,9 @@ func (r *StaticGatewayConfigurationReconciler) reconcileIlbIPOnHost(ctx context.
 		return nil
 	}
 
-	ilbIpCidr := fmt.Sprintf("%s/%d", ilbIP, prefix)
+	// avoid adding the ILB IP as a CIDR otherwise it will add a default route for the range setting the src
+	// IP as the ILB IP.
+	ilbIpCidr := fmt.Sprintf("%s/%d", ilbIP, 32)
 	ilbIpNet, err := netlink.ParseIPNet(ilbIpCidr)
 	if err != nil {
 		return fmt.Errorf("failed to parse ILB IP address: %s", ilbIpCidr)
