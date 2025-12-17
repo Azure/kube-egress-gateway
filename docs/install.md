@@ -1,13 +1,16 @@
 # Installation Guide
 
 ## Prerequisites
+
 * [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli)
 * [Helm 3](https://helm.sh/docs/intro/install/)
-* A Kubernetes cluster on Azure with a dedicated nodepool backed by Azure Virtual Machine Scale Set (VMSS) with at least one node (VMSS instance).
-    * The nodes should be tainted with `kubeegressgateway.azure.com/mode=true:NoSchedule` so that no other workload can land on.
-    * The nodes should be labeled with `kubeegressgateway.azure.com/mode: true` so that kube-egress-gateway DaemonSets NodeSelector can identify these.
-    * The nodes should be linux only.
-    * The nodes should be excluded from cluster autoscaler.
+* A Kubernetes cluster on Azure with a dedicated nodepool for gateway nodes with at least one node.
+  * **For public IP egress (default)**: Nodepool backed by Azure Virtual Machine Scale Set (VMSS)
+  * **For private IP egress (preview, AKS 1.34+)**: Nodepool must be of type VirtualMachines and is only supported as a [managed Gateway node pool](https://learn.microsoft.com/azure/aks/kube-egress-gateway)
+  * The nodes should be tainted with `kubeegressgateway.azure.com/mode=true:NoSchedule` so that no other workload can land on.
+  * The nodes should be labeled with `kubeegressgateway.azure.com/mode: true` so that kube-egress-gateway DaemonSets NodeSelector can identify these.
+  * The nodes should be linux only.
+  * The nodes should be excluded from cluster autoscaler.
 
 ## Create Azure credentials
 kube-egress-gateway components communicates with Azure Resource Manager (ARM) to manipulate Azure resources. It needs an identity to access the APIs. kube-egress-gateway supports both [Managed Identity](https://learn.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/overview) and [Service Principal](https://learn.microsoft.com/en-us/cli/azure/create-an-azure-service-principal-azure-cli).
@@ -24,20 +27,18 @@ kube-egress-gateway components communicates with Azure Resource Manager (ARM) to
     identityClientId=$(az identity show -g $resourceGroup -n $identityName -o tsv --query "clientId")
     identityId=$(az identity show -g $resourceGroup -n $identityName -o tsv --query "id")
     ```
-3. Assign "Network Contributor" and "Virtual Machine Contributor" roles to the identity. kube-egress-gateway components need these two roles to configure Load Balancer, Public IP Prefix, and VMSS resources.
+3. Assign "Network Contributor" and "Virtual Machine Contributor" roles to the identity. kube-egress-gateway components need these two roles to configure Load Balancer, Public IP Prefix (if using public IPs), and VMSS/VM resources.
     ```
     networkResourceGroup="<network resource group>"
-    vmssResourceGroup="<vmss resource group>"
+    gatewayResourceGroup="<gateway nodepool resource group>"
     networkRGID="/subscriptions/<your subscriptionID>/resourceGroups/$networkResourceGroup"
-    vmssRGID="/subscriptions/<your subscriptionID>/resourceGroups/$vmssResourceGroup"
-    vmssID="/subscriptions/<your subscriptionID>/resourceGroups/$vmssResourceGroup/providers/Microsoft.Compute/virtualMachineScaleSets/<your gateway vmss>"
-    
-    # assign Network Contributor role on scope networkResourceGroup and vmssResourceGroup to the identity
+
+    # assign Network Contributor role on scope networkResourceGroup and gatewayResourceGroup to the identity
     az role assignment create --role "Network Contributor" --assignee $identityClientId --scope $networkRGID
-    az role assignment create --role "Network Contributor" --assignee $identityClientId --scope $vmssRGID
-    
-    # assign Virtual Machine Contributor role on scope gateway vmss to the identity
-    az role assignment create --role "Virtual Machine Contributor" --assignee $identityClientId --scope $vmssID
+    az role assignment create --role "Network Contributor" --assignee $identityClientId --scope $gatewayRGID
+
+    # assign Virtual Machine Contributor role on scope gateway nodepool to the identity
+    az role assignment create --role "Virtual Machine Contributor" --assignee $identityClientId --scope $gatewayID
     ```
 4. Fill the identity clientID in your Azure cloud config file. See [sample_cloud_config_msi.yaml](samples/sample_azure_config_msi.yaml) for example.
     ```
@@ -46,12 +47,13 @@ kube-egress-gateway components communicates with Azure Resource Manager (ARM) to
     ```
 
 ### Use Service Principal
-1. Create a service principal and assign Contributor role on network resource group and vmss resource group scopes. And you get sp clientID and secret from the output.
+
+1. Create a service principal and assign Contributor role on network resource group and gateway nodepool resource group scopes. And you get sp clientID and secret from the output.
     ```
     appName="<app name>"
     networkRGID="/subscriptions/<your subscriptionID>/resourceGroups/$networkResourceGroup"
-    vmssRGID="/subscriptions/<your subscriptionID>/resourceGroups/$vmssResourceGroup"
-    az ad sp create-for-rbac -n $appName --role Contributor --scopes $networkRGID $vmssRGID
+    gatewayRGID="/subscriptions/<your subscriptionID>/resourceGroups/$gatewayResourceGroup"
+    az ad sp create-for-rbac -n $appName --role Contributor --scopes $networkRGID $gatewayRGID
     ```
 2. Fill the sp clientID and secret in your Azure cloud config file. See [sample_cloud_config_sp.yaml](samples/sample_azure_config_sp.yaml) for example.
     ```
