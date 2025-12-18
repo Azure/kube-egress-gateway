@@ -44,6 +44,16 @@ type PodEndpointReconciler struct {
 	WgCtrl       wgctrlwrapper.Interface
 }
 
+// PeerUpdateOperation defines the type of operation to perform on peer configurations
+type PeerUpdateOperation string
+
+const (
+	// PeerUpdateOpAdd adds the provided peer configurations to the existing list
+	PeerUpdateOpAdd PeerUpdateOperation = "ADD"
+	// PeerUpdateOpDelete removes all peers except those in the provided list
+	PeerUpdateOpDelete PeerUpdateOperation = "DELETE"
+)
+
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=podendpoints,verbs=get;list;watch;
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=podendpoints/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch
@@ -177,7 +187,7 @@ func (r *PodEndpointReconciler) reconcile(
 			PublicKey:     podEndpoint.Spec.PodPublicKey,
 		},
 	}
-	if err := r.updateGatewayNodeStatus(ctx, peerConfigs, true /* add */); err != nil {
+	if err := r.updateGatewayNodeStatus(ctx, peerConfigs, PeerUpdateOpAdd); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -217,23 +227,25 @@ func (r *PodEndpointReconciler) cleanUp(ctx context.Context) error {
 		}
 	}
 
-	var peersToDelete []egressgatewayv1alpha1.PeerConfiguration
+	var keep []egressgatewayv1alpha1.PeerConfiguration
 	for _, wglinkName := range gwConfigMap {
 		peers, err := r.cleanUpWgLink(ctx, wglinkName, peerMap)
 		if err != nil {
 			// do not block cleaning up rest namespaces
 			log.Error(err, fmt.Sprintf("failed to clean up peers for wgLink %s", wglinkName))
 		}
-		peersToDelete = append(peersToDelete, peers...)
+		keep = append(keep, peers...)
 	}
 
-	if err := r.updateGatewayNodeStatus(ctx, peersToDelete, false /* add */); err != nil {
+	if err := r.updateGatewayNodeStatus(ctx, keep, PeerUpdateOpDelete); err != nil {
 		return fmt.Errorf("failed to update gateway node status: %w", err)
 	}
 	log.Info("Wireguard peer cleanup completed")
 	return nil
 }
 
+// cleanUpWgLink removes orphaned wireguard peers from the specified interface.
+// It returns a list of PeerConfigurations to keep based on the input peerMap.
 func (r *PodEndpointReconciler) cleanUpWgLink(
 	ctx context.Context,
 	wglinkName string,
@@ -241,7 +253,7 @@ func (r *PodEndpointReconciler) cleanUpWgLink(
 ) ([]egressgatewayv1alpha1.PeerConfiguration, error) {
 	log := log.FromContext(ctx)
 
-	peersToDelete := make([]egressgatewayv1alpha1.PeerConfiguration, 0)
+	peersToKeep := make([]egressgatewayv1alpha1.PeerConfiguration, 0)
 
 	gwns, err := r.NetNS.GetNS(consts.GatewayNetnsName)
 	if err != nil {
@@ -273,6 +285,8 @@ func (r *PodEndpointReconciler) cleanUpWgLink(
 					podIPToDel[ipNet.IP.String()] = true
 				}
 				log.Info(fmt.Sprintf("Removing peer %s from wgLink %s", device.Peers[i].PublicKey.String(), wglinkName))
+			} else {
+				peersToKeep = append(peersToKeep, egressgatewayv1alpha1.PeerConfiguration{PublicKey: device.Peers[i].PublicKey.String()})
 			}
 		}
 		if len(wgConfig.Peers) > 0 {
@@ -283,16 +297,12 @@ func (r *PodEndpointReconciler) cleanUpWgLink(
 			if err := wgClient.ConfigureDevice(wglinkName, wgConfig); err != nil {
 				return fmt.Errorf("failed to remove peers from wireguard device %s: %w", wglinkName, err)
 			}
-
-			for _, peer := range wgConfig.Peers {
-				peersToDelete = append(peersToDelete, egressgatewayv1alpha1.PeerConfiguration{PublicKey: peer.PublicKey.String()})
-			}
 		}
 		return nil
 	}); err != nil {
 		return nil, err
 	}
-	return peersToDelete, nil
+	return peersToKeep, nil
 }
 
 func (r *PodEndpointReconciler) addWireguardPeerRoutes(
@@ -347,10 +357,14 @@ func (r *PodEndpointReconciler) deleteWireguardPeerRoutes(
 	return nil
 }
 
+// updateGatewayNodeStatus updates the GatewayStatus ReadyPeerConfigurations list based on the provided peerConfigs.
+// When op is PeerUpdateOpAdd, the peerConfigs will be added to the existing ready peers list.
+// When op is PeerUpdateOpDelete, all peers currently on the GatewayStatus will be removed except for those in peerConfigs,
+// effectively treating peerConfigs as the expected set of peers to keep.
 func (r *PodEndpointReconciler) updateGatewayNodeStatus(
 	ctx context.Context,
 	peerConfigs []egressgatewayv1alpha1.PeerConfiguration,
-	add bool,
+	op PeerUpdateOperation,
 ) error {
 	log := log.FromContext(ctx)
 	gwStatusKey := types.NamespacedName{
@@ -364,7 +378,7 @@ func (r *PodEndpointReconciler) updateGatewayNodeStatus(
 			log.Error(err, "failed to get existing gateway status object %s/%s", gwStatusKey.Namespace, gwStatusKey.Name)
 			return err
 		} else {
-			if !add {
+			if op == PeerUpdateOpDelete {
 				// ignore creating object during cleanup
 				return nil
 			}
@@ -395,21 +409,30 @@ func (r *PodEndpointReconciler) updateGatewayNodeStatus(
 			}
 		}
 	} else {
-		changed := false
 		peerMap := make(map[string]*egressgatewayv1alpha1.PeerConfiguration)
 		for _, peerConfig := range gwStatus.Spec.ReadyPeerConfigurations {
 			peerConfig := peerConfig
 			peerMap[peerConfig.PublicKey] = &peerConfig
 		}
-		for i, peerConfig := range peerConfigs {
-			if _, ok := peerMap[peerConfig.PublicKey]; ok {
-				if !add {
-					delete(peerMap, peerConfig.PublicKey)
+
+		changed := false
+		switch op {
+		case PeerUpdateOpAdd:
+			for i, peerConfig := range peerConfigs {
+				if _, exists := peerMap[peerConfig.PublicKey]; !exists {
+					peerMap[peerConfig.PublicKey] = &peerConfigs[i]
 					changed = true
 				}
-			} else {
-				if add {
-					peerMap[peerConfig.PublicKey] = &peerConfigs[i]
+			}
+		case PeerUpdateOpDelete:
+			peersToKeep := make(map[string]bool)
+			for _, peerConfig := range peerConfigs {
+				peersToKeep[peerConfig.PublicKey] = true
+			}
+
+			for pk := range peerMap {
+				if !peersToKeep[pk] {
+					delete(peerMap, pk)
 					changed = true
 				}
 			}

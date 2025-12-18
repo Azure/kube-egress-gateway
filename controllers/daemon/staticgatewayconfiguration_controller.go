@@ -215,7 +215,7 @@ func (r *StaticGatewayConfigurationReconciler) reconcile(
 		StaticGatewayConfiguration: fmt.Sprintf("%s/%s", gwConfig.Namespace, gwConfig.Name),
 		InterfaceName:              getWireguardInterfaceName(gwConfig),
 	}
-	if err := r.updateGatewayNodeStatus(ctx, gwStatus, true /* add */); err != nil {
+	if err := r.updateGatewayNodeStatus(ctx, gwStatus, PeerUpdateOpAdd); err != nil {
 		return err
 	}
 
@@ -362,7 +362,7 @@ func (r *StaticGatewayConfigurationReconciler) ensureDeleteLink(ctx context.Cont
 	gwStatus := egressgatewayv1alpha1.GatewayConfiguration{
 		InterfaceName: link.Attrs().Name,
 	}
-	if err := r.updateGatewayNodeStatus(ctx, gwStatus, false /* add */); err != nil {
+	if err := r.updateGatewayNodeStatus(ctx, gwStatus, PeerUpdateOpDelete); err != nil {
 		return err
 	}
 
@@ -1049,7 +1049,7 @@ func (r *StaticGatewayConfigurationReconciler) removeIPTablesChains(
 func (r *StaticGatewayConfigurationReconciler) updateGatewayNodeStatus(
 	ctx context.Context,
 	gwConfig egressgatewayv1alpha1.GatewayConfiguration,
-	add bool,
+	op PeerUpdateOperation,
 ) error {
 	log := log.FromContext(ctx)
 	gwStatusKey := types.NamespacedName{
@@ -1063,7 +1063,7 @@ func (r *StaticGatewayConfigurationReconciler) updateGatewayNodeStatus(
 			log.Error(err, "failed to get existing gateway status object %s/%s", gwStatusKey.Namespace, gwStatusKey.Name)
 			return err
 		} else {
-			if !add {
+			if op == PeerUpdateOpDelete {
 				// ignore creating object during cleanup
 				return nil
 			}
@@ -1098,7 +1098,7 @@ func (r *StaticGatewayConfigurationReconciler) updateGatewayNodeStatus(
 		found := false
 		for i, gwConf := range gwStatus.Spec.ReadyGatewayConfigurations {
 			if gwConf.InterfaceName == gwConfig.InterfaceName {
-				if !add {
+				if op == PeerUpdateOpDelete {
 					changed = true
 					gwStatus.Spec.ReadyGatewayConfigurations = append(gwStatus.Spec.ReadyGatewayConfigurations[:i], gwStatus.Spec.ReadyGatewayConfigurations[i+1:]...)
 				}
@@ -1106,11 +1106,11 @@ func (r *StaticGatewayConfigurationReconciler) updateGatewayNodeStatus(
 				break
 			}
 		}
-		if add && !found {
+		if op == PeerUpdateOpAdd && !found {
 			gwStatus.Spec.ReadyGatewayConfigurations = append(gwStatus.Spec.ReadyGatewayConfigurations, gwConfig)
 			changed = true
 		}
-		if !add {
+		if op == PeerUpdateOpDelete {
 			for i := len(gwStatus.Spec.ReadyPeerConfigurations) - 1; i >= 0; i = i - 1 {
 				if gwStatus.Spec.ReadyPeerConfigurations[i].InterfaceName == gwConfig.InterfaceName {
 					changed = true
