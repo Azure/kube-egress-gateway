@@ -297,7 +297,7 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 
 		It("should create new gateway status object if not exist", func() {
 			getTestReconciler(node)
-			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, true)
+			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, PeerUpdateOpAdd)
 			Expect(err).To(BeNil())
 			gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
 			err = getGatewayStatus(r.Client, gwStatus)
@@ -325,7 +325,7 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 				},
 			}
 			getTestReconciler(node, existing)
-			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, true)
+			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, PeerUpdateOpAdd)
 			Expect(err).To(BeNil())
 			gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
 			err = getGatewayStatus(r.Client, gwStatus)
@@ -364,7 +364,7 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 				},
 			}
 			getTestReconciler(node, existing)
-			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, false)
+			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, PeerUpdateOpDelete)
 			Expect(err).To(BeNil())
 			gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
 			err = getGatewayStatus(r.Client, gwStatus)
