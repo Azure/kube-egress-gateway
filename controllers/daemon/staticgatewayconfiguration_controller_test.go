@@ -534,7 +534,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 
 			It("should create new gateway status object if not exist", func() {
 				getTestReconciler(node)
-				err := r.updateGatewayNodeStatus(context.TODO(), gwNamespace, true)
+				err := r.updateGatewayNodeStatus(context.TODO(), gwNamespace, PeerUpdateOpAdd)
 				Expect(err).To(BeNil())
 				gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
 				err = getGatewayStatus(r.Client, gwStatus)
@@ -558,7 +558,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 					},
 				}
 				getTestReconciler(node, existing)
-				err := r.updateGatewayNodeStatus(context.TODO(), gwNamespace, true)
+				err := r.updateGatewayNodeStatus(context.TODO(), gwNamespace, PeerUpdateOpAdd)
 				Expect(err).To(BeNil())
 				gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
 				err = getGatewayStatus(r.Client, gwStatus)
@@ -603,7 +603,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 					},
 				}
 				getTestReconciler(node, existing)
-				err := r.updateGatewayNodeStatus(context.TODO(), gwNamespace, false)
+				err := r.updateGatewayNodeStatus(context.TODO(), gwNamespace, PeerUpdateOpDelete)
 				Expect(err).To(BeNil())
 				gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
 				err = getGatewayStatus(r.Client, gwStatus)

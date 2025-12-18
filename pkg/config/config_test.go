@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 )
 
 func TestTrimSpace(t *testing.T) {
