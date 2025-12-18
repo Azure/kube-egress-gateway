@@ -357,6 +357,12 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 					},
 				},
 			}
+			peerConfigs = []egressgatewayv1alpha1.PeerConfiguration{
+				{
+					PublicKey:     "pubk3",
+					InterfaceName: "wg-6000",
+				},
+			}
 			getTestReconciler(node, existing)
 			err := r.updateGatewayNodeStatus(context.TODO(), peerConfigs, false)
 			Expect(err).To(BeNil())
