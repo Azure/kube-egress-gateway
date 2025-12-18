@@ -416,14 +416,15 @@ func (r *PodEndpointReconciler) updateGatewayNodeStatus(
 		}
 
 		changed := false
-		if op == PeerUpdateOpAdd {
+		switch op {
+		case PeerUpdateOpAdd:
 			for i, peerConfig := range peerConfigs {
 				if _, exists := peerMap[peerConfig.PublicKey]; !exists {
 					peerMap[peerConfig.PublicKey] = &peerConfigs[i]
 					changed = true
 				}
 			}
-		} else if op == PeerUpdateOpDelete {
+		case PeerUpdateOpDelete:
 			peersToKeep := make(map[string]bool)
 			for _, peerConfig := range peerConfigs {
 				peersToKeep[peerConfig.PublicKey] = true
