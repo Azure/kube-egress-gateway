@@ -411,8 +411,8 @@ google.golang.org/grpc v1.23.0/go.mod h1:Y5yQAOtifL1yxbo5wqy6BxZv8vAUGQwXBOALyac
 google.golang.org/grpc v1.25.1/go.mod h1:c3i+UQWmh7LiEpx4sFZnkU36qjEYZ0imhYfXVyQciAY=
 google.golang.org/grpc v1.27.0/go.mod h1:qbnxyOmOxrQa7FizSgH+ReBfzJrCY1pSN7KXBS8abTk=
 google.golang.org/grpc v1.29.1/go.mod h1:itym6AZVZYACWQqET3MqgPpjcuV5QH3BxFS3IjizoKk=
-google.golang.org/grpc v1.77.0 h1:wVVY6/8cGA6vvffn+wWK5ToddbgdU3d8MNENr4evgXM=
-google.golang.org/grpc v1.77.0/go.mod h1:z0BY1iVj0q8E1uSQCjL9cppRj+gnZjzDnzV0dHhrNig=
+google.golang.org/grpc v1.78.0 h1:K1XZG/yGDJnzMdd/uZHAkVqJE+xIDOcmdSFZkBUicNc=
+google.golang.org/grpc v1.78.0/go.mod h1:I47qjTo4OKbMkjA/aOOwxDIiPSBofUtQUI5EfpWvW7U=
 google.golang.org/protobuf v1.36.11 h1:fV6ZwhNocDyBLK0dj+fg8ektcVegBBuEolpbTQyBNVE=
 google.golang.org/protobuf v1.36.11/go.mod h1:HTf+CrKn2C3g5S8VImy6tdcUvCska2kB7j23XfzDpco=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
@@ -453,8 +453,8 @@ sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.13.1 h1:jcw4DxB8XU79SS5eIJOZCp9
 sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.13.1/go.mod h1:zIU1j1Q/+kHoYXtww3j8qDm3bPeeRYLD9JRipBR+HZQ=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.11.0 h1:xbQUC6pfgnxPE1pKiYIRmR5HkyZ7StB7fnZwQ6pr0eE=
 sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.11.0/go.mod h1:9lQ7K/C/ms3OEDRlzLg2zyJVieNjV/7WfsQmOSnDaOQ=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.15.1 h1:T7mojR3qxLyospS5Ly4zs5LkXkvmirNilwVfuK88RLs=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.15.1/go.mod h1:HNXv7Uinl6Gnm7qzcNu99A4qo8eS6ivFr8O56mlO3Dw=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.15.2 h1:RYtAsbiIzs63sue4CR/RZUfuCn9rtT843vuvE2f7WvU=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.15.2/go.mod h1:0etKCnNLmiwnR4/AKLSu7ZTYpGKEI5JgR0kURpJrLDk=
 sigs.k8s.io/controller-runtime v0.22.4 h1:GEjV7KV3TY8e+tJ2LCTxUTanW4z/FmNB7l327UfMq9A=
 sigs.k8s.io/controller-runtime v0.22.4/go.mod h1:+QX1XUpTXN4mLoblf4tqr5CQcyHPAki2HLXqQMY6vh8=
 sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 h1:IpInykpT6ceI+QxKBbEflcR5EXP7sU1kvOlxwZh5txg=
