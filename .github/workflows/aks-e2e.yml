@@ -15,7 +15,7 @@ jobs:
       matrix:
         network_plugin: [overlay, azure, cilium]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.1
 
       - name: Azure Login with UAMI
         uses: azure/login@v2

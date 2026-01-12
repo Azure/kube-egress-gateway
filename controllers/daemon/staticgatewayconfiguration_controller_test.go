@@ -56,7 +56,7 @@ const (
 	privK               = "GHuMwljFfqd2a7cs6BaUOmHflK23zME8VNvC5B37S3k="
 	pubK                = "aPxGwq8zERHQ3Q1cOZFdJ+cvJX5Ka4mLN38AyYKYF10="
 	ilbIP               = "10.0.0.4"
-	ilbIPCidr           = "10.0.0.4/31"
+	ilbIPCidr           = "10.0.0.4/32"
 	natBuiltinChains    = `*nat
 :PREROUTING - [0:0]
 :INPUT - [0:0]
@@ -534,7 +534,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 
 			It("should create new gateway status object if not exist", func() {
 				getTestReconciler(node)
-				err := r.updateGatewayNodeStatus(context.TODO(), gwNamespace, true)
+				err := r.updateGatewayNodeStatus(context.TODO(), gwNamespace, PeerUpdateOpAdd)
 				Expect(err).To(BeNil())
 				gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
 				err = getGatewayStatus(r.Client, gwStatus)
@@ -558,7 +558,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 					},
 				}
 				getTestReconciler(node, existing)
-				err := r.updateGatewayNodeStatus(context.TODO(), gwNamespace, true)
+				err := r.updateGatewayNodeStatus(context.TODO(), gwNamespace, PeerUpdateOpAdd)
 				Expect(err).To(BeNil())
 				gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
 				err = getGatewayStatus(r.Client, gwStatus)
@@ -603,7 +603,7 @@ var _ = Describe("Daemon StaticGatewayConfiguration controller unit tests", func
 					},
 				}
 				getTestReconciler(node, existing)
-				err := r.updateGatewayNodeStatus(context.TODO(), gwNamespace, false)
+				err := r.updateGatewayNodeStatus(context.TODO(), gwNamespace, PeerUpdateOpDelete)
 				Expect(err).To(BeNil())
 				gwStatus := &egressgatewayv1alpha1.GatewayStatus{}
 				err = getGatewayStatus(r.Client, gwStatus)

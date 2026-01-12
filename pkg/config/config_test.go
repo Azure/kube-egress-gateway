@@ -4,10 +4,10 @@ package config
 
 import (
 	"context"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 	"testing"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader"
 )
 
 func TestConfigLoad(t *testing.T) {
