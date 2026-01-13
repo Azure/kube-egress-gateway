@@ -70,6 +70,8 @@ spec:
     - 169.254.169.254/32
 ```
 
+**Note**: Private IP mode requires User-Defined Routes or ExpressRoute for internet connectivity.
+
 #### Configuration Reference
 
 StaticGatewayConfiguration is a namespaced resource, meaning a static egress gateway can only be used by pods in the same namespace. There are two **required** configurations:
