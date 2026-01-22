@@ -1,0 +1,197 @@
+name: Cherry-pick to Release Branch
+
+# This workflow automates the process of cherry-picking commits from main to release branches
+# Usage:
+#   1. After merging a PR to main, add a label like "cherry-pick/release-0.0.x" to the PR
+#   2. This workflow will automatically create a new PR with the changes cherry-picked to the release branch
+#   3. The PR will be labeled with "backport" for easy identification
+
+on:
+  pull_request_target:
+    types:
+      - closed
+      - labeled
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  cherry-pick:
+    name: Cherry-pick to release branch
+    runs-on: ubuntu-latest
+    if: |
+      github.event.pull_request.merged == true &&
+      (
+        github.event.action == 'closed' ||
+        github.event.action == 'labeled'
+      )
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v5.0.0
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract release branch from labels
+        id: extract-branch
+        env:
+          LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
+        run: |
+          echo "Checking labels: $LABELS"
+
+          # Extract cherry-pick labels (e.g., "cherry-pick/release-0.0.x")
+          BRANCHES=$(echo "$LABELS" | jq -r '.[] | select(startswith("cherry-pick/")) | sub("cherry-pick/"; "")')
+
+          if [ -z "$BRANCHES" ]; then
+            echo "No cherry-pick labels found"
+            echo "branches=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Found branches to cherry-pick to:"
+          echo "$BRANCHES"
+
+          # Convert newlines to comma-separated values for matrix
+          BRANCHES_MATRIX=$(echo "$BRANCHES" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "branches=$BRANCHES_MATRIX" >> $GITHUB_OUTPUT
+
+      - name: Setup Git
+        if: steps.extract-branch.outputs.branches != ''
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Cherry-pick commits
+        if: steps.extract-branch.outputs.branches != ''
+        env:
+          BRANCHES: ${{ steps.extract-branch.outputs.branches }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          MERGE_COMMIT_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+
+          echo "Branches to cherry-pick to: $BRANCHES"
+
+          # Parse the JSON array
+          for BRANCH in $(echo "$BRANCHES" | jq -r '.[]'); do
+            echo "========================================"
+            echo "Processing branch: $BRANCH"
+            echo "========================================"
+
+            # Check if branch exists
+            if ! git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null 2>&1; then
+              echo "Error: Branch $BRANCH does not exist. Skipping."
+              continue
+            fi
+
+            # Create a new branch for the cherry-pick
+            NEW_BRANCH="cherry-pick-${PR_NUMBER}-to-${BRANCH}"
+
+            # Fetch and checkout the target branch
+            git fetch origin "$BRANCH"
+            git checkout -b "$NEW_BRANCH" "origin/$BRANCH"
+
+            # Try to cherry-pick
+            if git cherry-pick -x "$MERGE_COMMIT_SHA"; then
+              echo "Cherry-pick successful!"
+
+              # Push the new branch
+              git push origin "$NEW_BRANCH"
+
+              # Create a PR using GitHub CLI
+              PR_BODY_ESCAPED=$(echo "$PR_BODY" | jq -Rs .)
+
+              cat > /tmp/pr-body.txt <<EOF
+          Cherry-pick of #${PR_NUMBER} to ${BRANCH}
+
+          Original PR: #${PR_NUMBER}
+          Original Title: ${PR_TITLE}
+
+          ---
+
+          ${PR_BODY}
+          EOF
+
+              # Create the PR
+              gh pr create \
+                --base "$BRANCH" \
+                --head "$NEW_BRANCH" \
+                --title "[${BRANCH}] ${PR_TITLE}" \
+                --body-file /tmp/pr-body.txt \
+                --label "backport" \
+                --label "cherry-pick"
+
+              echo "✅ Successfully created PR for cherry-pick to $BRANCH"
+            else
+              echo "❌ Cherry-pick failed for $BRANCH - conflicts detected"
+
+              # Abort the cherry-pick
+              git cherry-pick --abort || true
+
+              # Create an issue to track manual cherry-pick needed
+              cat > /tmp/issue-body.txt <<EOF
+          ## Cherry-pick conflict detected
+
+          The automated cherry-pick of PR #${PR_NUMBER} to branch \`${BRANCH}\` failed due to conflicts.
+
+          **Original PR:** #${PR_NUMBER}
+          **Target Branch:** \`${BRANCH}\`
+          **Merge Commit:** \`${MERGE_COMMIT_SHA}\`
+
+          ### Manual Steps Required
+
+          1. Checkout the target branch:
+             \`\`\`bash
+             git fetch origin ${BRANCH}
+             git checkout -b cherry-pick-${PR_NUMBER}-to-${BRANCH} origin/${BRANCH}
+             \`\`\`
+
+          2. Cherry-pick the commit:
+             \`\`\`bash
+             git cherry-pick -x ${MERGE_COMMIT_SHA}
+             \`\`\`
+
+          3. Resolve conflicts manually
+
+          4. Complete the cherry-pick:
+             \`\`\`bash
+             git cherry-pick --continue
+             \`\`\`
+
+          5. Push and create a PR:
+             \`\`\`bash
+             git push origin cherry-pick-${PR_NUMBER}-to-${BRANCH}
+             gh pr create --base ${BRANCH} --head cherry-pick-${PR_NUMBER}-to-${BRANCH}
+             \`\`\`
+
+          ---
+
+          **Original PR Description:**
+
+          ${PR_BODY}
+          EOF
+
+              gh issue create \
+                --title "Manual cherry-pick needed: #${PR_NUMBER} to ${BRANCH}" \
+                --body-file /tmp/issue-body.txt \
+                --label "cherry-pick-conflict" \
+                --label "backport"
+
+              echo "📝 Created issue for manual cherry-pick"
+            fi
+
+            # Return to main branch for next iteration
+            git checkout main
+            git branch -D "$NEW_BRANCH" || true
+          done
+
+          echo "Cherry-pick process completed!"
