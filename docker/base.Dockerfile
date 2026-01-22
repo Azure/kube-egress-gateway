@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Build the manager binary
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/oss/go/microsoft/golang:1.24.3@sha256:d571b7d657aa472c7b49f143ea1942996240933cee257e37c3e4a4475b8ec567 AS builder 
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/oss/go/microsoft/golang:1.25.5@sha256:721dac6cb5ac794ccef0103b168ca3c4ee5ca8fc18780f9ea50fa06b7eea53e0 AS builder 
 WORKDIR /workspace
 # Copy the Go Modules manifests
 COPY go.mod go.mod
@@ -19,7 +19,7 @@ ARG TARGETARCH
 FROM builder AS base
 WORKDIR /workspace
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -a -o ${MAIN_ENTRY}  ./cmd/${MAIN_ENTRY}/main.go
+RUN GOEXPERIMENT=nosystemcrypto CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -a -o ${MAIN_ENTRY}  ./cmd/${MAIN_ENTRY}/main.go
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
