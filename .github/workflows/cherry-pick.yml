@@ -101,7 +101,8 @@ jobs:
             git checkout -b "$NEW_BRANCH" "origin/$BRANCH"
 
             # Try to cherry-pick
-            if git cherry-pick -x "$MERGE_COMMIT_SHA"; then
+            # Use -m 1 to specify mainline parent for merge commits
+            if git cherry-pick -x -m 1 "$MERGE_COMMIT_SHA"; then
               echo "Cherry-pick successful!"
 
               # Push the new branch
