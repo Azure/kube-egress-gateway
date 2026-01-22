@@ -61,7 +61,8 @@ git checkout -b cherry-pick-<description>-to-release-0.0.x origin/release/0.0.x
 
 ```bash
 # Cherry-pick with -x flag to add reference to original commit
-git cherry-pick -x <merge-commit-sha>
+# Use -m 1 for merge commits (parent 1 is the main branch)
+git cherry-pick -x -m 1 <merge-commit-sha>
 ```
 
 ### Step 4: Handle Conflicts (if any)
@@ -195,7 +196,7 @@ For complex conflicts:
 ```bash
 git fetch origin release/0.0.x
 git checkout -b cherry-pick-789-to-release-0.0.x origin/release/0.0.x
-git cherry-pick -x abc123def456
+git cherry-pick -x -m 1 abc123def456
 
 # Conflicts in file.go
 # Edit file.go to resolve conflicts
