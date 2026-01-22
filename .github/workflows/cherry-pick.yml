@@ -158,7 +158,7 @@ jobs:
 
           2. Cherry-pick the commit:
              \`\`\`bash
-             git cherry-pick -x ${MERGE_COMMIT_SHA}
+             git cherry-pick -x -m 1 ${MERGE_COMMIT_SHA}
              \`\`\`
 
           3. Resolve conflicts manually
