@@ -108,8 +108,6 @@ jobs:
               git push origin "$NEW_BRANCH"
 
               # Create a PR using GitHub CLI
-              PR_BODY_ESCAPED=$(echo "$PR_BODY" | jq -Rs .)
-
               cat > /tmp/pr-body.txt <<EOF
           Cherry-pick of #${PR_NUMBER} to ${BRANCH}
 
