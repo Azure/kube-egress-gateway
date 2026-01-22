@@ -102,6 +102,8 @@ jobs:
 
             # Try to cherry-pick
             # Use -m 1 to specify mainline parent for merge commits
+            # Parent 1 is the main branch in GitHub's merge commits
+            # (Parent 2 would be the feature branch being merged)
             if git cherry-pick -x -m 1 "$MERGE_COMMIT_SHA"; then
               echo "Cherry-pick successful!"
 
