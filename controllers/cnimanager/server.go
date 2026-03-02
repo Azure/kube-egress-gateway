@@ -22,6 +22,7 @@ import (
 
 	current "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	cniprotocol "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
+	"github.com/Azure/kube-egress-gateway/pkg/metrics"
 )
 
 type NicService struct {
@@ -57,6 +58,11 @@ func (s *NicService) NicAdd(ctx context.Context, in *cniprotocol.NicAddRequest) 
 		podEndpoint.Spec.PodPublicKey = in.PublicKey
 		return nil
 	}); err != nil {
+		metrics.CNIManagerPodEndpointOperationFailCount.WithLabelValues(
+			in.GetPodConfig().GetPodNamespace(),
+			"create_or_update",
+			in.GetPodConfig().GetPodName(),
+		).Inc()
 		return nil, status.Errorf(codes.Unknown, "failed to update PodEndpoint %s/%s: %s", in.GetPodConfig().GetPodNamespace(), in.GetPodConfig().GetPodName(), err)
 	}
 
@@ -77,6 +83,11 @@ func (s *NicService) NicDel(ctx context.Context, in *cniprotocol.NicDelRequest) 
 	podEndpoint := &current.PodEndpoint{ObjectMeta: metav1.ObjectMeta{Name: in.GetPodConfig().GetPodName(), Namespace: in.GetPodConfig().GetPodNamespace()}}
 	if err := s.k8sClient.Delete(ctx, podEndpoint); err != nil {
 		if !apierrors.IsNotFound(err) {
+			metrics.CNIManagerPodEndpointOperationFailCount.WithLabelValues(
+				in.GetPodConfig().GetPodNamespace(),
+				"delete",
+				in.GetPodConfig().GetPodName(),
+			).Inc()
 			return nil, status.Errorf(codes.Unknown, "failed to delete PodEndpoint %s/%s: %s", in.GetPodConfig().GetPodNamespace(), in.GetPodConfig().GetPodName(), err)
 		}
 	}
