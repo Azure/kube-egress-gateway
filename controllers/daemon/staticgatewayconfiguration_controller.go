@@ -58,6 +58,7 @@ type StaticGatewayConfigurationReconciler struct {
 // +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations,verbs=get;list;watch
 // +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewayvmconfigurations/status,verbs=get
 // +kubebuilder:rbac:groups=core,namespace=kube-egress-gateway-system,resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch
 // +kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=gatewaystatuses,verbs=get;list;watch;create;update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -132,6 +133,18 @@ func (r *StaticGatewayConfigurationReconciler) Reconcile(ctx context.Context, re
 		return ctrl.Result{}, nil
 	}
 
+	// Check if the node is being drained for upgrade
+	if draining, err := r.isNodeDraining(ctx); err != nil {
+		log.Error(err, "failed to check node drain label")
+		return ctrl.Result{}, err
+	} else if draining {
+		log.Info("Node is marked for drain, removing gateway from health probe")
+		if err := r.LBProbeServer.RemoveGateway(string(gwConfig.GetUID())); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
+	}
+
 	// Reconcile gateway configuration
 	return ctrl.Result{}, r.reconcile(ctx, gwConfig)
 }
@@ -147,6 +160,8 @@ func (r *StaticGatewayConfigurationReconciler) SetupWithManager(mgr ctrl.Manager
 		// We need to watch GatewayVMConfiguration also, because vmSecondaryIP may change, e.g. duing upgrade
 		// we can use EnqueueRequestForObject because GatewayVMConfiguration has the same namespace/name as StaticGatewayConfiguration
 		Watches(&egressgatewayv1alpha1.GatewayVMConfiguration{}, &handler.EnqueueRequestForObject{}).
+		// Watch the current node for drain label changes; enqueue all StaticGatewayConfigurations
+		Watches(&corev1.Node{}, handler.EnqueueRequestsFromMapFunc(r.nodeToStaticGatewayConfigurations)).
 		Build(r)
 	if err != nil {
 		return err
@@ -497,6 +512,41 @@ func isReady(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) bool {
 	return gwConfig.Status.EgressIpPrefix != "" && wgProfile.Ip != "" &&
 		wgProfile.Port != 0 && wgProfile.PublicKey != "" &&
 		wgProfile.PrivateKeySecretRef != nil
+}
+
+func (r *StaticGatewayConfigurationReconciler) isNodeDraining(ctx context.Context) (bool, error) {
+	node := &corev1.Node{}
+	if err := r.Get(ctx, types.NamespacedName{Name: os.Getenv(consts.NodeNameEnvKey)}, node); err != nil {
+		return false, fmt.Errorf("failed to get current node: %w", err)
+	}
+	return node.Labels[consts.GatewayDrainLabel] == "true", nil
+}
+
+func (r *StaticGatewayConfigurationReconciler) nodeToStaticGatewayConfigurations(ctx context.Context, obj client.Object) []reconcile.Request {
+	node, ok := obj.(*corev1.Node)
+	if !ok {
+		return nil
+	}
+	// Only care about this node
+	if node.Name != os.Getenv(consts.NodeNameEnvKey) {
+		return nil
+	}
+
+	gwConfigList := &egressgatewayv1alpha1.StaticGatewayConfigurationList{}
+	if err := r.List(ctx, gwConfigList); err != nil {
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, gwConfig := range gwConfigList.Items {
+		requests = append(requests, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      gwConfig.Name,
+				Namespace: gwConfig.Namespace,
+			},
+		})
+	}
+	return requests
 }
 
 func applyToNode(gwConfig *egressgatewayv1alpha1.StaticGatewayConfiguration) bool {

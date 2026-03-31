@@ -65,6 +65,9 @@ const (
 
 	// Default user agent for Azure SDK
 	DefaultUserAgent = "kube-egress-gateway-controller"
+
+	// GatewayDrainLabel is applied to a gateway node before upgrade to signal health probe to fail
+	GatewayDrainLabel = "gatewayDrainLabel"
 )
 
 const (
