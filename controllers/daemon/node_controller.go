@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/vishvananda/netlink/nl"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -57,7 +58,11 @@ func (r *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	}
 
 	if node.Labels[consts.GatewayDrainLabel] == "true" {
-		log.Info("Node is marked for drain, removing all gateways from health probe and clearing WireGuard peers")
+		log.Info("Node is marked for drain, removing ILB IP, health probe gateways, and WireGuard peers")
+		if err := r.removeIlbIPFromHost(ctx); err != nil {
+			log.Error(err, "failed to remove ILB IP during drain")
+			return ctrl.Result{}, err
+		}
 		r.removeAllGateways()
 		if err := r.removeAllWireGuardPeers(ctx); err != nil {
 			log.Error(err, "failed to remove WireGuard peers during drain")
@@ -126,6 +131,29 @@ func (r *NodeReconciler) removeAllWireGuardPeers(ctx context.Context) error {
 		}
 		return nil
 	})
+}
+
+func (r *NodeReconciler) removeIlbIPFromHost(ctx context.Context) error {
+	log := log.FromContext(ctx)
+	eth0, err := r.Netlink.LinkByName("eth0")
+	if err != nil {
+		return fmt.Errorf("failed to retrieve link eth0: %w", err)
+	}
+
+	addresses, err := r.Netlink.AddrList(eth0, nl.FAMILY_ALL)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve IP addresses for eth0: %w", err)
+	}
+
+	for _, address := range addresses {
+		if address.Label == consts.ILBIPLabel {
+			log.Info("Removing ILB IP from eth0 during drain", "ilb IP", address.IPNet.String())
+			if err := r.Netlink.AddrDel(eth0, &address); err != nil {
+				return fmt.Errorf("failed to delete ILB IP from eth0: %w", err)
+			}
+		}
+	}
+	return nil
 }
 
 func (r *NodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
