@@ -34,7 +34,7 @@ func (r *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, nil
 	}
 
-	log.Info("Reconciling node %s", req.Name)
+	log.Info("Reconciling node", "name", req.Name)
 
 	node := &corev1.Node{}
 	if err := r.Get(ctx, req.NamespacedName, node); err != nil {
