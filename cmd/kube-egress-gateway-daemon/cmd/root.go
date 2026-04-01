@@ -31,6 +31,8 @@ import (
 	controllers "github.com/Azure/kube-egress-gateway/controllers/daemon"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/healthprobe"
+	"github.com/Azure/kube-egress-gateway/pkg/netnswrapper"
+	"github.com/Azure/kube-egress-gateway/pkg/wgctrlwrapper"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -151,6 +153,8 @@ func startControllers(cmd *cobra.Command, args []string) {
 	if err = (&controllers.NodeReconciler{
 		Client:        mgr.GetClient(),
 		LBProbeServer: lbProbeServer,
+		NetNS:         netnswrapper.NewNetNS(),
+		WgCtrl:        wgctrlwrapper.NewWgCtrl(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Node")
 		os.Exit(1)
