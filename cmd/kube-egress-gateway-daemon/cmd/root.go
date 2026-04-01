@@ -147,6 +147,14 @@ func startControllers(cmd *cobra.Command, args []string) {
 		setupLog.Error(err, "unable to create controller", "controller", "PodEndpoint")
 		os.Exit(1)
 	}
+
+	if err = (&controllers.NodeReconciler{
+		Client:        mgr.GetClient(),
+		LBProbeServer: lbProbeServer,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Node")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
