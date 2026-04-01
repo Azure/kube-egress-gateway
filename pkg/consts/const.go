@@ -67,7 +67,7 @@ const (
 	DefaultUserAgent = "kube-egress-gateway-controller"
 
 	// GatewayDrainLabel is applied to a gateway node before upgrade to signal health probe to fail
-	GatewayDrainLabel = "gatewayDrainLabel"
+	GatewayDrainLabel = "kubernetes.azure.com/gateway-drain"
 )
 
 const (
