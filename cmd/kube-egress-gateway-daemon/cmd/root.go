@@ -31,6 +31,7 @@ import (
 	controllers "github.com/Azure/kube-egress-gateway/controllers/daemon"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/healthprobe"
+	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper"
 	"github.com/Azure/kube-egress-gateway/pkg/netnswrapper"
 	"github.com/Azure/kube-egress-gateway/pkg/wgctrlwrapper"
 )
@@ -153,6 +154,7 @@ func startControllers(cmd *cobra.Command, args []string) {
 	if err = (&controllers.NodeReconciler{
 		Client:        mgr.GetClient(),
 		LBProbeServer: lbProbeServer,
+		Netlink:       netlinkwrapper.NewNetLink(),
 		NetNS:         netnswrapper.NewNetNS(),
 		WgCtrl:        wgctrlwrapper.NewWgCtrl(),
 	}).SetupWithManager(mgr); err != nil {

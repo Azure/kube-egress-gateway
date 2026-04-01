@@ -19,6 +19,7 @@ import (
 
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/healthprobe"
+	"github.com/Azure/kube-egress-gateway/pkg/netlinkwrapper"
 	"github.com/Azure/kube-egress-gateway/pkg/netnswrapper"
 	"github.com/Azure/kube-egress-gateway/pkg/wgctrlwrapper"
 )
@@ -30,6 +31,7 @@ var _ reconcile.Reconciler = &NodeReconciler{}
 type NodeReconciler struct {
 	client.Client
 	LBProbeServer *healthprobe.LBProbeServer
+	Netlink       netlinkwrapper.Interface
 	NetNS         netnswrapper.Interface
 	WgCtrl        wgctrlwrapper.Interface
 }
@@ -82,21 +84,30 @@ func (r *NodeReconciler) removeAllWireGuardPeers(ctx context.Context) error {
 	defer func() { _ = gwns.Close() }()
 
 	return gwns.Do(func(_ ns.NetNS) error {
+		// List all links to find WireGuard interfaces by name prefix
+		links, err := r.Netlink.LinkList()
+		if err != nil {
+			return fmt.Errorf("failed to list links in gateway namespace: %w", err)
+		}
+
 		wgClient, err := r.WgCtrl.New()
 		if err != nil {
 			return fmt.Errorf("failed to create wgctrl client: %w", err)
 		}
 		defer func() { _ = wgClient.Close() }()
 
-		devices, err := wgClient.Devices()
-		if err != nil {
-			return fmt.Errorf("failed to list wireguard devices: %w", err)
-		}
-
-		for _, device := range devices {
-			if !strings.HasPrefix(device.Name, consts.WiregaurdLinkNamePrefix) {
+		for _, link := range links {
+			linkName := link.Attrs().Name
+			if !strings.HasPrefix(linkName, consts.WiregaurdLinkNamePrefix) {
 				continue
 			}
+
+			device, err := wgClient.Device(linkName)
+			if err != nil {
+				log.Error(err, "failed to get WireGuard device", "device", linkName)
+				continue
+			}
+
 			var peersToRemove []wgtypes.PeerConfig
 			for _, peer := range device.Peers {
 				peersToRemove = append(peersToRemove, wgtypes.PeerConfig{
@@ -105,11 +116,11 @@ func (r *NodeReconciler) removeAllWireGuardPeers(ctx context.Context) error {
 				})
 			}
 			if len(peersToRemove) > 0 {
-				log.Info("Removing all WireGuard peers", "device", device.Name, "count", len(peersToRemove))
-				if err := wgClient.ConfigureDevice(device.Name, wgtypes.Config{
+				log.Info("Removing all WireGuard peers", "device", linkName, "count", len(peersToRemove))
+				if err := wgClient.ConfigureDevice(linkName, wgtypes.Config{
 					Peers: peersToRemove,
 				}); err != nil {
-					return fmt.Errorf("failed to remove peers from %s: %w", device.Name, err)
+					return fmt.Errorf("failed to remove peers from %s: %w", linkName, err)
 				}
 			}
 		}
