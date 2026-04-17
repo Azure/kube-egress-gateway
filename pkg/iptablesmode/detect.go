@@ -38,7 +38,8 @@ const (
 // DetectAndConfigureIPTablesMode detects the host's iptables backend (legacy vs nft)
 // and configures the container's iptables symlinks to match.
 // This must be called before any iptables interface is created.
-// The daemon runs with hostPID=true, so /proc/1/root gives access to the host filesystem.
+// The daemon runs with hostNetwork=true, so iptables commands see the host's
+// network namespace.
 func DetectAndConfigureIPTablesMode() (string, error) {
 	hostMode, err := detectHostIPTablesMode()
 	if err != nil {
@@ -61,26 +62,55 @@ func DetectAndConfigureIPTablesMode() (string, error) {
 	return hostMode, nil
 }
 
-// detectHostIPTablesMode checks the host's iptables symlink to determine the backend.
-// On some distros (e.g., Azure Linux 3), iptables uses the alternatives system:
-//
-//	/usr/sbin/iptables -> /etc/alternatives/iptables -> xtables-nft-multi
-//
-// We must follow the full chain to the final binary.
+// detectHostIPTablesMode determines which iptables backend the host is using.
+// It tries multiple strategies in order:
+//  1. Read /proc/1/root symlinks (requires SYS_PTRACE or permissive kernel)
+//  2. Check for well-known kube-proxy rules in iptables-legacy-save output
+//     (works because the daemon runs with hostNetwork=true)
+//  3. Fall back to comparing rule counts across both backends
 func detectHostIPTablesMode() (string, error) {
+	// Strategy 1: Follow the host's iptables symlink chain via /proc/1/root.
 	hostIPTables := filepath.Join(hostProcRoot, hostIPTablesPath)
-
-	// resolveSymlinkChain follows symlinks manually within the host's root filesystem.
-	// filepath.EvalSymlinks cannot be used directly because intermediate symlinks
-	// (e.g., /etc/alternatives/iptables) are absolute paths that only exist under
-	// the host root (/proc/1/root), not in the container's own filesystem.
 	target, err := resolveSymlinkChain(hostIPTables, hostProcRoot)
-	if err != nil {
-		// If we can't resolve the host symlink, fall back to rule counting
-		return detectModeByRuleCounting()
+	if err == nil {
+		return classifyBinary(target), nil
 	}
 
-	return classifyBinary(target), nil
+	// Strategy 2: Check whether kube-proxy's KUBE- chains exist in iptables-legacy.
+	// The daemon runs with hostNetwork=true, so `iptables-legacy-save` sees the
+	// host's network namespace. kube-proxy always creates KUBE- chains in whichever
+	// backend the host uses. If KUBE- rules are present in legacy, the host uses
+	// legacy; if absent, the host uses nft.
+	mode, err := detectModeByKubeProxyChains()
+	if err == nil {
+		return mode, nil
+	}
+
+	// Strategy 3: Compare rule counts between legacy and nft save commands.
+	return detectModeByRuleCounting()
+}
+
+// detectModeByKubeProxyChains checks whether kube-proxy's well-known chains
+// (KUBE-SERVICES, KUBE-POSTROUTING) exist in the iptables-legacy nat table.
+// This works because the daemon runs with hostNetwork=true.
+func detectModeByKubeProxyChains() (string, error) {
+	path, err := exec.LookPath(iptablesSaveLegacyBin)
+	if err != nil {
+		return "", fmt.Errorf("%s not found: %w", iptablesSaveLegacyBin, err)
+	}
+	out, err := exec.Command(path, "-t", "nat").Output() // #nosec G204 -- constant binary
+	if err != nil {
+		return "", fmt.Errorf("failed to run %s: %w", iptablesSaveLegacyBin, err)
+	}
+
+	output := string(out)
+	// kube-proxy always creates these chains in the nat table.
+	if strings.Contains(output, "KUBE-SERVICES") || strings.Contains(output, "KUBE-POSTROUTING") {
+		return legacyBackend, nil
+	}
+
+	// KUBE- chains not found in legacy → host is using nft
+	return nftBackend, nil
 }
 
 // resolveSymlinkChain follows a chain of symlinks rooted under hostRoot.
