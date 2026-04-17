@@ -62,20 +62,47 @@ func DetectAndConfigureIPTablesMode() (string, error) {
 }
 
 // detectHostIPTablesMode checks the host's iptables symlink to determine the backend.
+// On some distros (e.g., Azure Linux 3), iptables uses the alternatives system:
+//
+//	/usr/sbin/iptables -> /etc/alternatives/iptables -> xtables-nft-multi
+//
+// We must follow the full chain to the final binary.
 func detectHostIPTablesMode() (string, error) {
 	hostIPTables := filepath.Join(hostProcRoot, hostIPTablesPath)
 
-	target, err := os.Readlink(hostIPTables)
+	// resolveSymlinkChain follows symlinks manually within the host's root filesystem.
+	// filepath.EvalSymlinks cannot be used directly because intermediate symlinks
+	// (e.g., /etc/alternatives/iptables) are absolute paths that only exist under
+	// the host root (/proc/1/root), not in the container's own filesystem.
+	target, err := resolveSymlinkChain(hostIPTables, hostProcRoot)
 	if err != nil {
-		// Try resolving the full path
-		target, err = filepath.EvalSymlinks(hostIPTables)
-		if err != nil {
-			// If we can't read the host symlink, fall back to rule counting
-			return detectModeByRuleCounting()
-		}
+		// If we can't resolve the host symlink, fall back to rule counting
+		return detectModeByRuleCounting()
 	}
 
 	return classifyBinary(target), nil
+}
+
+// resolveSymlinkChain follows a chain of symlinks rooted under hostRoot.
+// Absolute symlink targets are re-rooted under hostRoot so the resolution
+// stays within the host filesystem (accessed via /proc/1/root).
+func resolveSymlinkChain(path, hostRoot string) (string, error) {
+	const maxHops = 10
+	for i := 0; i < maxHops; i++ {
+		target, err := os.Readlink(path)
+		if err != nil {
+			// Not a symlink — this is the final file.
+			return path, nil
+		}
+		if filepath.IsAbs(target) {
+			// Absolute target: re-root under the host filesystem.
+			path = filepath.Join(hostRoot, target)
+		} else {
+			// Relative target: resolve relative to the current link's directory.
+			path = filepath.Join(filepath.Dir(path), target)
+		}
+	}
+	return "", fmt.Errorf("too many levels of symlinks resolving %s", path)
 }
 
 // detectContainerIPTablesMode checks what the container's iptables points to.
