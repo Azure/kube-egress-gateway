@@ -121,6 +121,12 @@ func resolveSymlinkChain(path, hostRoot string) (string, error) {
 	for i := 0; i < maxHops; i++ {
 		target, err := os.Readlink(path)
 		if err != nil {
+			// Check if this is a permission error rather than "not a symlink".
+			// On kernels that restrict /proc/1/root access, readlink may fail
+			// with EACCES at intermediate symlinks (e.g., /proc/1/root/etc/alternatives/iptables).
+			if os.IsPermission(err) {
+				return "", fmt.Errorf("permission denied reading symlink %s: %w", path, err)
+			}
 			// Not a symlink — this is the final file.
 			return path, nil
 		}
