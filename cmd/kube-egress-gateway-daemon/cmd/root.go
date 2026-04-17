@@ -31,6 +31,7 @@ import (
 	controllers "github.com/Azure/kube-egress-gateway/controllers/daemon"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/healthprobe"
+	"github.com/Azure/kube-egress-gateway/pkg/iptablesmode"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -121,6 +122,16 @@ func startControllers(cmd *cobra.Command, args []string) {
 	if err := controllers.InitNodeMetadata(); err != nil {
 		setupLog.Error(err, "unable to retrieve node metadata")
 		os.Exit(1)
+	}
+
+	// Detect the host's iptables backend (legacy vs nft) and configure the
+	// container's iptables symlinks to match. This must happen before any
+	// iptables interface is created (e.g., in SetupWithManager).
+	iptMode, err := iptablesmode.DetectAndConfigureIPTablesMode()
+	if err != nil {
+		setupLog.Error(err, "failed to configure iptables mode, continuing with default", "detected_mode", iptMode)
+	} else {
+		setupLog.Info("iptables mode configured", "mode", iptMode)
 	}
 
 	lbProbeServer := healthprobe.NewLBProbeServer(gatewayLBProbePort)
