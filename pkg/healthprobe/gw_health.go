@@ -17,10 +17,20 @@ import (
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 )
 
+const (
+	// lbProbeDrainDelay is the time to wait after marking unhealthy before shutting down
+	// the HTTP server. This gives the Azure LB time to detect failed health probes and
+	// stop routing traffic to this node.
+	// Default Azure LB probe: 5s interval, 2 consecutive failures = 10s to mark down.
+	// We use 15s to provide margin.
+	lbProbeDrainDelay = 15 * time.Second
+)
+
 type LBProbeServer struct {
 	lock           sync.RWMutex
 	activeGateways map[string]bool
 	listenPort     int
+	shuttingDown   bool
 }
 
 func NewLBProbeServer(listenPort int) *LBProbeServer {
@@ -54,11 +64,25 @@ func (svr *LBProbeServer) Start(ctx context.Context) error {
 		}
 	}()
 
-	// Shutdown the server when stop is closed.
+	// Shutdown gracefully when context is cancelled:
+	// 1. Mark as shutting down so health probes return 503
+	// 2. Wait for the LB to detect unhealthy status (2x probe interval)
+	// 3. Gracefully shutdown the HTTP server
 	<-ctx.Done()
+	log.Info("Marking gateway lb health probe server as shutting down")
+	svr.lock.Lock()
+	svr.shuttingDown = true
+	svr.lock.Unlock()
+
+	// Wait for Azure LB to detect unhealthy probes.
+	log.Info("Waiting for LB probes to detect shutdown", "delay", lbProbeDrainDelay)
+	time.Sleep(lbProbeDrainDelay)
+
 	log.Info("Stopping gateway lb health probe server")
-	if err := httpServer.Close(); err != nil {
-		log.Error(err, "failed to close gateway lb health probe server")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		log.Error(err, "failed to gracefully shutdown gateway lb health probe server")
 		return err
 	}
 	return nil
@@ -101,10 +125,11 @@ func (svr *LBProbeServer) serveHTTP(resp http.ResponseWriter, req *http.Request)
 	gatewayUID := subPaths[2]
 
 	svr.lock.RLock()
+	shutting := svr.shuttingDown
 	_, ok := svr.activeGateways[gatewayUID]
 	svr.lock.RUnlock()
 
-	if !ok {
+	if shutting || !ok {
 		resp.WriteHeader(http.StatusServiceUnavailable)
 	} else {
 		resp.WriteHeader(http.StatusOK)
