@@ -3,9 +3,13 @@
 package healthprobe
 
 import (
+	"context"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -64,4 +68,76 @@ func testHandler(svr *LBProbeServer, requestPath string, status int, t *testing.
 
 	svr.serveHTTP(resp, req)
 	assert.Equal(t, status, resp.Code, "testHandler: got unexpected http status code")
+}
+
+func TestGatewayHealthServer_ShutdownReturnsUnavailable(t *testing.T) {
+	svr := NewLBProbeServer(1000)
+
+	err := svr.AddGateway("123")
+	assert.Nil(t, err)
+
+	// Active gateway should return 200
+	testHandler(svr, "/gw/123", http.StatusOK, t)
+
+	// Simulate shutdown
+	svr.lock.Lock()
+	svr.shuttingDown = true
+	svr.lock.Unlock()
+
+	// Same gateway should now return 503
+	testHandler(svr, "/gw/123", http.StatusServiceUnavailable, t)
+}
+
+func TestGatewayHealthServer_GracefulShutdownLifecycle(t *testing.T) {
+	// Use port 0 to let the OS pick a free port
+	svr := NewLBProbeServer(0)
+	err := svr.AddGateway("test-gw")
+	assert.Nil(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Start the server; capture the actual listen address
+	listener, err := net.Listen("tcp", ":0")
+	assert.Nil(t, err)
+	port := listener.Addr().(*net.TCPAddr).Port
+	listener.Close()
+	svr.listenPort = port
+
+	serverDone := make(chan error, 1)
+	go func() {
+		serverDone <- svr.Start(ctx)
+	}()
+
+	// Wait for server to be ready
+	baseURL := fmt.Sprintf("http://localhost:%d", port)
+	assert.Eventually(t, func() bool {
+		resp, err := http.Get(baseURL + "/gw/test-gw")
+		if err != nil {
+			return false
+		}
+		resp.Body.Close()
+		return resp.StatusCode == http.StatusOK
+	}, 3*time.Second, 50*time.Millisecond, "server should become ready and return 200")
+
+	// Cancel context (simulates SIGTERM)
+	cancel()
+
+	// The server should still be running during lbProbeDrainDelay,
+	// but now returning 503 for all gateways
+	assert.Eventually(t, func() bool {
+		resp, err := http.Get(baseURL + "/gw/test-gw")
+		if err != nil {
+			return false // server not yet processing the shutdown
+		}
+		resp.Body.Close()
+		return resp.StatusCode == http.StatusServiceUnavailable
+	}, 3*time.Second, 50*time.Millisecond, "server should return 503 during shutdown drain")
+
+	// Server should eventually shut down
+	select {
+	case err := <-serverDone:
+		assert.Nil(t, err, "server should shut down without error")
+	case <-time.After(lbProbeDrainDelay + 10*time.Second):
+		t.Fatal("server did not shut down within expected time")
+	}
 }
