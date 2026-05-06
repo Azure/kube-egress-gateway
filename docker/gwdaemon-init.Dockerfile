@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM gcr.io/distroless/static:latest@sha256:3d0f463de06b7ddff27684ec3bfd0b54a425149d0f8685308b1fdf297b0265e9
+FROM gcr.io/distroless/static:latest@sha256:47b2d72ff90843eb8a768b5c2f89b40741843b639d065b9b937b07cd59b479c6
 WORKDIR /workspace
 COPY --from=tool /add-netns .
 ENTRYPOINT ["./add-netns"]
