@@ -15,7 +15,7 @@ import (
 )
 
 func TestGatewayHealthServer(t *testing.T) {
-	svr := NewLBProbeServer(1000)
+	svr := NewLBProbeServer(1000, 0)
 	assert.Empty(t, svr.GetGateways(), "active gateway map should be empty at the beginning")
 
 	// test unexpected request path
@@ -71,7 +71,7 @@ func testHandler(svr *LBProbeServer, requestPath string, status int, t *testing.
 }
 
 func TestGatewayHealthServer_ShutdownReturnsUnavailable(t *testing.T) {
-	svr := NewLBProbeServer(1000)
+	svr := NewLBProbeServer(1000, 0)
 
 	err := svr.AddGateway("123")
 	assert.Nil(t, err)
@@ -90,7 +90,7 @@ func TestGatewayHealthServer_ShutdownReturnsUnavailable(t *testing.T) {
 
 func TestGatewayHealthServer_GracefulShutdownLifecycle(t *testing.T) {
 	// Use port 0 to let the OS pick a free port
-	svr := NewLBProbeServer(0)
+	svr := NewLBProbeServer(0, 0)
 	err := svr.AddGateway("test-gw")
 	assert.Nil(t, err)
 
