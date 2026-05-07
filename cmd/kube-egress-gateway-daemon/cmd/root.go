@@ -56,6 +56,7 @@ var (
 	metricsPort        int
 	probePort          int
 	gatewayLBProbePort int
+	lbProbeDrainDelay  int
 	secretNamespace    string
 	zapOpts            = zap.Options{
 		Development: true,
@@ -78,6 +79,7 @@ func init() {
 	rootCmd.Flags().IntVar(&metricsPort, "metrics-bind-port", 8080, "The port the metric endpoint binds to.")
 	rootCmd.Flags().IntVar(&probePort, "health-probe-bind-port", 8081, "The port the probe endpoint binds to.")
 	rootCmd.Flags().IntVar(&gatewayLBProbePort, "gateway-lb-probe-port", 8082, "The port the gateway lb probe endpoint binds to.")
+	rootCmd.Flags().IntVar(&lbProbeDrainDelay, "lb-probe-drain-delay", 30, "Seconds to wait after marking LB probe unhealthy before shutting down (allows LB to drain traffic).")
 	rootCmd.Flags().StringVar(&secretNamespace, "secret-namespace", os.Getenv(consts.PodNamespaceEnvKey), "The namespace to retrieve server privateKey secrets")
 
 	zapOpts.BindFlags(goflag.CommandLine)
@@ -123,7 +125,7 @@ func startControllers(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	lbProbeServer := healthprobe.NewLBProbeServer(gatewayLBProbePort)
+	lbProbeServer := healthprobe.NewLBProbeServer(gatewayLBProbePort, time.Duration(lbProbeDrainDelay)*time.Second)
 	if err := mgr.Add(manager.RunnableFunc(lbProbeServer.Start)); err != nil {
 		setupLog.Error(err, "unbaled to set up gateway health probe server")
 		os.Exit(1)

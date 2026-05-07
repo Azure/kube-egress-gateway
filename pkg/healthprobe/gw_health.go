@@ -18,25 +18,30 @@ import (
 )
 
 const (
-	// lbProbeDrainDelay is the time to wait after marking unhealthy before shutting down
-	// the HTTP server. This gives the Azure LB time to detect failed health probes and
-	// stop routing traffic to this node.
+	// DefaultLBProbeDrainDelay is the default time to wait after marking unhealthy before
+	// shutting down the HTTP server. This gives the Azure LB time to detect failed health
+	// probes and stop routing traffic to this node.
 	// Default Azure LB probe: 5s interval, 2 consecutive failures = 10s to mark down.
-	// We use 15s to provide margin.
-	lbProbeDrainDelay = 15 * time.Second
+	// We use 30s to provide ample margin for LB probe detection and connection draining.
+	DefaultLBProbeDrainDelay = 30 * time.Second
 )
 
 type LBProbeServer struct {
 	lock           sync.RWMutex
 	activeGateways map[string]bool
 	listenPort     int
+	drainDelay     time.Duration
 	shuttingDown   bool
 }
 
-func NewLBProbeServer(listenPort int) *LBProbeServer {
+func NewLBProbeServer(listenPort int, drainDelay time.Duration) *LBProbeServer {
+	if drainDelay <= 0 {
+		drainDelay = DefaultLBProbeDrainDelay
+	}
 	return &LBProbeServer{
 		activeGateways: make(map[string]bool),
 		listenPort:     listenPort,
+		drainDelay:     drainDelay,
 	}
 }
 
@@ -75,8 +80,8 @@ func (svr *LBProbeServer) Start(ctx context.Context) error {
 	svr.lock.Unlock()
 
 	// Wait for Azure LB to detect unhealthy probes.
-	log.Info("Waiting for LB probes to detect shutdown", "delay", lbProbeDrainDelay)
-	time.Sleep(lbProbeDrainDelay)
+	log.Info("Waiting for LB probes to detect shutdown", "delay", svr.drainDelay)
+	time.Sleep(svr.drainDelay)
 
 	log.Info("Stopping gateway lb health probe server")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
