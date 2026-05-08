@@ -39,6 +39,14 @@ type GatewayLBConfigurationReconciler struct {
 	LBProbePort int
 }
 
+const (
+	// lbProbeIntervalSeconds is the interval between health probe attempts.
+	lbProbeIntervalSeconds int32 = 5
+	// lbProbeThreshold is the number of consecutive probe successes/failures
+	// required to mark a backend healthy/unhealthy.
+	lbProbeThreshold int32 = 1
+)
+
 type lbPropertyNames struct {
 	frontendName string
 	backendName  string
@@ -495,7 +503,9 @@ func (r *GatewayLBConfigurationReconciler) reconcileLBRule(
 				}
 				if to.Val(probe.Properties.RequestPath) != to.Val(expectedProbe.Properties.RequestPath) ||
 					to.Val(probe.Properties.Port) != to.Val(expectedProbe.Properties.Port) ||
-					*probe.Properties.Protocol != *expectedProbe.Properties.Protocol {
+					*probe.Properties.Protocol != *expectedProbe.Properties.Protocol ||
+					to.Val(probe.Properties.ProbeThreshold) != to.Val(expectedProbe.Properties.ProbeThreshold) ||
+					to.Val(probe.Properties.IntervalInSeconds) != to.Val(expectedProbe.Properties.IntervalInSeconds) {
 					log.Info("Found LB probe with different configuration, dropping")
 					probes = append(probes[:i], probes[i+1:]...)
 				} else {
@@ -629,9 +639,11 @@ func getExpectedLBProbe(
 		}
 	}
 	probeProp := &network.ProbePropertiesFormat{
-		RequestPath: to.Ptr(consts.GatewayHealthProbeEndpoint + gatewayUID),
-		Protocol:    to.Ptr(network.ProbeProtocolHTTP),
-		Port:        to.Ptr(int32(lbProbePort)),
+		RequestPath:       to.Ptr(consts.GatewayHealthProbeEndpoint + gatewayUID),
+		Protocol:          to.Ptr(network.ProbeProtocolHTTP),
+		Port:              to.Ptr(int32(lbProbePort)),
+		ProbeThreshold:    to.Ptr(lbProbeThreshold),
+		IntervalInSeconds: to.Ptr(lbProbeIntervalSeconds),
 	}
 	return &network.Probe{
 		Name:       probeName,
