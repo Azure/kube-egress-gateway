@@ -83,7 +83,7 @@ spec:
             cpu: 10m
             memory: 64Mi
       serviceAccountName: daemon-manager
-      terminationGracePeriodSeconds: 10
+      terminationGracePeriodSeconds: 30
       volumes:
       - name: hostpath-var
         hostPath:

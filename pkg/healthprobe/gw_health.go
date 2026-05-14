@@ -17,16 +17,31 @@ import (
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 )
 
+const (
+	// DefaultLBProbeDrainDelay is the default time to wait after marking unhealthy before
+	// shutting down the HTTP server. This gives the Azure LB time to detect failed health
+	// probes and stop routing traffic to this node.
+	// With explicit LB probe config (5s interval, threshold 1), detection takes ~5s.
+	// We use 10s to provide margin for LB probe detection and connection draining.
+	DefaultLBProbeDrainDelay = 10 * time.Second
+)
+
 type LBProbeServer struct {
 	lock           sync.RWMutex
 	activeGateways map[string]bool
 	listenPort     int
+	drainDelay     time.Duration
+	shuttingDown   bool
 }
 
-func NewLBProbeServer(listenPort int) *LBProbeServer {
+func NewLBProbeServer(listenPort int, drainDelay time.Duration) *LBProbeServer {
+	if drainDelay <= 0 {
+		drainDelay = DefaultLBProbeDrainDelay
+	}
 	return &LBProbeServer{
 		activeGateways: make(map[string]bool),
 		listenPort:     listenPort,
+		drainDelay:     drainDelay,
 	}
 }
 
@@ -54,11 +69,25 @@ func (svr *LBProbeServer) Start(ctx context.Context) error {
 		}
 	}()
 
-	// Shutdown the server when stop is closed.
+	// Shutdown gracefully when context is cancelled:
+	// 1. Mark as shutting down so health probes return 503
+	// 2. Wait for the LB to detect unhealthy status (probe interval x threshold)
+	// 3. Gracefully shutdown the HTTP server
 	<-ctx.Done()
+	log.Info("Marking gateway lb health probe server as shutting down")
+	svr.lock.Lock()
+	svr.shuttingDown = true
+	svr.lock.Unlock()
+
+	// Wait for Azure LB to detect unhealthy probes.
+	log.Info("Waiting for LB probes to detect shutdown", "delay", svr.drainDelay)
+	time.Sleep(svr.drainDelay)
+
 	log.Info("Stopping gateway lb health probe server")
-	if err := httpServer.Close(); err != nil {
-		log.Error(err, "failed to close gateway lb health probe server")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		log.Error(err, "failed to gracefully shutdown gateway lb health probe server")
 		return err
 	}
 	return nil
@@ -101,10 +130,11 @@ func (svr *LBProbeServer) serveHTTP(resp http.ResponseWriter, req *http.Request)
 	gatewayUID := subPaths[2]
 
 	svr.lock.RLock()
+	stopping := svr.shuttingDown
 	_, ok := svr.activeGateways[gatewayUID]
 	svr.lock.RUnlock()
 
-	if !ok {
+	if stopping || !ok {
 		resp.WriteHeader(http.StatusServiceUnavailable)
 	} else {
 		resp.WriteHeader(http.StatusOK)
