@@ -122,7 +122,7 @@ func TestGatewayHealthServer_GracefulShutdownLifecycle(t *testing.T) {
 	// Cancel context (simulates SIGTERM)
 	cancel()
 
-	// The server should still be running during lbProbeDrainDelay,
+	// The server should still be running during lbProbeDrainDelaySeconds,
 	// but now returning 503 for all gateways
 	assert.Eventually(t, func() bool {
 		resp, err := http.Get(baseURL + "/gw/test-gw")
@@ -137,7 +137,7 @@ func TestGatewayHealthServer_GracefulShutdownLifecycle(t *testing.T) {
 	select {
 	case err := <-serverDone:
 		assert.Nil(t, err, "server should shut down without error")
-	case <-time.After(DefaultLBProbeDrainDelay + 10*time.Second):
+	case <-time.After(DefaultLBProbeDrainDelaySeconds + 10*time.Second):
 		t.Fatal("server did not shut down within expected time")
 	}
 }
