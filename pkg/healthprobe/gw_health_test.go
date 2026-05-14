@@ -100,7 +100,7 @@ func TestGatewayHealthServer_GracefulShutdownLifecycle(t *testing.T) {
 	listener, err := net.Listen("tcp", ":0")
 	assert.Nil(t, err)
 	port := listener.Addr().(*net.TCPAddr).Port
-	listener.Close()
+	listener.Close() //nolint:errcheck
 	svr.listenPort = port
 
 	serverDone := make(chan error, 1)
@@ -115,7 +115,7 @@ func TestGatewayHealthServer_GracefulShutdownLifecycle(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		resp.Body.Close()
+		resp.Body.Close() //nolint:errcheck
 		return resp.StatusCode == http.StatusOK
 	}, 3*time.Second, 50*time.Millisecond, "server should become ready and return 200")
 
@@ -129,7 +129,7 @@ func TestGatewayHealthServer_GracefulShutdownLifecycle(t *testing.T) {
 		if err != nil {
 			return false // server not yet processing the shutdown
 		}
-		resp.Body.Close()
+		resp.Body.Close() //nolint:errcheck
 		return resp.StatusCode == http.StatusServiceUnavailable
 	}, 3*time.Second, 50*time.Millisecond, "server should return 503 during shutdown drain")
 
@@ -137,7 +137,7 @@ func TestGatewayHealthServer_GracefulShutdownLifecycle(t *testing.T) {
 	select {
 	case err := <-serverDone:
 		assert.Nil(t, err, "server should shut down without error")
-	case <-time.After(DefaultLBProbeDrainDelaySeconds + 10*time.Second):
+	case <-time.After(DefaultLBProbeDrainDelay + 10*time.Second):
 		t.Fatal("server did not shut down within expected time")
 	}
 }
