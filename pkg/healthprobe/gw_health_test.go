@@ -137,7 +137,7 @@ func TestGatewayHealthServer_GracefulShutdownLifecycle(t *testing.T) {
 	select {
 	case err := <-serverDone:
 		assert.Nil(t, err, "server should shut down without error")
-	case <-time.After(lbProbeDrainDelay + 10*time.Second):
+	case <-time.After(DefaultLBProbeDrainDelay + 10*time.Second):
 		t.Fatal("server did not shut down within expected time")
 	}
 }
