@@ -18,12 +18,12 @@ import (
 )
 
 const (
-	// DefaultLBProbeDrainDelay is the default time to wait after marking unhealthy before
+	// DefaultLBProbeDrainDelaySeconds is the default time to wait after marking unhealthy before
 	// shutting down the HTTP server. This gives the Azure LB time to detect failed health
 	// probes and stop routing traffic to this node.
 	// Default Azure LB probe: 5s interval, 2 consecutive failures = 10s to mark down.
 	// We use 30s to provide ample margin for LB probe detection and connection draining.
-	DefaultLBProbeDrainDelay = 30 * time.Second
+	DefaultLBProbeDrainDelaySeconds = 30 * time.Second
 )
 
 type LBProbeServer struct {
@@ -36,7 +36,7 @@ type LBProbeServer struct {
 
 func NewLBProbeServer(listenPort int, drainDelay time.Duration) *LBProbeServer {
 	if drainDelay <= 0 {
-		drainDelay = DefaultLBProbeDrainDelay
+		drainDelay = DefaultLBProbeDrainDelaySeconds
 	}
 	return &LBProbeServer{
 		activeGateways: make(map[string]bool),
