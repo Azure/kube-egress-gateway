@@ -21,9 +21,9 @@ const (
 	// DefaultLBProbeDrainDelaySeconds is the default time to wait after marking unhealthy before
 	// shutting down the HTTP server. This gives the Azure LB time to detect failed health
 	// probes and stop routing traffic to this node.
-	// Default Azure LB probe: 5s interval, 2 consecutive failures = 10s to mark down.
-	// We use 30s to provide ample margin for LB probe detection and connection draining.
-	DefaultLBProbeDrainDelaySeconds = 30 * time.Second
+	// With explicit LB probe config (5s interval, threshold 1), detection takes ~5s.
+	// We use 10s to provide margin for LB probe detection and connection draining.
+	DefaultLBProbeDrainDelaySeconds = 10 * time.Second
 )
 
 type LBProbeServer struct {
@@ -71,7 +71,7 @@ func (svr *LBProbeServer) Start(ctx context.Context) error {
 
 	// Shutdown gracefully when context is cancelled:
 	// 1. Mark as shutting down so health probes return 503
-	// 2. Wait for the LB to detect unhealthy status (2x probe interval)
+	// 2. Wait for the LB to detect unhealthy status (probe interval x threshold)
 	// 3. Gracefully shutdown the HTTP server
 	<-ctx.Done()
 	log.Info("Marking gateway lb health probe server as shutting down")
@@ -130,11 +130,11 @@ func (svr *LBProbeServer) serveHTTP(resp http.ResponseWriter, req *http.Request)
 	gatewayUID := subPaths[2]
 
 	svr.lock.RLock()
-	shutting := svr.shuttingDown
+	stopping := svr.shuttingDown
 	_, ok := svr.activeGateways[gatewayUID]
 	svr.lock.RUnlock()
 
-	if shutting || !ok {
+	if stopping || !ok {
 		resp.WriteHeader(http.StatusServiceUnavailable)
 	} else {
 		resp.WriteHeader(http.StatusOK)
