@@ -51,14 +51,14 @@ func Execute() {
 }
 
 var (
-	scheme             = runtime.NewScheme()
-	setupLog           = ctrl.Log.WithName("setup")
-	metricsPort        int
-	probePort          int
-	gatewayLBProbePort int
-	lbProbeDrainDelaySeconds  int
-	secretNamespace    string
-	zapOpts            = zap.Options{
+	scheme                   = runtime.NewScheme()
+	setupLog                 = ctrl.Log.WithName("setup")
+	metricsPort              int
+	probePort                int
+	gatewayLBProbePort       int
+	lbProbeDrainDelaySeconds int
+	secretNamespace          string
+	zapOpts                  = zap.Options{
 		Development: true,
 	}
 )
