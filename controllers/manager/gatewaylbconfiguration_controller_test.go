@@ -957,9 +957,11 @@ func getExpectedLB() *network.LoadBalancer {
 				{
 					Name: to.Ptr(testLBConfigUID),
 					Properties: &network.ProbePropertiesFormat{
-						RequestPath: to.Ptr("/gw/" + testGWConfigUID),
-						Protocol:    to.Ptr(network.ProbeProtocolHTTP),
-						Port:        to.Ptr(int32(lbProbePort)),
+						RequestPath:       to.Ptr("/gw/" + testGWConfigUID),
+						Protocol:          to.Ptr(network.ProbeProtocolHTTP),
+						Port:              to.Ptr(int32(lbProbePort)),
+						ProbeThreshold:    to.Ptr(int32(1)),
+						IntervalInSeconds: to.Ptr(int32(5)),
 					},
 				},
 			},

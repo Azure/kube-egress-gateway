@@ -178,7 +178,7 @@ spec:
       nodeSelector:
         kubeegressgateway.azure.com/mode: "true"
       serviceAccountName: kube-egress-gateway-daemon-manager
-      terminationGracePeriodSeconds: 10
+      terminationGracePeriodSeconds: 30
       tolerations:
       - effect: NoSchedule
         key: kubeegressgateway.azure.com/mode
