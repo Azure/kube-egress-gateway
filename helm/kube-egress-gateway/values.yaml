@@ -23,8 +23,13 @@ gatewayCNIManager:
   # imageTag: ""
   imagePullPolicy: "IfNotPresent"
   grpcServerPort: 50051
+  # Cidrs that should bypass the egress gateway, e.g. intra-cluster traffic.
+  # The two link-local entries below (Azure IMDS and AKS node-local DNS) are
+  # node-local and must not be routed through the gateway VMSS; keep them
+  # unless you have a specific reason to remove them.
   exceptionCidrs:
-    - ""
+    - "169.254.169.254/32"
+    - "169.254.10.11/32"
   cniConfigFileName: "01-egressgateway.conflist"
   cniUninstallConfigMapName: "cni-uninstall"
   cniUninstall: false
