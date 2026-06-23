@@ -16,7 +16,7 @@ var (
 	GroupVersion = schema.GroupVersion{Group: "egressgateway.kubernetes.azure.com", Version: "v1alpha1"}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
-	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion}
+	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion} //nolint:staticcheck // scheme.Builder is deprecated but still functional; migrating to apimachinery scheme builder is out of scope for the dependency bump
 
 	// AddToScheme adds the types in this group-version to the given scheme.
 	AddToScheme = SchemeBuilder.AddToScheme
