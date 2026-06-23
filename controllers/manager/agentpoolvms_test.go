@@ -5,7 +5,7 @@ package manager
 import (
 	"testing"
 
-	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 )
