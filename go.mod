@@ -16,8 +16,8 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
-	github.com/onsi/ginkgo/v2 v2.31.0
-	github.com/onsi/gomega v1.42.0
+	github.com/onsi/ginkgo/v2 v2.32.0
+	github.com/onsi/gomega v1.42.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
@@ -37,9 +37,9 @@ require (
 	k8s.io/client-go v0.36.2
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/kubernetes v1.36.2
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.20.9
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.15.3
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.21.8
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.21.2
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.16.0
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.22.1
 	sigs.k8s.io/controller-runtime v0.24.1
 )
 
