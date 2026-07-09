@@ -23,6 +23,7 @@ import (
 
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/logger"
+	"github.com/Azure/kube-egress-gateway/pkg/metrics"
 )
 
 var ErrMainCNINotFound error = errors.New("no existing cni plugin configuration file found")
@@ -88,6 +89,7 @@ func (mgr *Manager) Start(ctx context.Context) error {
 		if errors.Is(err, ErrMainCNINotFound) {
 			log.Info("Main CNI config file is missing, continue to watch changes")
 		} else {
+			metrics.CNIManagerConfigOperationFailCount.WithLabelValues("install").Inc()
 			return err
 		}
 	}
@@ -103,6 +105,7 @@ func (mgr *Manager) Start(ctx context.Context) error {
 			}
 			log.Info("Detected changes in cni configuration directory, regenerating...", "change event", event)
 			if err := mgr.insertCNIPluginConf(); err != nil {
+				metrics.CNIManagerConfigOperationFailCount.WithLabelValues("regenerate").Inc()
 				log.Error(err, "failed to regenerate cni conf")
 			}
 		case err := <-mgr.cniConfWatcher.Errors:
@@ -111,6 +114,7 @@ func (mgr *Manager) Start(ctx context.Context) error {
 			}
 		case <-ctx.Done():
 			if err := mgr.removeCNIPluginConf(); err != nil {
+				metrics.CNIManagerConfigOperationFailCount.WithLabelValues("uninstall").Inc()
 				log.Error(err, "failed to remove cni configuration file on exit")
 			}
 			return nil

@@ -6,7 +6,10 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
@@ -15,6 +18,8 @@ import (
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	grpc_ctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.uber.org/zap"
@@ -42,6 +47,7 @@ import (
 	cniprotocol "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/logger"
+	"github.com/Azure/kube-egress-gateway/pkg/metrics"
 )
 
 // serveCmd represents the serve command
@@ -57,6 +63,7 @@ var (
 	exceptionCidrs            string
 	cniUninstallConfigMapName string
 	grpcPort                  int
+	metricsPort               int
 )
 
 func init() {
@@ -72,6 +79,7 @@ func init() {
 	// is called directly, e.g.:
 	// serveCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	serveCmd.Flags().IntVar(&grpcPort, "grpc-server-port", 50051, "The port the grpc server listens on.")
+	serveCmd.Flags().IntVar(&metricsPort, "metrics-bind-port", 8080, "The port the metric endpoint binds to.")
 	serveCmd.Flags().StringVar(&exceptionCidrs, "exception-cidrs", "", "Cidrs that should bypass egress gateway separated with ',', e.g. intra-cluster traffic")
 	serveCmd.Flags().StringVar(&confFileName, "cni-conf-file", "01-egressgateway.conflist", "Name of the new cni configuration file")
 	serveCmd.Flags().StringVar(&cniUninstallConfigMapName, "cni-uninstall-configmap-name", "cni-uninstall", "Name of the configmap that indicates whether to uninstall cni plugin or not, the configMap should be in the same namespace as the cniManager pod")
@@ -86,6 +94,14 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 	}
 	logger.SetDefaultLogger(zapr.NewLogger(zapLog))
 	logger := logger.GetLogger()
+
+	// Register metrics
+	prometheus.MustRegister(
+		metrics.CNIManagerPodEndpointOperationFailCount,
+		metrics.CNIManagerConfigOperationFailCount,
+		metrics.CNIManagerNodeTaintOperationFailCount,
+	)
+	grpc_prometheus.EnableHandlingTimeHistogram()
 
 	k8sCluster := getKubeCluster(ctx, logger)
 	k8sClient := k8sCluster.GetClient()
@@ -112,6 +128,26 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 			os.Exit(1)
 		}
 		return nil
+	})
+
+	// Start metrics HTTP server
+	metricsServer := &http.Server{
+		Addr:    ":" + strconv.Itoa(metricsPort),
+		Handler: promhttp.Handler(),
+	}
+	g.Go(func() error {
+		logger.Info("starting metrics server", "port", metricsPort)
+		if err := metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error(err, "metrics server failed")
+			return err
+		}
+		return nil
+	})
+	g.Go(func() error {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return metricsServer.Shutdown(shutdownCtx)
 	})
 
 	nicSvc := cnimanager.NewNicService(k8sClient)
@@ -237,6 +273,7 @@ func removeNodeTaintIfNeeded(obj interface{}, isReady func() bool, k8sClient cli
 				if err := clientretry.RetryOnConflict(clientretry.DefaultRetry, func() error {
 					return k8sClient.Update(context.Background(), newNode)
 				}); err != nil {
+					metrics.CNIManagerNodeTaintOperationFailCount.WithLabelValues(newNode.Name).Inc()
 					logger.Error(err, "failed to remove node taint", "node", newNode.Name)
 				}
 			} else {

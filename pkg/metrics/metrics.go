@@ -25,6 +25,31 @@ var (
 		},
 		[]string{"namespace", "operation", "subscription_id", "resource_group"},
 	)
+
+	// CNI Manager metrics
+	CNIManagerPodEndpointOperationFailCount = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "cnimanager_podendpoint_operation_failures_total",
+			Help: "Number of failed PodEndpoint operations in CNI manager",
+		},
+		[]string{"namespace", "operation", "pod"},
+	)
+
+	CNIManagerConfigOperationFailCount = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "cnimanager_cni_config_operation_failures_total",
+			Help: "Number of failed CNI configuration operations",
+		},
+		[]string{"operation"},
+	)
+
+	CNIManagerNodeTaintOperationFailCount = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "cnimanager_node_taint_operation_failures_total",
+			Help: "Number of failed node taint removal operations",
+		},
+		[]string{"node"},
+	)
 )
 
 type MetricsContext struct {
