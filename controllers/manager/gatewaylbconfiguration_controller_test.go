@@ -8,8 +8,8 @@ import (
 	"net/http"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
-	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
-	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v6"
+	compute "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7"
+	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
@@ -957,9 +957,11 @@ func getExpectedLB() *network.LoadBalancer {
 				{
 					Name: to.Ptr(testLBConfigUID),
 					Properties: &network.ProbePropertiesFormat{
-						RequestPath: to.Ptr("/gw/" + testGWConfigUID),
-						Protocol:    to.Ptr(network.ProbeProtocolHTTP),
-						Port:        to.Ptr(int32(lbProbePort)),
+						RequestPath:       to.Ptr("/gw/" + testGWConfigUID),
+						Protocol:          to.Ptr(network.ProbeProtocolHTTP),
+						Port:              to.Ptr(int32(lbProbePort)),
+						ProbeThreshold:    to.Ptr(int32(1)),
+						IntervalInSeconds: to.Ptr(int32(5)),
 					},
 				},
 			},

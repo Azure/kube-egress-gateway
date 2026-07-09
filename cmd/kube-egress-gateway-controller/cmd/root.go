@@ -164,7 +164,7 @@ func startControllers(cmd *cobra.Command, args []string) {
 	if err = (&controllers.StaticGatewayConfigurationReconciler{
 		Client:          mgr.GetClient(),
 		SecretNamespace: secretNamespace,
-		Recorder:        mgr.GetEventRecorderFor("staticGatewayConfiguration-controller"),
+		Recorder:        mgr.GetEventRecorderFor("staticGatewayConfiguration-controller"), //nolint:staticcheck // GetEventRecorderFor is deprecated but still functional; migrating to the new events API is out of scope for the dependency bump
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "StaticGatewayConfiguration")
 		os.Exit(1)
@@ -172,7 +172,7 @@ func startControllers(cmd *cobra.Command, args []string) {
 	if err = (&controllers.GatewayLBConfigurationReconciler{
 		Client:       mgr.GetClient(),
 		AzureManager: az,
-		Recorder:     mgr.GetEventRecorderFor("gatewayLBConfiguration-controller"),
+		Recorder:     mgr.GetEventRecorderFor("gatewayLBConfiguration-controller"), //nolint:staticcheck // GetEventRecorderFor is deprecated but still functional; migrating to the new events API is out of scope for the dependency bump
 		LBProbePort:  gatewayLBProbePort,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GatewayLBConfiguration")
@@ -181,7 +181,7 @@ func startControllers(cmd *cobra.Command, args []string) {
 	if err = (&controllers.GatewayVMConfigurationReconciler{
 		Client:       mgr.GetClient(),
 		AzureManager: az,
-		Recorder:     mgr.GetEventRecorderFor("gatewayVMConfiguration-controller"),
+		Recorder:     mgr.GetEventRecorderFor("gatewayVMConfiguration-controller"), //nolint:staticcheck // GetEventRecorderFor is deprecated but still functional; migrating to the new events API is out of scope for the dependency bump
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GatewayVMConfiguration")
 		os.Exit(1)
