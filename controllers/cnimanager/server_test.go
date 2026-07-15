@@ -7,6 +7,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -18,6 +19,7 @@ import (
 	current "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/controllers/cnimanager"
 	cniprotocol "github.com/Azure/kube-egress-gateway/pkg/cniprotocol/v1"
+	"github.com/Azure/kube-egress-gateway/pkg/metrics"
 )
 
 var _ = Describe("Server", func() {
@@ -29,6 +31,9 @@ var _ = Describe("Server", func() {
 	var gatewayProfile *current.StaticGatewayConfiguration
 	var pod *corev1.Pod
 	BeforeEach(func() {
+		// Reset metrics before each test
+		metrics.CNIManagerPodEndpointOperationFailCount.Reset()
+
 		fakeClientBuilder := fake.NewClientBuilder()
 		apischeme := runtime.NewScheme()
 		utilruntime.Must(clientgoscheme.AddToScheme(apischeme))
@@ -139,6 +144,7 @@ var _ = Describe("Server", func() {
 		})
 		When("gateway is not found", func() {
 			It("should return error and don't create pod endpoint", func() {
+				initialCount := testutil.CollectAndCount(metrics.CNIManagerPodEndpointOperationFailCount)
 				fakeClient.Delete(context.Background(), gatewayProfile) //nolint:errcheck
 				_, err := service.NicAdd(context.Background(), nicAddInputRequest)
 				Expect(err).To(HaveOccurred())
@@ -148,6 +154,9 @@ var _ = Describe("Server", func() {
 					Namespace: nicAddInputRequest.PodConfig.PodNamespace,
 				}, podEndpoint)
 				Expect(err).To(HaveOccurred())
+				// Verify metrics were NOT incremented (gateway retrieval failure happens before PodEndpoint operation)
+				finalCount := testutil.CollectAndCount(metrics.CNIManagerPodEndpointOperationFailCount)
+				Expect(finalCount).To(Equal(initialCount))
 			})
 		})
 	})
@@ -157,6 +166,18 @@ var _ = Describe("Server", func() {
 			It("should return nothing", func() {
 				_, err := service.NicDel(context.Background(), nicDelInputRequest)
 				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+	})
+
+	Context("metrics tracking", func() {
+		When("podendpoint operations succeed", func() {
+			It("should not increment failure counter", func() {
+				initialCount := testutil.CollectAndCount(metrics.CNIManagerPodEndpointOperationFailCount)
+				_, err := service.NicAdd(context.Background(), nicAddInputRequest)
+				Expect(err).NotTo(HaveOccurred())
+				finalCount := testutil.CollectAndCount(metrics.CNIManagerPodEndpointOperationFailCount)
+				Expect(finalCount).To(Equal(initialCount))
 			})
 		})
 	})
