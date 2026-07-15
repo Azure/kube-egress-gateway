@@ -1405,6 +1405,35 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				Expect(foundVMConfig.Status.EgressIpPrefix).To(Equal("1.2.3.4/31"))
 				assertEqualEvents([]string{"Normal ReconcileGatewayVMConfigurationSuccess GatewayVMConfiguration reconciled"}, recorder.Events)
 			})
+
+			It("should requeue after the periodic reconcile interval on successful reconcile", func() {
+				vmss := getConfiguredVMSSWithNameAndUID()
+				vmss.Tags = map[string]*string{
+					consts.AKSNodepoolTagKey:             to.Ptr("testgw"),
+					consts.AKSNodepoolIPPrefixSizeTagKey: to.Ptr("31"),
+				}
+				ipPrefix := &network.PublicIPPrefix{
+					Name: to.Ptr("prefix"),
+					ID:   to.Ptr("prefix"),
+					Properties: &network.PublicIPPrefixPropertiesFormat{
+						PrefixLength: to.Ptr(int32(31)),
+						IPPrefix:     to.Ptr("1.2.3.4/31"),
+					},
+				}
+				mockVMSSClient := az.VmssClient.(*mock_virtualmachinescalesetclient.MockInterface)
+				mockVMSSClient.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachineScaleSet{vmss}, nil)
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), "rg", "prefix", gomock.Any()).Return(ipPrefix, nil)
+				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), testRG, "egressgateway-testUID", gomock.Any()).Return(nil, &azcore.ResponseError{StatusCode: http.StatusNotFound})
+				mockVMSSVMClient := az.VmssVMClient.(*mock_virtualmachinescalesetvmclient.MockInterface)
+				mockVMSSVMClient.EXPECT().List(gomock.Any(), vmssRG, vmssName).Return([]*compute.VirtualMachineScaleSetVM{}, nil)
+				res, reconcileErr = r.Reconcile(context.TODO(), req)
+				Expect(reconcileErr).To(BeNil())
+				// A successful reconcile must requeue after the fixed interval so
+				// in-place VMSS NIC drift is repaired without a Node or CR event.
+				Expect(res).To(Equal(ctrl.Result{RequeueAfter: vmConfigReconcileInterval}))
+				assertEqualEvents([]string{"Normal ReconcileGatewayVMConfigurationSuccess GatewayVMConfiguration reconciled"}, recorder.Events)
+			})
 		})
 
 		When("deleting vmConfig with finalizer", func() {
