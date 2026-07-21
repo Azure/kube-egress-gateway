@@ -11,7 +11,7 @@ require (
 	github.com/containernetworking/plugins v1.9.1
 	github.com/coreos/go-iptables v0.8.0
 	github.com/fsnotify/fsnotify v1.10.1
-	github.com/go-logr/logr v1.4.3
+	github.com/go-logr/logr v1.4.4
 	github.com/go-logr/zapr v1.3.0
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
@@ -37,9 +37,9 @@ require (
 	k8s.io/client-go v0.36.2
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/kubernetes v1.36.2
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.21.4
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.21.5
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.16.0
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.22.3
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.22.4
 	sigs.k8s.io/controller-runtime v0.24.1
 )
 
