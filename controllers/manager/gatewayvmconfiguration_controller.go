@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
@@ -44,6 +45,13 @@ type GatewayVMConfigurationReconciler struct {
 	*azmanager.AzureManager
 	Recorder record.EventRecorder
 }
+
+// vmConfigReconcileInterval is the period between periodic requeues of a
+// successful GatewayVMConfiguration reconcile. It lets the controller detect and
+// repair instance-level NIC drift (for example, secondary ipconfigs stripped by
+// an out-of-band VMSS model rollout / in-place ManualUpgrade) even when no Node
+// or CR event is emitted.
+const vmConfigReconcileInterval = 5 * time.Minute
 
 var (
 	publicIPPrefixRE = regexp.MustCompile(`(?i).*/subscriptions/(.+)/resourceGroups/(.+)/providers/Microsoft.Network/publicIPPrefixes/(.+)`)
@@ -270,7 +278,10 @@ func (r *GatewayVMConfigurationReconciler) reconcile(
 
 	log.Info("GatewayVMConfiguration reconciled")
 	succeeded = true
-	return ctrl.Result{}, nil
+	// Requeue after a fixed interval so instance-level NIC drift is detected and
+	// repaired even when it is caused by an out-of-band, in-place VMSS model
+	// rollout that emits no Node Create/Delete or CR event.
+	return ctrl.Result{RequeueAfter: vmConfigReconcileInterval}, nil
 }
 
 func (r *GatewayVMConfigurationReconciler) ensureDeleted(
