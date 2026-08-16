@@ -3,7 +3,7 @@ module github.com/Azure/kube-egress-gateway
 go 1.26.2
 
 require (
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.22.0
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7 v7.3.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9 v9.0.0
@@ -16,7 +16,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
-	github.com/onsi/ginkgo/v2 v2.32.0
+	github.com/onsi/ginkgo/v2 v2.32.1
 	github.com/onsi/gomega v1.42.1
 	github.com/prometheus/client_golang v1.24.1
 	github.com/spf13/cobra v1.10.2
@@ -37,9 +37,9 @@ require (
 	k8s.io/client-go v0.36.3
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/kubernetes v1.36.3
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.21.6
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.21.7
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.16.1
-	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.22.6
+	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.22.7
 	sigs.k8s.io/controller-runtime v0.24.1
 )
 
