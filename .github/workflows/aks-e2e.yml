@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v7.0.0
 
       - name: Azure Login with UAMI
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
