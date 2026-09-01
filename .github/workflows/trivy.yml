@@ -43,7 +43,7 @@ jobs:
           make docker-build
 
       - name: Run Trivy scanner for controller
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         if: success() || failure()
         with:
           image-ref: 'local/kube-egress-gateway-controller:${{ github.sha }}'
@@ -57,12 +57,12 @@ jobs:
           TRIVY_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-db 
           TRIVY_JAVA_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-java-db
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@5d4e8d1aca955e8d8589aabd499c5cae939e33c7 # v3.29.5
+        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
         with:
           sarif_file: 'trivy-kube-egress-gateway-controller-results.sarif'
           category: kube-egress-gateway-controller-image
       - name: Run Trivy scanner for daemon
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         if: success() || failure()
         with:
           image-ref: 'local/kube-egress-gateway-daemon:${{ github.sha }}'
@@ -76,12 +76,12 @@ jobs:
           TRIVY_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-db 
           TRIVY_JAVA_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-java-db
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@5d4e8d1aca955e8d8589aabd499c5cae939e33c7 # v3.29.5
+        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
         with:
           sarif_file: 'trivy-kube-egress-gateway-daemon-results.sarif'
           category: kube-egress-gateway-daemon-image
       - name: Run Trivy scanner for cnimanager
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         if: success() || failure()
         with:
           image-ref: 'local/kube-egress-gateway-cnimanager:${{ github.sha }}'
@@ -95,12 +95,12 @@ jobs:
           TRIVY_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-db 
           TRIVY_JAVA_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-java-db
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@5d4e8d1aca955e8d8589aabd499c5cae939e33c7 # v3.29.5
+        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
         with:
           sarif_file: 'trivy-kube-egress-gateway-cnimanager-results.sarif'
           category: kube-egress-gateway-cnimanager-image
       - name: Run Trivy scanner for cni
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         if: success() || failure()
         with:
           image-ref: 'local/kube-egress-gateway-cni:${{ github.sha }}'
@@ -114,12 +114,12 @@ jobs:
           TRIVY_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-db 
           TRIVY_JAVA_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-java-db
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@5d4e8d1aca955e8d8589aabd499c5cae939e33c7 # v3.29.5
+        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
         with:
           sarif_file: 'trivy-kube-egress-gateway-cni-results.sarif'
           category: kube-egress-gateway-cni
       - name: Run Trivy scanner for cni-ipam
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         if: success() || failure()
         with:
           image-ref: 'local/kube-egress-gateway-cni-ipam:${{ github.sha }}'
@@ -133,12 +133,12 @@ jobs:
           TRIVY_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-db 
           TRIVY_JAVA_DB_REPOSITORY: mcr.microsoft.com/mirror/ghcr/aquasecurity/trivy-java-db
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@5d4e8d1aca955e8d8589aabd499c5cae939e33c7 # v3.29.5
+        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
         with:
           sarif_file: 'trivy-kube-egress-gateway-cni-ipam-results.sarif'
           category: kube-egress-gateway-cni-ipam
       - name: Run Trivy vulnerability scanner in repo mode
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         if: success() || failure()
         with:
           scan-type: 'fs'
