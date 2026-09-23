@@ -37,7 +37,9 @@ import (
 const (
 	pubK2        = "xUgp0rzI2lqa78w9vRTfCTx8UQzZacu4WXXKw86Oy0c="
 	privK2       = "OGDxE0+PqdflLqQxdlHigfC7ZKtEh2VMxIElq4RpZWc="
+	podIPAddress = "10.0.0.25"
 	podIPAddrNet = "10.0.0.25/32"
+	podUID       = "test-pod-uid"
 )
 
 var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
@@ -47,6 +49,7 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 		res          reconcile.Result
 		reconcileErr error
 		podEndpoint  *egressgatewayv1alpha1.PodEndpoint
+		pod          *corev1.Pod
 		gwConfig     *egressgatewayv1alpha1.StaticGatewayConfiguration
 		mclient      *mockwgctrlwrapper.MockClient
 		node         = &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: testNodeName}}
@@ -63,15 +66,45 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 	}
 
 	getTestPodEndpoint := func() *egressgatewayv1alpha1.PodEndpoint {
+		controller := true
+		blockOwnerDeletion := true
 		return &egressgatewayv1alpha1.PodEndpoint{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      testName,
-				Namespace: testNamespace,
+				Name:       testName,
+				Namespace:  testNamespace,
+				Generation: 1,
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion:         corev1.SchemeGroupVersion.String(),
+						Kind:               "Pod",
+						Name:               testName,
+						UID:                podUID,
+						Controller:         &controller,
+						BlockOwnerDeletion: &blockOwnerDeletion,
+					},
+				},
 			},
 			Spec: egressgatewayv1alpha1.PodEndpointSpec{
 				StaticGatewayConfiguration: testName,
 				PodIpAddress:               podIPAddrNet,
 				PodPublicKey:               pubK,
+			},
+			Status: egressgatewayv1alpha1.PodEndpointStatus{
+				PodUID:             podUID,
+				ObservedGeneration: 1,
+			},
+		}
+	}
+
+	getTestPod := func() *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      testName,
+				Namespace: testNamespace,
+				UID:       podUID,
+			},
+			Status: corev1.PodStatus{
+				PodIP: podIPAddress,
 			},
 		}
 	}
@@ -103,6 +136,7 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 				},
 			}
 			podEndpoint = getTestPodEndpoint()
+			pod = getTestPod()
 			gwConfig = getTestGwConfig()
 			nodeMeta = &imds.InstanceMetadata{
 				Compute: &imds.ComputeMetadata{
@@ -114,7 +148,7 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 
 		When("gwConfig is not found", func() {
 			It("should report error", func() {
-				getTestReconciler(podEndpoint)
+				getTestReconciler(podEndpoint, pod)
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 
 				Expect(apierrors.IsNotFound(reconcileErr)).To(BeTrue())
@@ -124,13 +158,90 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 
 		When("gwConfig does not apply to the node", func() {
 			It("should not do anything", func() {
-				getTestReconciler(podEndpoint, gwConfig)
+				getTestReconciler(podEndpoint, pod, gwConfig)
 				res, reconcileErr = r.Reconcile(context.TODO(), req)
 
 				Expect(reconcileErr).To(BeNil())
 				Expect(res).To(Equal(ctrl.Result{}))
 			})
 		})
+	})
+
+	Context("Validate PodEndpoint", func() {
+		BeforeEach(func() {
+			podEndpoint = getTestPodEndpoint()
+			pod = getTestPod()
+		})
+
+		It("should accept a CNI-attested endpoint for the live Pod", func() {
+			getTestReconciler(pod)
+			Expect(r.validatePodEndpoint(context.TODO(), podEndpoint)).To(Succeed())
+		})
+
+		It("should accept the CNI-attested IP while Pod status is not populated", func() {
+			pod.Status.PodIP = ""
+			getTestReconciler(pod)
+			Expect(r.validatePodEndpoint(context.TODO(), podEndpoint)).To(Succeed())
+		})
+
+		It("should reject an unattested spec generation", func() {
+			podEndpoint.Generation++
+			getTestReconciler(pod)
+			Expect(errors.Is(r.validatePodEndpoint(context.TODO(), podEndpoint), errInvalidPodEndpoint)).To(BeTrue())
+		})
+
+		It("should reject a changed owner reference", func() {
+			podEndpoint.OwnerReferences[0].UID = "different-pod-uid"
+			getTestReconciler(pod)
+			Expect(errors.Is(r.validatePodEndpoint(context.TODO(), podEndpoint), errInvalidPodEndpoint)).To(BeTrue())
+		})
+
+		It("should reject a recreated Pod", func() {
+			pod.UID = "replacement-pod-uid"
+			getTestReconciler(pod)
+			Expect(errors.Is(r.validatePodEndpoint(context.TODO(), podEndpoint), errInvalidPodEndpoint)).To(BeTrue())
+		})
+
+		It("should reject a missing Pod", func() {
+			getTestReconciler()
+			Expect(errors.Is(r.validatePodEndpoint(context.TODO(), podEndpoint), errInvalidPodEndpoint)).To(BeTrue())
+		})
+
+		It("should reject a terminating Pod", func() {
+			now := metav1.Now()
+			pod.DeletionTimestamp = &now
+			pod.Finalizers = []string{"test-finalizer"}
+			getTestReconciler(pod)
+			Expect(errors.Is(r.validatePodEndpoint(context.TODO(), podEndpoint), errInvalidPodEndpoint)).To(BeTrue())
+		})
+
+		It("should reject an IP not assigned to the Pod", func() {
+			pod.Status.PodIP = "10.0.0.26"
+			getTestReconciler(pod)
+			Expect(errors.Is(r.validatePodEndpoint(context.TODO(), podEndpoint), errInvalidPodEndpoint)).To(BeTrue())
+		})
+
+		It("should accept an IPv4 address from PodIPs", func() {
+			pod.Status.PodIP = "2001:db8::1"
+			pod.Status.PodIPs = []corev1.PodIP{
+				{IP: "2001:db8::1"},
+				{IP: podIPAddress},
+			}
+			getTestReconciler(pod)
+			Expect(r.validatePodEndpoint(context.TODO(), podEndpoint)).To(Succeed())
+		})
+
+		DescribeTable("should reject non-canonical or non-IPv4 host CIDRs",
+			func(podIP string) {
+				podEndpoint.Spec.PodIpAddress = podIP
+				getTestReconciler(pod)
+				Expect(errors.Is(r.validatePodEndpoint(context.TODO(), podEndpoint), errInvalidPodEndpoint)).To(BeTrue())
+			},
+			Entry("plain address", podIPAddress),
+			Entry("IPv4 network", "10.0.0.0/24"),
+			Entry("non-canonical host address", "10.0.0.25/032"),
+			Entry("IPv6 host", "2001:db8::1/128"),
+		)
 	})
 
 	Context("Test reconcile", func() {
@@ -142,6 +253,7 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 				},
 			}
 			podEndpoint = getTestPodEndpoint()
+			pod = getTestPod()
 			gwConfig = getTestGwConfig()
 			nodeMeta = &imds.InstanceMetadata{
 				Compute: &imds.ComputeMetadata{
@@ -151,7 +263,7 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 			}
 			_ = os.Setenv(consts.PodNamespaceEnvKey, testPodNamespace)
 			_ = os.Setenv(consts.NodeNameEnvKey, testNodeName)
-			getTestReconciler(podEndpoint, gwConfig, node)
+			getTestReconciler(podEndpoint, pod, gwConfig, node)
 		})
 
 		AfterEach(func() {
@@ -457,11 +569,78 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 			Expect(gwStatus.Spec.ReadyPeerConfigurations).To(BeEmpty())
 		})
 
+		It("should clean peer and route when the PodEndpoint binding is invalid", func() {
+			podEndpoint = getTestPodEndpoint()
+			podEndpoint.Generation++
+			pod = getTestPod()
+			gwStatus := &egressgatewayv1alpha1.GatewayStatus{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testNodeName,
+					Namespace: testPodNamespace,
+				},
+				Spec: egressgatewayv1alpha1.GatewayStatusSpec{
+					ReadyPeerConfigurations: []egressgatewayv1alpha1.PeerConfiguration{
+						{
+							PodEndpoint:   fmt.Sprintf("%s/%s", testNamespace, testName),
+							PublicKey:     pubK,
+							InterfaceName: "wg-6000",
+						},
+					},
+				},
+			}
+			gwConfig = getTestGwConfig()
+			getTestReconciler(podEndpoint, pod, gwConfig, gwStatus)
+			mns := r.NetNS.(*mocknetnswrapper.MockInterface)
+			mwg := r.WgCtrl.(*mockwgctrlwrapper.MockInterface)
+			mnl := r.Netlink.(*mocknetlinkwrapper.MockInterface)
+			wg0 := &netlink.Wireguard{}
+			gwns := &mocknetnswrapper.MockNetNS{Name: consts.GatewayNetnsName}
+			pk, _ := wgtypes.ParseKey(pubK)
+			device := &wgtypes.Device{
+				Peers: []wgtypes.Peer{
+					{
+						PublicKey: pk,
+						AllowedIPs: []net.IPNet{
+							*getIPNet(podIPAddrNet),
+						},
+					},
+				},
+			}
+			config := wgtypes.Config{
+				Peers: []wgtypes.PeerConfig{
+					{
+						PublicKey: pk,
+						Remove:    true,
+					},
+				},
+			}
+			gomock.InOrder(
+				mns.EXPECT().GetNS(consts.GatewayNetnsName).Return(gwns, nil),
+				mwg.EXPECT().New().Return(mclient, nil),
+				mclient.EXPECT().Device("wg-6000").Return(device, nil),
+				mnl.EXPECT().LinkByName("wg-6000").Return(wg0, nil),
+				mnl.EXPECT().RouteList(wg0, netlink.FAMILY_ALL).Return([]netlink.Route{{Dst: getIPNet(podIPAddrNet)}}, nil),
+				mnl.EXPECT().RouteDel(&netlink.Route{Dst: getIPNet(podIPAddrNet)}).Return(nil),
+				mclient.EXPECT().ConfigureDevice("wg-6000", config).Return(nil),
+				mclient.EXPECT().Close().Return(nil),
+			)
+
+			_, reconcileErr = r.Reconcile(context.TODO(), reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: testName, Namespace: testNamespace},
+			})
+			Expect(reconcileErr).To(BeNil())
+			Expect(getGatewayStatus(r.Client, gwStatus)).To(Succeed())
+			Expect(gwStatus.Spec.ReadyPeerConfigurations).To(BeEmpty())
+		})
+
 		It("should not clean existing peer and route", func() {
 			podEndpoint = getTestPodEndpoint()
 			podEndpoint.Name = testName + "a"
+			podEndpoint.OwnerReferences[0].Name = podEndpoint.Name
+			pod = getTestPod()
+			pod.Name = podEndpoint.Name
 			gwConfig = getTestGwConfig()
-			getTestReconciler(podEndpoint, gwConfig)
+			getTestReconciler(podEndpoint, pod, gwConfig)
 			mns := r.NetNS.(*mocknetnswrapper.MockInterface)
 			mwg := r.WgCtrl.(*mockwgctrlwrapper.MockInterface)
 			gwns := &mocknetnswrapper.MockNetNS{Name: consts.GatewayNetnsName}
@@ -487,6 +666,11 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 		})
 
 		It("should handle multiple gateway namespaces properly", func() {
+			podEndpoint := getTestPodEndpoint()
+			podEndpoint.Name = testName + "a"
+			podEndpoint.OwnerReferences[0].Name = podEndpoint.Name
+			pod := getTestPod()
+			pod.Name = podEndpoint.Name
 			objects := []runtime.Object{
 				getTestGwConfig(),
 				&egressgatewayv1alpha1.StaticGatewayConfiguration{
@@ -504,17 +688,8 @@ var _ = Describe("Daemon PodEndpoint controller unit tests", func() {
 					},
 					Status: getTestGwConfigStatus(),
 				},
-				&egressgatewayv1alpha1.PodEndpoint{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      testName + "a",
-						Namespace: testNamespace,
-					},
-					Spec: egressgatewayv1alpha1.PodEndpointSpec{
-						StaticGatewayConfiguration: testName,
-						PodIpAddress:               "10.0.0.1",
-						PodPublicKey:               pubK,
-					},
-				},
+				podEndpoint,
+				pod,
 			}
 			getTestReconciler(objects...)
 			mns := r.NetNS.(*mocknetnswrapper.MockInterface)

@@ -5,6 +5,7 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -18,11 +19,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -34,6 +37,8 @@ import (
 )
 
 var _ reconcile.Reconciler = &PodEndpointReconciler{}
+
+var errInvalidPodEndpoint = errors.New("invalid PodEndpoint")
 
 // PodEndpointReconciler reconciles gateway node network according to a PodEndpoint object
 type PodEndpointReconciler struct {
@@ -89,6 +94,17 @@ func (r *PodEndpointReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
+	if err := r.validatePodEndpoint(ctx, podEndpoint); err != nil {
+		if !errors.Is(err, errInvalidPodEndpoint) {
+			return ctrl.Result{}, err
+		}
+		log.Error(err, "rejecting invalid PodEndpoint")
+		if cleanupErr := r.cleanUp(ctx); cleanupErr != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to revoke invalid PodEndpoint state: %w", cleanupErr)
+		}
+		return ctrl.Result{}, nil
+	}
+
 	gwConfigKey := types.NamespacedName{
 		Namespace: podEndpoint.Namespace,
 		Name:      podEndpoint.Spec.StaticGatewayConfiguration,
@@ -96,11 +112,18 @@ func (r *PodEndpointReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// Fetch the StaticGatewayConfiguration instance.
 	gwConfig := &egressgatewayv1alpha1.StaticGatewayConfiguration{}
 	if err := r.Get(ctx, gwConfigKey, gwConfig); err != nil {
+		if apierrors.IsNotFound(err) {
+			if cleanupErr := r.cleanUp(ctx); cleanupErr != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to revoke PodEndpoint state for missing StaticGatewayConfiguration: %w", cleanupErr)
+			}
+		}
 		return ctrl.Result{}, fmt.Errorf("failed to fetch StaticGatewayConfiguration(%s/%s): %w", gwConfigKey.Namespace, gwConfigKey.Name, err)
 	}
 
 	if !applyToNode(gwConfig) {
-		// gwConfig does not apply to this node
+		if err := r.cleanUp(ctx); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to revoke PodEndpoint state from this node: %w", err)
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -113,11 +136,34 @@ func (r *PodEndpointReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.Netlink = netlinkwrapper.NewNetLink()
 	r.NetNS = netnswrapper.NewNetNS()
 	r.WgCtrl = wgctrlwrapper.NewWgCtrl()
-	controller, err := ctrl.NewControllerManagedBy(mgr).For(&egressgatewayv1alpha1.PodEndpoint{}).Build(r)
+	controller, err := ctrl.NewControllerManagedBy(mgr).
+		For(&egressgatewayv1alpha1.PodEndpoint{}).
+		Watches(&corev1.Pod{}, handler.EnqueueRequestsFromMapFunc(func(_ context.Context, pod client.Object) []reconcile.Request {
+			return []reconcile.Request{{NamespacedName: client.ObjectKeyFromObject(pod)}}
+		}), builder.WithPredicates(predicate.Funcs{
+			CreateFunc: func(e event.CreateEvent) bool {
+				return usesStaticEgressGateway(e.Object)
+			},
+			UpdateFunc: func(e event.UpdateEvent) bool {
+				return usesStaticEgressGateway(e.ObjectOld) || usesStaticEgressGateway(e.ObjectNew)
+			},
+			DeleteFunc: func(e event.DeleteEvent) bool {
+				return usesStaticEgressGateway(e.Object)
+			},
+			GenericFunc: func(event.GenericEvent) bool {
+				return false
+			},
+		})).
+		Build(r)
 	if err != nil {
 		return err
 	}
 	return controller.Watch(source.Channel(r.TickerEvents, &handler.EnqueueRequestForObject{}))
+}
+
+func usesStaticEgressGateway(object client.Object) bool {
+	_, found := object.GetAnnotations()[consts.CNIGatewayAnnotationKey]
+	return found
 }
 
 func (r *PodEndpointReconciler) reconcile(
@@ -219,6 +265,15 @@ func (r *PodEndpointReconciler) cleanUp(ctx context.Context) error {
 	// map: gw-namespace-name -> set of peer public keys
 	peerMap := make(map[string]map[string]struct{})
 	for _, podEndpoint := range podEndpointList.Items {
+		podEndpoint := podEndpoint
+		if err := r.validatePodEndpoint(ctx, &podEndpoint); err != nil {
+			if !errors.Is(err, errInvalidPodEndpoint) {
+				return fmt.Errorf("failed to validate PodEndpoint %s/%s: %w", podEndpoint.Namespace, podEndpoint.Name, err)
+			}
+			log.Error(err, "excluding invalid PodEndpoint from expected WireGuard peers",
+				"namespace", podEndpoint.Namespace, "name", podEndpoint.Name)
+			continue
+		}
 		if wglinkName, ok := gwConfigMap[strings.ToLower(fmt.Sprintf("%s/%s", podEndpoint.Namespace, podEndpoint.Spec.StaticGatewayConfiguration))]; ok {
 			if _, exists := peerMap[wglinkName]; !exists {
 				peerMap[wglinkName] = make(map[string]struct{})
@@ -355,6 +410,104 @@ func (r *PodEndpointReconciler) deleteWireguardPeerRoutes(
 	}
 
 	return nil
+}
+
+// validatePodEndpoint prevents namespace-scoped PodEndpoint writers from injecting arbitrary
+// WireGuard peers and routes. Before the daemon applies the endpoint, it verifies that:
+//   - the CNI manager attested the current spec generation and Pod UID;
+//   - the controller owner reference identifies that same Pod;
+//   - the Pod still exists with the attested UID and is not terminating;
+//   - the claimed address is a canonical IPv4 /32; and
+//   - the claimed address matches the Pod IP reported by Kubernetes when available.
+func (r *PodEndpointReconciler) validatePodEndpoint(
+	ctx context.Context,
+	podEndpoint *egressgatewayv1alpha1.PodEndpoint,
+) error {
+	if podEndpoint.Status.PodUID == "" {
+		return fmt.Errorf("%w: status.podUID is empty", errInvalidPodEndpoint)
+	}
+	if podEndpoint.Generation <= 0 || podEndpoint.Status.ObservedGeneration != podEndpoint.Generation {
+		return fmt.Errorf(
+			"%w: generation %d has not been attested, observed generation is %d",
+			errInvalidPodEndpoint,
+			podEndpoint.Generation,
+			podEndpoint.Status.ObservedGeneration,
+		)
+	}
+
+	controllerRef := metav1.GetControllerOf(podEndpoint)
+	if controllerRef == nil ||
+		controllerRef.APIVersion != corev1.SchemeGroupVersion.String() ||
+		controllerRef.Kind != "Pod" ||
+		controllerRef.Name != podEndpoint.Name ||
+		controllerRef.UID != podEndpoint.Status.PodUID {
+		return fmt.Errorf("%w: controller owner reference does not match the attested Pod", errInvalidPodEndpoint)
+	}
+
+	pod := &corev1.Pod{}
+	podKey := types.NamespacedName{Namespace: podEndpoint.Namespace, Name: podEndpoint.Name}
+	if err := r.Get(ctx, podKey, pod); err != nil {
+		if apierrors.IsNotFound(err) {
+			return fmt.Errorf("%w: Pod %s/%s does not exist", errInvalidPodEndpoint, podKey.Namespace, podKey.Name)
+		}
+		return fmt.Errorf("failed to fetch Pod %s/%s: %w", podKey.Namespace, podKey.Name, err)
+	}
+	if !pod.DeletionTimestamp.IsZero() {
+		return fmt.Errorf("%w: Pod %s/%s is terminating", errInvalidPodEndpoint, pod.Namespace, pod.Name)
+	}
+	if pod.UID != podEndpoint.Status.PodUID {
+		return fmt.Errorf(
+			"%w: live Pod UID %s does not match attested UID %s",
+			errInvalidPodEndpoint,
+			pod.UID,
+			podEndpoint.Status.PodUID,
+		)
+	}
+
+	podIP, err := parseCanonicalPodIPv4CIDR(podEndpoint.Spec.PodIpAddress)
+	if err != nil {
+		return fmt.Errorf("%w: %v", errInvalidPodEndpoint, err)
+	}
+	if len(pod.Status.PodIPs) > 0 {
+		for _, assignedIP := range pod.Status.PodIPs {
+			if assignedIP.IP == podIP.String() {
+				return nil
+			}
+		}
+		return fmt.Errorf(
+			"%w: endpoint IP %s is not assigned to Pod %s/%s",
+			errInvalidPodEndpoint,
+			podIP,
+			pod.Namespace,
+			pod.Name,
+		)
+	}
+	if pod.Status.PodIP != "" && pod.Status.PodIP != podIP.String() {
+		return fmt.Errorf(
+			"%w: endpoint IP %s does not match Pod IP %s",
+			errInvalidPodEndpoint,
+			podIP,
+			pod.Status.PodIP,
+		)
+	}
+	return nil
+}
+
+func parseCanonicalPodIPv4CIDR(value string) (net.IP, error) {
+	ip, ipNet, err := net.ParseCIDR(value)
+	if err != nil {
+		return nil, fmt.Errorf("pod IP address %q is not a valid CIDR: %w", value, err)
+	}
+	ipv4 := ip.To4()
+	ones, bits := ipNet.Mask.Size()
+	if ipv4 == nil || bits != net.IPv4len*8 || ones != bits {
+		return nil, fmt.Errorf("pod IP address %q must be an IPv4 /32", value)
+	}
+	canonical := ipv4.String() + "/32"
+	if value != canonical {
+		return nil, fmt.Errorf("pod IP address %q must use canonical form %q", value, canonical)
+	}
+	return ipv4, nil
 }
 
 // updateGatewayNodeStatus updates the GatewayStatus ReadyPeerConfigurations list based on the provided peerConfigs.
