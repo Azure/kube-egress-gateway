@@ -4,7 +4,8 @@ package cnimanager
 
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations,verbs=get;list;watch
 //+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=staticgatewayconfigurations/status,verbs=get;
-//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=podendpoints,verbs=list;watch;create;update;patch;delete;
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=podendpoints,verbs=get;list;watch;create;update;patch;delete;
+//+kubebuilder:rbac:groups=egressgateway.kubernetes.azure.com,resources=podendpoints/status,verbs=get;update;patch;
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch
 //+kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch;update;patch
@@ -17,6 +18,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clientretry "k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -64,6 +66,21 @@ func (s *NicService) NicAdd(ctx context.Context, in *cniprotocol.NicAddRequest) 
 			in.GetPodConfig().GetPodName(),
 		).Inc()
 		return nil, status.Errorf(codes.Unknown, "failed to update PodEndpoint %s/%s: %s", in.GetPodConfig().GetPodNamespace(), in.GetPodConfig().GetPodName(), err)
+	}
+	if err := clientretry.RetryOnConflict(clientretry.DefaultRetry, func() error {
+		if err := s.k8sClient.Get(ctx, client.ObjectKeyFromObject(podEndpoint), podEndpoint); err != nil {
+			return err
+		}
+		podEndpoint.Status.PodUID = pod.UID
+		podEndpoint.Status.ObservedGeneration = podEndpoint.Generation
+		return s.k8sClient.Status().Update(ctx, podEndpoint)
+	}); err != nil {
+		metrics.CNIManagerPodEndpointOperationFailCount.WithLabelValues(
+			in.GetPodConfig().GetPodNamespace(),
+			"attest",
+			in.GetPodConfig().GetPodName(),
+		).Inc()
+		return nil, status.Errorf(codes.Unknown, "failed to attest PodEndpoint %s/%s: %s", in.GetPodConfig().GetPodNamespace(), in.GetPodConfig().GetPodName(), err)
 	}
 
 	defaultRoute := cniprotocol.DefaultRoute_DEFAULT_ROUTE_STATIC_EGRESS_GATEWAY
