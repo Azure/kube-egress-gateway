@@ -219,6 +219,20 @@ func (mr *MockInterfaceMockRecorder) LinkSetUp(link interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkSetUp", reflect.TypeOf((*MockInterface)(nil).LinkSetUp), link)
 }
 
+// RouteAdd mocks base method.
+func (m *MockInterface) RouteAdd(route *netlink.Route) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RouteAdd", route)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RouteAdd indicates an expected call of RouteAdd.
+func (mr *MockInterfaceMockRecorder) RouteAdd(route interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RouteAdd", reflect.TypeOf((*MockInterface)(nil).RouteAdd), route)
+}
+
 // RouteDel mocks base method.
 func (m *MockInterface) RouteDel(route *netlink.Route) error {
 	m.ctrl.T.Helper()

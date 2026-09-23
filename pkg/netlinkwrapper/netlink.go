@@ -31,6 +31,8 @@ type Interface interface {
 	AddrDel(link netlink.Link, addr *netlink.Addr) error
 	// AddrReplace replaces (or, if not present, adds) an IP address on a link device
 	AddrReplace(link netlink.Link, addr *netlink.Addr) error
+	// RouteAdd adds a route to the system without replacing an existing route
+	RouteAdd(route *netlink.Route) error
 	// RouteReplace adds a route to the system
 	RouteReplace(route *netlink.Route) error
 	// RouteDel deletes a route from the system
@@ -97,6 +99,10 @@ func (*nl) AddrDel(link netlink.Link, addr *netlink.Addr) error {
 
 func (*nl) AddrReplace(link netlink.Link, addr *netlink.Addr) error {
 	return netlink.AddrReplace(link, addr)
+}
+
+func (*nl) RouteAdd(route *netlink.Route) error {
+	return netlink.RouteAdd(route)
 }
 
 func (*nl) RouteReplace(route *netlink.Route) error {
