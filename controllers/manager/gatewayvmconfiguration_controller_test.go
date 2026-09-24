@@ -248,6 +248,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 			It("should return error if prefix returned does not have expected ip prefix length", func() {
 				prefix := &network.PublicIPPrefix{
 					Name:       to.Ptr("prefix"),
+					Tags:       map[string]*string{consts.PublicIPPrefixAllowedNamespacesTagKey: to.Ptr("*")},
 					Properties: &network.PublicIPPrefixPropertiesFormat{PrefixLength: to.Ptr(int32(30))},
 				}
 				vmConfig.Spec.PublicIpPrefixId = "/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix"
@@ -257,10 +258,42 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				Expect(err).To(Equal(fmt.Errorf("provided public ip prefix has invalid length(30), required(31)")))
 			})
 
+			It("should return error if prefix is not authorized for the namespace (no tag)", func() {
+				prefix := &network.PublicIPPrefix{
+					Name: to.Ptr("prefix"),
+					Properties: &network.PublicIPPrefixPropertiesFormat{
+						PrefixLength: to.Ptr(int32(31)),
+						IPPrefix:     to.Ptr("1.2.3.4/31"),
+					},
+				}
+				vmConfig.Spec.PublicIpPrefixId = "/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix"
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), "rg", "prefix", gomock.Any()).Return(prefix, nil)
+				_, _, _, err := r.ensurePublicIPPrefix(context.TODO(), 31, vmConfig)
+				Expect(err).To(Equal(fmt.Errorf("public ip prefix(/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix) is not authorized for namespace %s", testNamespace)))
+			})
+
+			It("should return error if prefix tag does not list the namespace", func() {
+				prefix := &network.PublicIPPrefix{
+					Name: to.Ptr("prefix"),
+					Tags: map[string]*string{consts.PublicIPPrefixAllowedNamespacesTagKey: to.Ptr("other-ns")},
+					Properties: &network.PublicIPPrefixPropertiesFormat{
+						PrefixLength: to.Ptr(int32(31)),
+						IPPrefix:     to.Ptr("1.2.3.4/31"),
+					},
+				}
+				vmConfig.Spec.PublicIpPrefixId = "/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix"
+				mockPublicIPPrefixClient := az.PublicIPPrefixClient.(*mock_publicipprefixclient.MockInterface)
+				mockPublicIPPrefixClient.EXPECT().Get(gomock.Any(), "rg", "prefix", gomock.Any()).Return(prefix, nil)
+				_, _, _, err := r.ensurePublicIPPrefix(context.TODO(), 31, vmConfig)
+				Expect(err).To(Equal(fmt.Errorf("public ip prefix(/subscriptions/testSub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix) is not authorized for namespace %s", testNamespace)))
+			})
+
 			It("should return valid provided public ip prefix", func() {
 				prefix := &network.PublicIPPrefix{
 					Name: to.Ptr("prefix"),
 					ID:   to.Ptr("prefix"),
+					Tags: map[string]*string{consts.PublicIPPrefixAllowedNamespacesTagKey: to.Ptr(testNamespace)},
 					Properties: &network.PublicIPPrefixPropertiesFormat{
 						PrefixLength: to.Ptr(int32(31)),
 						IPPrefix:     to.Ptr("1.2.3.4/31"),
@@ -1334,6 +1367,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				ipPrefix := &network.PublicIPPrefix{
 					Name: to.Ptr("prefix"),
 					ID:   to.Ptr("prefix"),
+					Tags: map[string]*string{consts.PublicIPPrefixAllowedNamespacesTagKey: to.Ptr("*")},
 					Properties: &network.PublicIPPrefixPropertiesFormat{
 						PrefixLength: to.Ptr(int32(31)),
 						IPPrefix:     to.Ptr("1.2.3.4/31"),
@@ -1359,6 +1393,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				ipPrefix := &network.PublicIPPrefix{
 					Name: to.Ptr("prefix"),
 					ID:   to.Ptr("prefix"),
+					Tags: map[string]*string{consts.PublicIPPrefixAllowedNamespacesTagKey: to.Ptr("*")},
 					Properties: &network.PublicIPPrefixPropertiesFormat{
 						PrefixLength: to.Ptr(int32(31)),
 						IPPrefix:     to.Ptr("1.2.3.4/31"),
@@ -1385,6 +1420,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				ipPrefix := &network.PublicIPPrefix{
 					Name: to.Ptr("prefix"),
 					ID:   to.Ptr("prefix"),
+					Tags: map[string]*string{consts.PublicIPPrefixAllowedNamespacesTagKey: to.Ptr("*")},
 					Properties: &network.PublicIPPrefixPropertiesFormat{
 						PrefixLength: to.Ptr(int32(31)),
 						IPPrefix:     to.Ptr("1.2.3.4/31"),
@@ -1415,6 +1451,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				ipPrefix := &network.PublicIPPrefix{
 					Name: to.Ptr("prefix"),
 					ID:   to.Ptr("prefix"),
+					Tags: map[string]*string{consts.PublicIPPrefixAllowedNamespacesTagKey: to.Ptr("*")},
 					Properties: &network.PublicIPPrefixPropertiesFormat{
 						PrefixLength: to.Ptr(int32(31)),
 						IPPrefix:     to.Ptr("1.2.3.4/31"),
