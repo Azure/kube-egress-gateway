@@ -30,10 +30,19 @@ rules:
   verbs:
   - create
   - delete
+  - get
   - list
   - patch
   - update
   - watch
+- apiGroups:
+  - egressgateway.kubernetes.azure.com
+  resources:
+  - podendpoints/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - egressgateway.kubernetes.azure.com
   resources:

@@ -5,6 +5,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -27,8 +28,11 @@ type PodEndpointSpec struct {
 
 // PodEndpointStatus defines the observed state of PodEndpoint
 type PodEndpointStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// UID of the Pod whose current endpoint specification was attested by the CNI manager.
+	PodUID types.UID `json:"podUID,omitempty"`
+
+	// Generation of the PodEndpoint specification attested by the CNI manager.
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 //+kubebuilder:object:root=true

@@ -57,6 +57,7 @@ var _ = Describe("Server", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test",
 				Namespace: "default",
+				UID:       "test-pod-uid",
 				Annotations: map[string]string{
 					"key1": "value1",
 					"key2": "value2",
@@ -80,6 +81,7 @@ var _ = Describe("Server", func() {
 			PodConfig: nicAddInputRequest.PodConfig,
 		}
 		fakeClientBuilder.WithRuntimeObjects(gatewayProfile, pod)
+		fakeClientBuilder.WithStatusSubresource(&current.PodEndpoint{})
 		fakeClient = fakeClientBuilder.Build()
 		service = cnimanager.NewNicService(fakeClient)
 	})
@@ -131,6 +133,10 @@ var _ = Describe("Server", func() {
 				Expect(podEndpoint.Spec.StaticGatewayConfiguration).To(Equal(gatewayProfile.Name))
 				Expect(podEndpoint.Spec.PodPublicKey).To(Equal(nicAddInputRequest.PublicKey))
 				Expect(podEndpoint.Spec.PodIpAddress).To(Equal(nicAddInputRequest.AllowedIp))
+				Expect(podEndpoint.Status.PodUID).To(Equal(pod.UID))
+				Expect(podEndpoint.Status.ObservedGeneration).To(Equal(podEndpoint.Generation))
+				Expect(podEndpoint.OwnerReferences).To(HaveLen(1))
+				Expect(podEndpoint.OwnerReferences[0].UID).To(Equal(pod.UID))
 			})
 		})
 		When("gateway has azureNetworking as default route", func() {

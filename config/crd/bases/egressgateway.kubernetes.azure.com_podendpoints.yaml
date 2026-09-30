@@ -51,6 +51,16 @@ spec:
             type: object
           status:
             description: PodEndpointStatus defines the observed state of PodEndpoint
+            properties:
+              observedGeneration:
+                description: Generation of the PodEndpoint specification attested
+                  by the CNI manager.
+                format: int64
+                type: integer
+              podUID:
+                description: UID of the Pod whose current endpoint specification was
+                  attested by the CNI manager.
+                type: string
             type: object
         type: object
     served: true
