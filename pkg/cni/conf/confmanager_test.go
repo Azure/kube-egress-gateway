@@ -275,7 +275,7 @@ func TestInsertCNIPluginConf(t *testing.T) {
       "ipam": {
         "type": "kube-egress-cni-ipam"
       },
-      "socketPath": "localhost:5051",
+      "socketPath": "127.0.0.1:5051",
       "type": "kube-egress-cni"
     },
     {
@@ -328,7 +328,7 @@ func TestInsertCNIPluginConf(t *testing.T) {
       "ipam": {
         "type": "kube-egress-cni-ipam"
       },
-      "socketPath": "localhost:5051",
+      "socketPath": "127.0.0.1:5051",
       "type": "kube-egress-cni"
     }
   ]

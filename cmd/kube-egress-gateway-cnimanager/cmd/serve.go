@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -64,6 +65,7 @@ var (
 	cniUninstallConfigMapName string
 	grpcPort                  int
 	metricsPort               int
+	probePort                 int
 )
 
 func init() {
@@ -80,9 +82,29 @@ func init() {
 	// serveCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	serveCmd.Flags().IntVar(&grpcPort, "grpc-server-port", 50051, "The port the grpc server listens on.")
 	serveCmd.Flags().IntVar(&metricsPort, "metrics-bind-port", 8080, "The port the metric endpoint binds to.")
+	serveCmd.Flags().IntVar(&probePort, "health-probe-bind-port", 8081, "The port the health probe endpoint binds to.")
 	serveCmd.Flags().StringVar(&exceptionCidrs, "exception-cidrs", "", "Cidrs that should bypass egress gateway separated with ',', e.g. intra-cluster traffic")
 	serveCmd.Flags().StringVar(&confFileName, "cni-conf-file", "01-egressgateway.conflist", "Name of the new cni configuration file")
 	serveCmd.Flags().StringVar(&cniUninstallConfigMapName, "cni-uninstall-configmap-name", "cni-uninstall", "Name of the configmap that indicates whether to uninstall cni plugin or not, the configMap should be in the same namespace as the cniManager pod")
+}
+
+func newProbeHandler(grpcServing *atomic.Bool, cniReady func() bool) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		if !grpcServing.Load() {
+			http.Error(w, "gRPC server is not serving", http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
+		if !grpcServing.Load() || !cniReady() {
+			http.Error(w, "cni-manager is not ready", http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	return mux
 }
 
 func ServiceLauncher(cmd *cobra.Command, args []string) {
@@ -124,8 +146,7 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 
 	g.Go(func() error {
 		if err := cniConfMgr.Start(ctx); err != nil {
-			logger.Error(err, "failed to start cni config manager monitoring")
-			os.Exit(1)
+			return fmt.Errorf("failed to start cni config manager monitoring: %w", err)
 		}
 		return nil
 	})
@@ -150,6 +171,26 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 		return metricsServer.Shutdown(shutdownCtx)
 	})
 
+	var grpcServing atomic.Bool
+	probeServer := &http.Server{
+		Addr:    ":" + strconv.Itoa(probePort),
+		Handler: newProbeHandler(&grpcServing, cniConfMgr.IsReady),
+	}
+	g.Go(func() error {
+		logger.Info("starting health probe server", "port", probePort)
+		if err := probeServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error(err, "health probe server failed")
+			return err
+		}
+		return nil
+	})
+	g.Go(func() error {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return probeServer.Shutdown(shutdownCtx)
+	})
+
 	nicSvc := cnimanager.NewNicService(k8sClient)
 	server := grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
@@ -172,12 +213,12 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 	)
 
 	healthServer := health.NewServer()
-	healthServer.SetServingStatus("", healthgrpc.HealthCheckResponse_SERVING)
+	healthServer.SetServingStatus("", healthgrpc.HealthCheckResponse_NOT_SERVING)
 	healthgrpc.RegisterHealthServer(server, healthServer)
 
 	cniprotocol.RegisterNicServiceServer(server, nicSvc)
 	var listener net.Listener
-	listener, err = net.Listen("tcp", fmt.Sprintf(":%d", grpcPort))
+	listener, err = net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(grpcPort)))
 	if err != nil {
 		logger.Error(err, "failed to listen")
 		os.Exit(1)
@@ -185,18 +226,27 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 
 	g.Go(func() error {
 		<-ctx.Done()
-		logger.Error(ctx.Err(), "os signal received, shutting down")
+		logger.Error(ctx.Err(), "shutdown requested")
+		grpcServing.Store(false)
+		healthServer.SetServingStatus("", healthgrpc.HealthCheckResponse_NOT_SERVING)
 		server.GracefulStop()
 		return nil
 	})
-	err = server.Serve(listener)
-	if err != nil {
-		logger.Error(err, "failed to serve")
-	}
-	// wait for all context to be done
-	err = g.Wait()
-	if err != nil {
+	g.Go(func() error {
+		grpcServing.Store(true)
+		healthServer.SetServingStatus("", healthgrpc.HealthCheckResponse_SERVING)
+		err := server.Serve(listener)
+		grpcServing.Store(false)
+		healthServer.SetServingStatus("", healthgrpc.HealthCheckResponse_NOT_SERVING)
+		if err != nil && ctx.Err() == nil {
+			return fmt.Errorf("gRPC server failed: %w", err)
+		}
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
 		logger.Error(err, "unexpected error returned from errgroup")
+		os.Exit(1)
 	}
 	logger.Info("server shutdown")
 }
