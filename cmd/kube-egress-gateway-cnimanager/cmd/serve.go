@@ -82,7 +82,7 @@ func init() {
 	// serveCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	serveCmd.Flags().IntVar(&grpcPort, "grpc-server-port", 50051, "The port the grpc server listens on.")
 	serveCmd.Flags().IntVar(&metricsPort, "metrics-bind-port", 8080, "The port the metric endpoint binds to.")
-	serveCmd.Flags().IntVar(&probePort, "health-probe-bind-port", 8081, "The port the health probe endpoint binds to.")
+	serveCmd.Flags().IntVar(&probePort, "health-probe-bind-port", 20081, "The port the health probe endpoint binds to.")
 	serveCmd.Flags().StringVar(&exceptionCidrs, "exception-cidrs", "", "Cidrs that should bypass egress gateway separated with ',', e.g. intra-cluster traffic")
 	serveCmd.Flags().StringVar(&confFileName, "cni-conf-file", "01-egressgateway.conflist", "Name of the new cni configuration file")
 	serveCmd.Flags().StringVar(&cniUninstallConfigMapName, "cni-uninstall-configmap-name", "cni-uninstall", "Name of the configmap that indicates whether to uninstall cni plugin or not, the configMap should be in the same namespace as the cniManager pod")
