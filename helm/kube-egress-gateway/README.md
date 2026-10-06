@@ -111,7 +111,8 @@ Additionally, `common.gatewayLbProbePort` defines the gateway LoadBalancer probe
 | `gatewayCNIManager.imageName` | `kube-egress-gateway-cni` | Name of gatewayCNIManager image. |
 | `gatewayCNIManager.imageTag` | | Tag of gatewayCNIManager image. |
 | `gatewayCNIManager.imagePullPolicy` | `IfNotPresent` | Image pull policy for gatewayCNIManager's image. |
-| `gatewayCNIManager.grpcServerPort` | `50051` | Port which cniManager grpc server listens on. Also used for cniManager pod liveness and readiness probes. |
+| `gatewayCNIManager.grpcServerPort` | `50051` | Port on which the cniManager gRPC server listens. The server binds to `127.0.0.1` and is accessible only from the node network namespace. |
+| `gatewayCNIManager.healthProbeBindPort` | `20081` | Port on which cniManager serves the HTTP `/healthz` and `/readyz` endpoints used by its liveness and readiness probes. |
 | `gatewayCNIManager.exceptionCidrs` | `["169.254.169.254/32", "169.254.10.11/32"]` | A list of cidrs that should be exempted from all egress gateways, e.g. intra-cluster traffic. Defaults to Azure IMDS and AKS node-local DNS, which are node-local endpoints that must not traverse the gateway VMSS. |
 | `gatewayCNIManager.cniConfigFileName` | `01-egressgateway.conflist` | Name of the newly generated cni configuration list file. |
 | `gatewayCNIManager.cniUninstallConfigMapName` | `cni-uninstall` | Name of the configMap indicating whether cni plugin needs to be uninstalled upon gatewayCNIManager pod shutdown. |
