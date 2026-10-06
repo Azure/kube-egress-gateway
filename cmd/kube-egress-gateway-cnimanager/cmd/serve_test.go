@@ -5,8 +5,10 @@ package cmd
 import (
 	"net/http"
 	"net/http/httptest"
-	"sync/atomic"
 	"testing"
+
+	"google.golang.org/grpc/health"
+	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 func TestProbeHandler(t *testing.T) {
@@ -45,9 +47,11 @@ func TestProbeHandler(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			var grpcServing atomic.Bool
-			grpcServing.Store(test.grpcServing)
-			handler := newProbeHandler(&grpcServing, func() bool {
+			healthServer := health.NewServer()
+			if !test.grpcServing {
+				healthServer.SetServingStatus("", healthgrpc.HealthCheckResponse_NOT_SERVING)
+			}
+			handler := newProbeHandler(healthServer, func() bool {
 				return test.cniReady
 			})
 

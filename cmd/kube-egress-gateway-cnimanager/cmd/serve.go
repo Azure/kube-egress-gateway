@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"sync/atomic"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -88,17 +87,22 @@ func init() {
 	serveCmd.Flags().StringVar(&cniUninstallConfigMapName, "cni-uninstall-configmap-name", "cni-uninstall", "Name of the configmap that indicates whether to uninstall cni plugin or not, the configMap should be in the same namespace as the cniManager pod")
 }
 
-func newProbeHandler(grpcServing *atomic.Bool, cniReady func() bool) http.Handler {
+func newProbeHandler(healthServer *health.Server, cniReady func() bool) http.Handler {
+	grpcServing := func() bool {
+		response, err := healthServer.Check(context.Background(), &healthgrpc.HealthCheckRequest{})
+		return err == nil && response.Status == healthgrpc.HealthCheckResponse_SERVING
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		if !grpcServing.Load() {
+		if !grpcServing() {
 			http.Error(w, "gRPC server is not serving", http.StatusServiceUnavailable)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
 	})
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
-		if !grpcServing.Load() || !cniReady() {
+		if !grpcServing() || !cniReady() {
 			http.Error(w, "cni-manager is not ready", http.StatusServiceUnavailable)
 			return
 		}
@@ -171,10 +175,12 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 		return metricsServer.Shutdown(shutdownCtx)
 	})
 
-	var grpcServing atomic.Bool
+	healthServer := health.NewServer()
+	healthServer.SetServingStatus("", healthgrpc.HealthCheckResponse_NOT_SERVING)
+
 	probeServer := &http.Server{
 		Addr:    ":" + strconv.Itoa(probePort),
-		Handler: newProbeHandler(&grpcServing, cniConfMgr.IsReady),
+		Handler: newProbeHandler(healthServer, cniConfMgr.IsReady),
 	}
 	g.Go(func() error {
 		logger.Info("starting health probe server", "port", probePort)
@@ -212,8 +218,6 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 		)),
 	)
 
-	healthServer := health.NewServer()
-	healthServer.SetServingStatus("", healthgrpc.HealthCheckResponse_NOT_SERVING)
 	healthgrpc.RegisterHealthServer(server, healthServer)
 
 	cniprotocol.RegisterNicServiceServer(server, nicSvc)
@@ -227,17 +231,14 @@ func ServiceLauncher(cmd *cobra.Command, args []string) {
 	g.Go(func() error {
 		<-ctx.Done()
 		logger.Error(ctx.Err(), "shutdown requested")
-		grpcServing.Store(false)
-		healthServer.SetServingStatus("", healthgrpc.HealthCheckResponse_NOT_SERVING)
+		healthServer.Shutdown()
 		server.GracefulStop()
 		return nil
 	})
 	g.Go(func() error {
-		grpcServing.Store(true)
 		healthServer.SetServingStatus("", healthgrpc.HealthCheckResponse_SERVING)
 		err := server.Serve(listener)
-		grpcServing.Store(false)
-		healthServer.SetServingStatus("", healthgrpc.HealthCheckResponse_NOT_SERVING)
+		healthServer.Shutdown()
 		if err != nil && ctx.Err() == nil {
 			return fmt.Errorf("gRPC server failed: %w", err)
 		}
