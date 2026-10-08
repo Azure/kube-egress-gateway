@@ -23,6 +23,7 @@ gatewayCNIManager:
   # imageTag: ""
   imagePullPolicy: "IfNotPresent"
   grpcServerPort: 50051
+  healthProbeBindPort: 20081
   # Cidrs that should bypass the egress gateway, e.g. intra-cluster traffic.
   # The two link-local entries below (Azure IMDS and AKS node-local DNS) are
   # node-local and must not be routed through the gateway VMSS; keep them
