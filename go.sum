@@ -29,8 +29,6 @@ github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi v1.3.0 h1:L7G3d
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi v1.3.0/go.mod h1:Ms6gYEy0+A2knfKrwdatsggTXYA2+ICKug8w7STorFw=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12 v12.0.0 h1:KSPTp+F/wadsyVKqsMxsooMmlROoQ77Mo8cft+5ebOM=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12 v12.0.0/go.mod h1:K/MJIfdVb0kcukInWroiX9aLeX5rjK49NkvQXwuAqtw=
-github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9 v9.0.0 h1:CbHDMVJhcJSmXenq+UDWyIjumzVkZIb5pVUGzsCok5M=
-github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9 v9.0.0/go.mod h1:raqbEXrok4aycS74XoU6p9Hne1dliAFpHLizlp+qJoM=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns v1.3.0 h1:yzrctSl9GMIQ5lHu7jc8olOsGjWDCsBpJhWqfGa/YIM=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns v1.3.0/go.mod h1:GE4m0rnnfwLGX0Y9A9A25Zx5N/90jneT5ABevqzhuFQ=
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armdeployments v1.0.0 h1:67nFqWXpo0x5Nz0XEb1yI7s8D+EHy8NsTinYw9sZnLk=
