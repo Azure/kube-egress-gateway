@@ -111,3 +111,17 @@ func (cfg *CloudConfig) trimSpace() {
 	cfg.VnetResourceGroup = strings.TrimSpace(cfg.VnetResourceGroup)
 	cfg.SubnetName = strings.TrimSpace(cfg.SubnetName)
 }
+
+// IsNamespaceAllowedByTagValue reports whether the given namespace is authorized by the value of an
+// administrator-set public IP prefix allow tag. The value is a comma- or semicolon-separated list of
+// namespaces; "*" authorizes any namespace. Matching is case-insensitive and whitespace-trimmed. An
+// empty value authorizes nothing (fail-closed).
+func IsNamespaceAllowedByTagValue(tagValue, namespace string) bool {
+	for _, part := range strings.FieldsFunc(tagValue, func(r rune) bool { return r == ',' || r == ';' }) {
+		p := strings.TrimSpace(part)
+		if p == "*" || strings.EqualFold(p, namespace) {
+			return true
+		}
+	}
+	return false
+}

@@ -34,6 +34,7 @@ import (
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
+	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/metrics"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
@@ -393,6 +394,17 @@ func managedSubresourceName(vmConfig *egressgatewayv1alpha1.GatewayVMConfigurati
 	return consts.ManagedResourcePrefix + string(vmConfig.GetUID())
 }
 
+// isPublicIPPrefixAllowedForNamespace reports whether the BYO public IP prefix is authorized for the
+// given namespace by its administrator-set Azure tag. It fails closed: a prefix without the tag, or
+// whose tag does not list the namespace (or "*"), is not authorized.
+func isPublicIPPrefixAllowedForNamespace(tags map[string]*string, namespace string) bool {
+	tagVal, ok := tags[consts.PublicIPPrefixAllowedNamespacesTagKey]
+	if !ok {
+		return false
+	}
+	return config.IsNamespaceAllowedByTagValue(to.Val(tagVal), namespace)
+}
+
 func isErrorNotFound(err error) bool {
 	var respErr *azcore.ResponseError
 	return errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound
@@ -427,6 +439,14 @@ func (r *GatewayVMConfigurationReconciler) ensurePublicIPPrefix(
 		}
 		if ipPrefix.Properties == nil {
 			return "", "", false, fmt.Errorf("public ip prefix(%s) has empty properties", vmConfig.Spec.PublicIpPrefixId)
+		}
+		// Authorization (fail-closed): a tenant-supplied BYO prefix must be explicitly approved by an
+		// administrator via an opt-in Azure tag on the prefix that lists the allowed namespaces. Setting
+		// that tag requires Azure write access to the prefix, which a namespace tenant does not have, so
+		// this prevents a tenant from making the controller identity attach an arbitrary/administrator-
+		// owned prefix.
+		if !isPublicIPPrefixAllowedForNamespace(ipPrefix.Tags, vmConfig.Namespace) {
+			return "", "", false, fmt.Errorf("public ip prefix(%s) is not authorized for namespace %s", vmConfig.Spec.PublicIpPrefixId, vmConfig.Namespace)
 		}
 		if to.Val(ipPrefix.Properties.PrefixLength) != ipPrefixLength {
 			return "", "", false, fmt.Errorf("provided public ip prefix has invalid length(%d), required(%d)", to.Val(ipPrefix.Properties.PrefixLength), ipPrefixLength)
