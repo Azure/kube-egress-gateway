@@ -203,7 +203,7 @@ var _ = Describe("GatewayVMConfiguration controller unit tests", func() {
 				az = getMockAzureManager(gomock.NewController(GinkgoT()))
 				v := az.VMClient.(*mock_virtualmachineclient.MockInterface)
 				v.EXPECT().List(gomock.Any(), testRG).Return([]*compute.VirtualMachine{}, nil).AnyTimes()
-				r = &GatewayVMConfigurationReconciler{AzureManager: az, Recorder: recorder}
+				r = &GatewayVMConfigurationReconciler{AzureManager: az, Recorder: recorder, EnforceBYOPrefixAuthorization: true}
 				vmConfig.Spec.PublicIpPrefixId = ""
 			})
 

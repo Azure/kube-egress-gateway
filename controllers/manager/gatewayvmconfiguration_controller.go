@@ -44,7 +44,8 @@ import (
 type GatewayVMConfigurationReconciler struct {
 	client.Client
 	*azmanager.AzureManager
-	Recorder record.EventRecorder
+	Recorder                      record.EventRecorder
+	EnforceBYOPrefixAuthorization bool
 }
 
 // vmConfigReconcileInterval is the period between periodic requeues of a
@@ -440,13 +441,20 @@ func (r *GatewayVMConfigurationReconciler) ensurePublicIPPrefix(
 		if ipPrefix.Properties == nil {
 			return "", "", false, fmt.Errorf("public ip prefix(%s) has empty properties", vmConfig.Spec.PublicIpPrefixId)
 		}
-		// Authorization (fail-closed): a tenant-supplied BYO prefix must be explicitly approved by an
-		// administrator via an opt-in Azure tag on the prefix that lists the allowed namespaces. Setting
-		// that tag requires Azure write access to the prefix, which a namespace tenant does not have, so
-		// this prevents a tenant from making the controller identity attach an arbitrary/administrator-
-		// owned prefix.
 		if !isPublicIPPrefixAllowedForNamespace(ipPrefix.Tags, vmConfig.Namespace) {
-			return "", "", false, fmt.Errorf("public ip prefix(%s) is not authorized for namespace %s", vmConfig.Spec.PublicIpPrefixId, vmConfig.Namespace)
+			if r.EnforceBYOPrefixAuthorization {
+				return "", "", false, fmt.Errorf("public ip prefix(%s) is not authorized for namespace %s", vmConfig.Spec.PublicIpPrefixId, vmConfig.Namespace)
+			}
+			gwConfig := &egressgatewayv1alpha1.StaticGatewayConfiguration{}
+			if err := r.Get(ctx, client.ObjectKeyFromObject(vmConfig), gwConfig); err != nil {
+				return "", "", false, fmt.Errorf("failed to get StaticGatewayConfiguration for BYO prefix authorization warning: %w", err)
+			}
+			message := fmt.Sprintf(
+				"Public IP prefix %s is not authorized for namespace %s. Authorization enforcement is disabled for this cluster; reconciliation will continue. Ask the prefix administrator to add this namespace to the Azure resource tag %q, preserving other approved namespaces. This configuration will fail reconciliation when enforcement is enabled. For setup instructions, see https://learn.microsoft.com/azure/aks/configure-static-egress-gateway#authorize-the-namespace-on-the-prefix",
+				vmConfig.Spec.PublicIpPrefixId, vmConfig.Namespace, consts.PublicIPPrefixAllowedNamespacesTagKey,
+			)
+			r.Recorder.Event(gwConfig, corev1.EventTypeWarning, "BYOPrefixAuthorizationRequired", message)
+			log.Info(message, "publicIpPrefixId", vmConfig.Spec.PublicIpPrefixId, "namespace", vmConfig.Namespace, "name", vmConfig.Name)
 		}
 		if to.Val(ipPrefix.Properties.PrefixLength) != ipPrefixLength {
 			return "", "", false, fmt.Errorf("provided public ip prefix has invalid length(%d), required(%d)", to.Val(ipPrefix.Properties.PrefixLength), ipPrefixLength)

@@ -31,6 +31,7 @@ spec:
         - /kube-egress-gateway-controller
         args:
         - --leader-elect
+        - --enforce-byo-prefix-authorization=false
         - --leader-election-namespace=$(MY_POD_NAMESPACE)
         - --secret-namespace=$(MY_POD_NAMESPACE)
         - --cloud-config=/etc/config/azure.json

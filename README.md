@@ -84,9 +84,23 @@ StaticGatewayConfiguration is a namespaced resource, meaning a static egress gat
 
 Three **optional** configurations:
 
-* `publicIpPrefixId`: BYO public IP prefix is supported. Users can provide Azure resource ID of their own public IP prefix in this field. Make sure kube-egress-gateway operator has access to the prefix. If not provided and provisionPublicIps is set to true, a system generated prefix will be provisioned.
+* `publicIpPrefixId`: BYO public IP prefix is supported. Users can provide Azure resource ID of their own public IP prefix in this field. Make sure kube-egress-gateway operator has access to the prefix. To prepare for authorization enforcement, ask the prefix administrator to authorize the configuration's namespace using the Azure resource tag `kube-egress-gateway-allowed-namespaces`. The tag accepts comma- or semicolon-separated namespace names, or `*` to authorize all namespaces. Missing authorization produces a warning by default and blocks reconciliation when enforcement is enabled. If not provided and provisionPublicIps is set to true, a system generated prefix will be provisioned.
 * `defaultRoute`: Enum, either `staticEgressGateway` or `azureNetworking`. Set it to be `staticEgressGateway` if traffic by default should be routed to the egress gateway or `azureNetworking` if traffic should be routed to pods' `eth0` by default like regular pods. Default value is `staticEgressGateway`.
 * `excludeCidrs`: List of destination network CIDRs that should bypass the default route and flow via the other network interface. That is, if `defaultRoute` is `staticEgressGateway`, cidrs set in `excludeCidrs` will be routed via pod's `eth0` interface. For example, traffic within the cluster like pod-pod traffic and pod-service traffic should not be routed to the egress gateway and can be set here. On the other hand, if `defaultRoute` is `azureNetworking`, then only cidrs set in `excludeCidrs` will be routed to the egress gateway.
+
+### BYO prefix authorization
+
+Ask the prefix administrator to add approved namespaces to the prefix's `kube-egress-gateway-allowed-namespaces` Azure tag, preserving existing approvals. Only trusted administrators should be able to modify this tag.
+
+`--enforce-byo-prefix-authorization` defaults to `false` (Helm: `gatewayControllerManager.enforceBYOPrefixAuthorization=false`). Missing authorization emits a `BYOPrefixAuthorizationRequired` Warning event on the `StaticGatewayConfiguration` and a controller log message without blocking reconciliation. Other validation and Azure errors still fail.
+
+View warnings with:
+
+```sh
+kubectl describe staticgatewayconfiguration <name> -n <namespace>
+```
+
+After configuring tags, set the flag or Helm value to `true` to enforce authorization. **Until then, namespaces with permission to create or update SGCs can request any BYO prefix accessible to the controller identity.** Removing tag authorization doesn't automatically detach an existing prefix.
 
 kube-egress-gateway reconcilers manage the setup and resources and report the egress IP information in `StaticGatewayConfiguration` status:
 

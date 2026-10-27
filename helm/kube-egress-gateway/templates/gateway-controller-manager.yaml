@@ -203,6 +203,7 @@ spec:
       - args:
         - --cloud-config=/azure/config/azure-cloud-config.json
         - --leader-elect={{ .Values.gatewayControllerManager.leaderElect }}
+        - --enforce-byo-prefix-authorization={{ .Values.gatewayControllerManager.enforceBYOPrefixAuthorization }}
         - --leader-election-namespace={{ .Release.Namespace }}
         - --secret-namespace={{ .Release.Namespace }}
         - --metrics-bind-port={{ .Values.gatewayControllerManager.metricsBindPort }}
