@@ -63,13 +63,11 @@ func NewCNIConfManager(cniConfDir, cniConfFile, exceptionCidrs, cniUninstallConf
 }
 
 func (mgr *Manager) IsReady() bool {
-	log := logger.GetLogger()
 	file := filepath.Join(mgr.cniConfDir, mgr.cniConfFile)
 	if _, err := os.Stat(file); err != nil {
-		if os.IsNotExist(err) {
-			log.Info("cni configuration file not found, skip removing taint")
+		if !os.IsNotExist(err) {
+			logger.GetLogger().Error(err, "failed to stat cni configuration file", "file name", file)
 		}
-		log.Error(err, "failed to stat cni configuration file in node event handler", "file name", file)
 		return false
 	}
 	return true
@@ -246,7 +244,7 @@ func (mgr *Manager) managePluginFromConf(file string) (map[string]interface{}, e
 		"type":          consts.KubeEgressCNIName,
 		"ipam":          map[string]interface{}{"type": consts.KubeEgressIPAMCNIName},
 		"excludedCIDRs": mgr.exceptionCidrs,
-		"socketPath":    fmt.Sprintf("localhost:%d", mgr.grpcPort),
+		"socketPath":    fmt.Sprintf("127.0.0.1:%d", mgr.grpcPort),
 	})
 	rawList["plugins"] = plugins
 	return rawList, nil
@@ -296,7 +294,7 @@ func (mgr *Manager) managePluginFromConfList(file string) (map[string]interface{
 		"type":          consts.KubeEgressCNIName,
 		"ipam":          map[string]interface{}{"type": consts.KubeEgressIPAMCNIName},
 		"excludedCIDRs": mgr.exceptionCidrs,
-		"socketPath":    fmt.Sprintf("localhost:%d", mgr.grpcPort),
+		"socketPath":    fmt.Sprintf("127.0.0.1:%d", mgr.grpcPort),
 	}}, plugins[1:]...)...)
 
 	rawList["plugins"] = plugins

@@ -90,6 +90,7 @@ spec:
       - args:
         - serve
         - --grpc-server-port={{- .Values.gatewayCNIManager.grpcServerPort }}
+        - --health-probe-bind-port={{- .Values.gatewayCNIManager.healthProbeBindPort }}
         - --exception-cidrs={{- range $i, $cidr := .Values.gatewayCNIManager.exceptionCidrs }}{{- if $i }},{{- end }}{{ $cidr }}{{- end }}
         - --cni-conf-file={{- .Values.gatewayCNIManager.cniConfigFileName }}
         - --cni-uninstall-configmap-name={{- .Values.gatewayCNIManager.cniUninstallConfigMapName }}
@@ -100,15 +101,19 @@ spec:
         ports:
           - containerPort: {{ .Values.gatewayCNIManager.grpcServerPort }}
             name: grpc
+          - containerPort: {{ .Values.gatewayCNIManager.healthProbeBindPort }}
+            name: health
         livenessProbe:
-          grpc:
-            port: {{ .Values.gatewayCNIManager.grpcServerPort }}
+          httpGet:
+            path: /healthz
+            port: health
           initialDelaySeconds: 20
           periodSeconds: 5
         name: cnimanager
         readinessProbe:
-          grpc:
-            port: {{ .Values.gatewayCNIManager.grpcServerPort }}
+          httpGet:
+            path: /readyz
+            port: health
           initialDelaySeconds: 20
           periodSeconds: 5
         resources:

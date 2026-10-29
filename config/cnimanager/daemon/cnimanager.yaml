@@ -43,6 +43,7 @@ spec:
           args:
             - serve
             - --grpc-server-port=50051
+            - --health-probe-bind-port=20081
             - --exception-cidrs=$(EXCEPTION_CIDRS)
             - --cni-conf-file=01-egressgateway.conflist
             - --cni-uninstall-configmap-name=cni-uninstall
@@ -68,14 +69,18 @@ spec:
           ports:
             - containerPort: 50051
               name: grpc
+            - containerPort: 20081
+              name: health
           livenessProbe:
-            grpc:
-              port: 50051
+            httpGet:
+              path: /healthz
+              port: health
             initialDelaySeconds: 20
             periodSeconds: 5
           readinessProbe:
-            grpc:
-              port: 50051
+            httpGet:
+              path: /readyz
+              port: health
             initialDelaySeconds: 20
             periodSeconds: 5
           # TODO(user): Configure the resources accordingly based on the project requirements.

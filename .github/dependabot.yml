@@ -48,3 +48,5 @@ updates:
       - "release-note-none"
       - "ok-to-test"
       - "kind/testing"
+    cooldown:
+      default-days: 7

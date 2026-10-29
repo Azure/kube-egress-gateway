@@ -41,12 +41,6 @@ func (f *FakeIPTables) AddBuiltinTargets(targets ...string) {
 	}
 }
 
-// SetHasRandomFully sets f's return value for HasRandomFully()
-func (f *FakeIPTables) SetHasRandomFully(can bool) *FakeIPTables {
-	f.fake.SetHasRandomFully(can)
-	return f
-}
-
 // EnsureChain is part of iptables.Interface
 func (f *FakeIPTables) EnsureChain(table iptables.Table, chain iptables.Chain) (bool, error) {
 	return f.fake.EnsureChain(table, chain)
@@ -191,11 +185,6 @@ func (f *FakeIPTables) RestoreAll(data []byte, flush iptables.FlushFlag, counter
 
 // Monitor is part of iptables.Interface
 func (f *FakeIPTables) Monitor(canary iptables.Chain, tables []iptables.Table, reloadFunc func(), interval time.Duration, stopCh <-chan struct{}) {
-}
-
-// HasRandomFully is part of iptables.Interface
-func (f *FakeIPTables) HasRandomFully() bool {
-	return f.fake.HasRandomFully()
 }
 
 func (f *FakeIPTables) Present() error {
