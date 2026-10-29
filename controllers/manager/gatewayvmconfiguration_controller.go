@@ -34,6 +34,7 @@ import (
 
 	egressgatewayv1alpha1 "github.com/Azure/kube-egress-gateway/api/v1alpha1"
 	"github.com/Azure/kube-egress-gateway/pkg/azmanager"
+	"github.com/Azure/kube-egress-gateway/pkg/config"
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/metrics"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
@@ -43,7 +44,8 @@ import (
 type GatewayVMConfigurationReconciler struct {
 	client.Client
 	*azmanager.AzureManager
-	Recorder record.EventRecorder
+	Recorder                      record.EventRecorder
+	EnforceBYOPrefixAuthorization bool
 }
 
 // vmConfigReconcileInterval is the period between periodic requeues of a
@@ -393,6 +395,17 @@ func managedSubresourceName(vmConfig *egressgatewayv1alpha1.GatewayVMConfigurati
 	return consts.ManagedResourcePrefix + string(vmConfig.GetUID())
 }
 
+// isPublicIPPrefixAllowedForNamespace reports whether the BYO public IP prefix is authorized for the
+// given namespace by its administrator-set Azure tag. It fails closed: a prefix without the tag, or
+// whose tag does not list the namespace (or "*"), is not authorized.
+func isPublicIPPrefixAllowedForNamespace(tags map[string]*string, namespace string) bool {
+	tagVal, ok := tags[consts.PublicIPPrefixAllowedNamespacesTagKey]
+	if !ok {
+		return false
+	}
+	return config.IsNamespaceAllowedByTagValue(to.Val(tagVal), namespace)
+}
+
 func isErrorNotFound(err error) bool {
 	var respErr *azcore.ResponseError
 	return errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound
@@ -427,6 +440,21 @@ func (r *GatewayVMConfigurationReconciler) ensurePublicIPPrefix(
 		}
 		if ipPrefix.Properties == nil {
 			return "", "", false, fmt.Errorf("public ip prefix(%s) has empty properties", vmConfig.Spec.PublicIpPrefixId)
+		}
+		if !isPublicIPPrefixAllowedForNamespace(ipPrefix.Tags, vmConfig.Namespace) {
+			if r.EnforceBYOPrefixAuthorization {
+				return "", "", false, fmt.Errorf("public ip prefix(%s) is not authorized for namespace %s", vmConfig.Spec.PublicIpPrefixId, vmConfig.Namespace)
+			}
+			gwConfig := &egressgatewayv1alpha1.StaticGatewayConfiguration{}
+			if err := r.Get(ctx, client.ObjectKeyFromObject(vmConfig), gwConfig); err != nil {
+				return "", "", false, fmt.Errorf("failed to get StaticGatewayConfiguration for BYO prefix authorization warning: %w", err)
+			}
+			message := fmt.Sprintf(
+				"Public IP prefix %s is not authorized for namespace %s. Authorization enforcement is disabled for this cluster; reconciliation will continue. Ask the prefix administrator to add this namespace to the Azure resource tag %q, preserving other approved namespaces. This configuration will fail reconciliation when enforcement is enabled. For setup instructions, see https://learn.microsoft.com/azure/aks/configure-static-egress-gateway#authorize-the-namespace-on-the-prefix",
+				vmConfig.Spec.PublicIpPrefixId, vmConfig.Namespace, consts.PublicIPPrefixAllowedNamespacesTagKey,
+			)
+			r.Recorder.Event(gwConfig, corev1.EventTypeWarning, "BYOPrefixAuthorizationRequired", message)
+			log.Info(message, "publicIpPrefixId", vmConfig.Spec.PublicIpPrefixId, "namespace", vmConfig.Namespace, "name", vmConfig.Name)
 		}
 		if to.Val(ipPrefix.Properties.PrefixLength) != ipPrefixLength {
 			return "", "", false, fmt.Errorf("provided public ip prefix has invalid length(%d), required(%d)", to.Val(ipPrefix.Properties.PrefixLength), ipPrefixLength)

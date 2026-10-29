@@ -52,16 +52,17 @@ func Execute() {
 }
 
 var (
-	cloudConfigFile         string
-	cloudConfig             *config.CloudConfig
-	scheme                  = runtime.NewScheme()
-	metricsPort             int
-	gatewayLBProbePort      int
-	enableLeaderElection    bool
-	leaderElectionNamespace string
-	secretNamespace         string
-	probePort               int
-	zapOpts                 = zap.Options{
+	cloudConfigFile               string
+	cloudConfig                   *config.CloudConfig
+	scheme                        = runtime.NewScheme()
+	metricsPort                   int
+	gatewayLBProbePort            int
+	enableLeaderElection          bool
+	enforceBYOPrefixAuthorization bool
+	leaderElectionNamespace       string
+	secretNamespace               string
+	probePort                     int
+	zapOpts                       = zap.Options{
 		Development: true,
 	}
 )
@@ -83,6 +84,8 @@ func init() {
 	rootCmd.Flags().IntVar(&metricsPort, "metrics-bind-port", 8080, "The port the metric endpoint binds to.")
 	rootCmd.Flags().IntVar(&probePort, "health-probe-bind-port", 8081, "The port the probe endpoint binds to.")
 	rootCmd.Flags().IntVar(&gatewayLBProbePort, "gateway-lb-probe-port", 8082, "The port the gateway lb health probe endpoint binds to.")
+	rootCmd.Flags().BoolVar(&enforceBYOPrefixAuthorization, "enforce-byo-prefix-authorization", false,
+		"Require an administrator-set Azure tag authorizing the namespace to use a BYO public IP prefix. When false, warn and continue reconciliation.")
 	rootCmd.Flags().BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -179,9 +182,10 @@ func startControllers(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 	if err = (&controllers.GatewayVMConfigurationReconciler{
-		Client:       mgr.GetClient(),
-		AzureManager: az,
-		Recorder:     mgr.GetEventRecorderFor("gatewayVMConfiguration-controller"), //nolint:staticcheck // GetEventRecorderFor is deprecated but still functional; migrating to the new events API is out of scope for the dependency bump
+		Client:                        mgr.GetClient(),
+		AzureManager:                  az,
+		Recorder:                      mgr.GetEventRecorderFor("gatewayVMConfiguration-controller"), //nolint:staticcheck // GetEventRecorderFor is deprecated but still functional; migrating to the new events API is out of scope for the dependency bump
+		EnforceBYOPrefixAuthorization: enforceBYOPrefixAuthorization,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GatewayVMConfiguration")
 		os.Exit(1)

@@ -312,3 +312,27 @@ func TestDefaultAndValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestIsNamespaceAllowedByTagValue(t *testing.T) {
+	tests := map[string]struct {
+		tagValue  string
+		namespace string
+		expected  bool
+	}{
+		"empty value fails closed":         {tagValue: "", namespace: "ns1", expected: false},
+		"exact match":                      {tagValue: "ns1", namespace: "ns1", expected: true},
+		"case-insensitive match":           {tagValue: "NS1", namespace: "ns1", expected: true},
+		"wildcard matches any":             {tagValue: "*", namespace: "anything", expected: true},
+		"comma-separated list match":       {tagValue: "ns0,ns1,ns2", namespace: "ns1", expected: true},
+		"semicolon-separated list match":   {tagValue: "ns0; ns1 ; ns2", namespace: "ns1", expected: true},
+		"list without namespace fails":     {tagValue: "ns0,ns2", namespace: "ns1", expected: false},
+		"whitespace trimmed around values": {tagValue: "  ns1  ", namespace: "ns1", expected: true},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := IsNamespaceAllowedByTagValue(tc.tagValue, tc.namespace); got != tc.expected {
+				t.Fatalf("IsNamespaceAllowedByTagValue(%q, %q) = %v, want %v", tc.tagValue, tc.namespace, got, tc.expected)
+			}
+		})
+	}
+}
