@@ -399,11 +399,12 @@ func managedSubresourceName(vmConfig *egressgatewayv1alpha1.GatewayVMConfigurati
 // given namespace by its administrator-set Azure tag. It fails closed: a prefix without the tag, or
 // whose tag does not list the namespace (or "*"), is not authorized.
 func isPublicIPPrefixAllowedForNamespace(tags map[string]*string, namespace string) bool {
-	tagVal, ok := tags[consts.PublicIPPrefixAllowedNamespacesTagKey]
-	if !ok {
-		return false
+	for key, tagVal := range tags {
+		if strings.EqualFold(key, consts.PublicIPPrefixAllowedNamespacesTagKey) {
+			return config.IsNamespaceAllowedByTagValue(to.Val(tagVal), namespace)
+		}
 	}
-	return config.IsNamespaceAllowedByTagValue(to.Val(tagVal), namespace)
+	return false
 }
 
 func isErrorNotFound(err error) bool {

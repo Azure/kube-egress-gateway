@@ -6,6 +6,7 @@ package manager
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	network "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
@@ -23,6 +24,24 @@ import (
 	"github.com/Azure/kube-egress-gateway/pkg/consts"
 	"github.com/Azure/kube-egress-gateway/pkg/utils/to"
 )
+
+func TestPublicIPPrefixAuthorizationTagKeyCaseInsensitive(t *testing.T) {
+	for _, key := range []string{
+		consts.PublicIPPrefixAllowedNamespacesTagKey,
+		strings.ToUpper(consts.PublicIPPrefixAllowedNamespacesTagKey),
+		"Kube-Egress-Gateway-Allowed-Namespaces",
+	} {
+		t.Run(key, func(t *testing.T) {
+			require.True(t, isPublicIPPrefixAllowedForNamespace(map[string]*string{key: to.Ptr("tenant")}, "tenant"))
+			require.True(t, isPublicIPPrefixAllowedForNamespace(map[string]*string{key: to.Ptr("*")}, "tenant"))
+			require.False(t, isPublicIPPrefixAllowedForNamespace(map[string]*string{key: to.Ptr("other")}, "tenant"))
+			require.False(t, isPublicIPPrefixAllowedForNamespace(map[string]*string{key: nil}, "tenant"))
+			require.False(t, isPublicIPPrefixAllowedForNamespace(map[string]*string{key: to.Ptr("")}, "tenant"))
+		})
+	}
+	require.False(t, isPublicIPPrefixAllowedForNamespace(nil, "tenant"))
+	require.False(t, isPublicIPPrefixAllowedForNamespace(map[string]*string{"unrelated": to.Ptr("*")}, "tenant"))
+}
 
 type byoPrefixEventRecorder struct {
 	*record.FakeRecorder
