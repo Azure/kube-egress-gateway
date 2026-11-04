@@ -63,6 +63,13 @@ const (
 	// Owning StaticGatewayConfiguration name key on secret label
 	OwningSGCNameLabel = "egressgateway.kubernetes.azure.com/owning-gateway-config-name"
 
+	// PublicIPPrefixAllowedNamespacesTagKey is the Azure resource tag an administrator sets on a BYO
+	// public IP prefix to authorize its use by kube-egress-gateway. The tag value is a comma- or
+	// semicolon-separated list of allowed namespaces, or "*" for any namespace. Setting this tag
+	// requires Azure write access (e.g. Network Contributor) to the prefix, which a namespace tenant
+	// does not have, making it a safe administrator authorization signal that needs no API change.
+	PublicIPPrefixAllowedNamespacesTagKey = "kube-egress-gateway-allowed-namespaces"
+
 	// Default user agent for Azure SDK
 	DefaultUserAgent = "kube-egress-gateway-controller"
 )

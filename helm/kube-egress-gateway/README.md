@@ -86,6 +86,7 @@ Additionally, `common.gatewayLbProbePort` defines the gateway LoadBalancer probe
 | `gatewayControllerManager.imagePullPolicy` | `IfNotPresent` | Image pull policy for gatewayControllerManager's image. |
 | `gatewayControllerManager.replicas` | `1` | Number of replicas for gatewayControllerManager deployment. By default, just 1 runs in the cluster. To improve availability, choose number greater than 1. |
 | `gatewayControllerManager.leaderElect` | `true` | If multiple relicas are enabled for gatewayControllerManager, enable or disable leader Election among the relicas. Default to `true`. |
+| `gatewayControllerManager.enforceBYOPrefixAuthorization` | `false` | Default to warning-only mode for migration: unauthorized BYO requests emit Warning events but continue reconciliation, including new requests. Set to `true` after migration to require the BYO prefix's Azure tag to authorize the requesting namespace. |
 | `gatewayControllerManager.metricsBindPort` | `8080` | Port that gatewayControllerManager listens on for `/metrics` requests. |
 | `gatewayControllerManager.healthProbeBindPort` | `8081` | Port that gatewayControllerManager listens on for health probe requests. |
 | `gatewayControllerManager.nodeSelector` | | Define tolerations to allow the pods to be scheduled on nodes with specific taints. |

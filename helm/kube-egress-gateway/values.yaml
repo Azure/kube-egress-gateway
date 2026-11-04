@@ -11,6 +11,7 @@ gatewayControllerManager:
   imagePullPolicy: "IfNotPresent"
   replicas: 1
   leaderElect: "true"
+  enforceBYOPrefixAuthorization: false
   metricsBindPort: 8080
   healthProbeBindPort: 8081
   nodeSelector: {}
