@@ -40,7 +40,7 @@ require (
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.26.2
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/configloader v0.20.1
 	sigs.k8s.io/cloud-provider-azure/pkg/azclient/trace v0.26.1
-	sigs.k8s.io/controller-runtime v0.25.2
+	sigs.k8s.io/controller-runtime v0.25.3
 )
 
 require (
