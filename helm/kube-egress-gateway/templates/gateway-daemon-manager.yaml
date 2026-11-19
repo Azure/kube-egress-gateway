@@ -43,13 +43,13 @@ rules:
   - egressgateway.kubernetes.azure.com
   resources:
   - gatewayvmconfigurations/status
+  - staticgatewayconfigurations/status
   verbs:
   - get
 - apiGroups:
   - egressgateway.kubernetes.azure.com
   resources:
   - podendpoints/status
-  - staticgatewayconfigurations/status
   verbs:
   - get
   - patch
