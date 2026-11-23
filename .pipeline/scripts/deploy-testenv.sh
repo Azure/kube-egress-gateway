@@ -39,6 +39,12 @@ fi
 # Generate parameters file from template
 echo "Generating Bicep parameters file"
 TEMP_PARAMS_FILE=$(mktemp)
+DEPLOYMENT_ERROR_FILE=$(mktemp)
+cleanup() {
+    rm -f "${TEMP_PARAMS_FILE}" "${DEPLOYMENT_ERROR_FILE}"
+}
+trap cleanup EXIT
+
 envsubst < "${BICEP_DIR}/parameters.json" > "${TEMP_PARAMS_FILE}"
 
 echo "Using parameters:"
@@ -46,15 +52,29 @@ cat "${TEMP_PARAMS_FILE}"
 
 # Deploy infrastructure using Bicep
 echo "Deploying infrastructure using Bicep templates"
-DEPLOYMENT_OUTPUT=$(az deployment group create \
-    --resource-group ${RESOURCE_GROUP} \
-    --template-file "${BICEP_DIR}/main.bicep" \
-    --parameters "@${TEMP_PARAMS_FILE}" \
-    --parameters location="${LOCATION}" \
-    --output json)
+MAX_DEPLOYMENT_ATTEMPTS=3
+for attempt in $(seq 1 ${MAX_DEPLOYMENT_ATTEMPTS}); do
+    if DEPLOYMENT_OUTPUT=$(az deployment group create \
+        --resource-group ${RESOURCE_GROUP} \
+        --template-file "${BICEP_DIR}/main.bicep" \
+        --parameters "@${TEMP_PARAMS_FILE}" \
+        --parameters location="${LOCATION}" \
+        --output json 2>"${DEPLOYMENT_ERROR_FILE}"); then
+        break
+    fi
 
-# Clean up temporary parameters file
-rm -f "${TEMP_PARAMS_FILE}"
+    cat "${DEPLOYMENT_ERROR_FILE}" >&2
+    if ! grep -Fq "userAssignedIdentities/${AKS_KUBELET_ID_NAME}' was not found" "${DEPLOYMENT_ERROR_FILE}" ||
+        [ "${attempt}" -eq "${MAX_DEPLOYMENT_ATTEMPTS}" ]; then
+        exit 1
+    fi
+
+    echo "Kubelet identity is not available yet; retrying deployment in 10 seconds (${attempt}/${MAX_DEPLOYMENT_ATTEMPTS})"
+    sleep 10
+done
+
+cleanup
+trap - EXIT
 
 # Extract outputs from deployment
 echo "Extracting deployment outputs"
